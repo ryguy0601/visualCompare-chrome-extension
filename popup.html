@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VisualCompare Live</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="popup-header">
+    <div class="logo-group">
+      <div class="logo-badge">VC</div>
+      <div>
+        <h1 class="popup-title">VisualCompare Live</h1>
+        <p class="popup-sub">Dual-Site Regression &amp; Click Sync</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- URL Configuration -->
+  <div class="section-card">
+    <div class="field-group">
+      <div class="field-label-row">
+        <label for="prod-url-input">Reference / Production URL</label>
+        <button id="btn-use-active-prod" class="btn-micro" title="Use current active tab URL">Use Current Tab</button>
+      </div>
+      <input type="url" id="prod-url-input" class="text-input" placeholder="https://example.com" />
+    </div>
+
+    <div class="field-group" style="margin-top: 10px;">
+      <div class="field-label-row">
+        <label for="stg-url-input">Candidate / Staging URL</label>
+        <button id="btn-use-active-stg" class="btn-micro" title="Use current active tab URL">Use Current Tab</button>
+      </div>
+      <input type="url" id="stg-url-input" class="text-input" placeholder="https://staging.example.com" />
+    </div>
+  </div>
+
+  <!-- Device & Sync Options -->
+  <div class="section-card">
+    <div class="options-grid">
+      <div class="option-item">
+        <label for="device-select">Device Viewport</label>
+        <select id="device-select" class="select-input">
+          <option value="desktop" selected>Desktop (1920 × 1080)</option>
+          <option value="laptop">Laptop (1366 × 768)</option>
+          <option value="tablet">Tablet (768 × 1024)</option>
+          <option value="mobile">Mobile (440 × 956)</option>
+          <option value="responsive">Responsive (Fluid)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Live Sync Checkboxes -->
+    <div class="sync-toggles">
+      <label class="toggle-pill">
+        <input type="checkbox" id="sync-clicks-check" checked />
+        <span>Mirror Clicks</span>
+      </label>
+      <label class="toggle-pill">
+        <input type="checkbox" id="sync-scroll-check" checked />
+        <span>Sync Scroll</span>
+      </label>
+      <label class="toggle-pill">
+        <input type="checkbox" id="sync-hover-check" checked />
+        <span>Ghost Cursor</span>
+      </label>
+      <label class="toggle-pill">
+        <input type="checkbox" id="sync-inputs-check" checked />
+        <span>Sync Typing</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
+  <div class="actions-footer">
+    <button id="btn-launch-studio" class="btn-primary">
+      <span>🚀 Launch Live Studio</span>
+    </button>
+    <div class="secondary-actions">
+      <button id="btn-quick-swap" class="btn-secondary" title="Swap Prod & Staging URLs">⇄ Swap URLs</button>
+      <button id="btn-demo-preset" class="btn-secondary" title="Load ApexCloud Complex Test Pages">⚡ Demo Test</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VisualCompare Live Studio</title>
+  <link rel="stylesheet" href="studio.css">
+</head>
+<body>
+
+  <!-- Top Global Navigation & Controls -->
+  <header class="studio-header">
+    <div class="header-left">
+      <div class="studio-logo">
+        <span class="logo-box">VC</span>
+        <span class="logo-text">VisualCompare <span class="badge-live">LIVE</span></span>
+      </div>
+
+      <!-- Sync Status Badge -->
+      <div class="sync-status-indicator" id="sync-status">
+        <span class="pulse-dot"></span>
+        <span id="sync-status-label">Mirror Active</span>
+      </div>
+    </div>
+
+    <!-- URL Bar Center -->
+    <div class="header-center">
+      <!-- Prod URL -->
+      <div class="url-input-wrap prod-wrap">
+        <span class="url-label prod-tag">PROD</span>
+        <input type="text" id="studio-prod-url" placeholder="Production URL..." />
+        <button id="btn-reload-prod" class="btn-icon" title="Reload Production">↻</button>
+      </div>
+
+      <!-- Swap URLs Button -->
+      <button id="btn-swap-urls" class="btn-swap" title="Swap Production & Staging URLs">⇄</button>
+
+      <!-- Staging URL -->
+      <div class="url-input-wrap stg-wrap">
+        <span class="url-label stg-tag">STG</span>
+        <input type="text" id="studio-stg-url" placeholder="Staging URL..." />
+        <button id="btn-reload-stg" class="btn-icon" title="Reload Staging">↻</button>
+      </div>
+
+      <button id="btn-navigate-all" class="btn-nav" title="Navigate both frames to entered URLs">Go</button>
+    </div>
+
+    <!-- Controls Right -->
+    <div class="header-right">
+      <!-- Viewport Device Selector -->
+      <div class="control-group">
+        <label for="viewport-select">Device:</label>
+        <select id="viewport-select" class="studio-select">
+          <option value="responsive" selected>Responsive (Fluid)</option>
+          <option value="1920x1080">Desktop (1920 × 1080)</option>
+          <option value="1366x768">Laptop (1366 × 768)</option>
+          <option value="768x1024">Tablet (768 × 1024)</option>
+          <option value="440x956">Mobile (440 × 956)</option>
+        </select>
+      </div>
+
+      <!-- Zoom Scaler -->
+      <div class="control-group">
+        <label for="zoom-select">Scale:</label>
+        <select id="zoom-select" class="studio-select">
+          <option value="1">100%</option>
+          <option value="0.85">85%</option>
+          <option value="0.75">75%</option>
+          <option value="0.5">50%</option>
+        </select>
+      </div>
+
+      <!-- Live Diff Button -->
+      <button id="btn-run-diff" class="btn-diff-action" title="Capture snapshots and calculate visual pixel mismatch">
+        <span>📸 Run Diff</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Secondary Toolbar: Modes & Sync Toggles -->
+  <div class="secondary-toolbar">
+    <!-- View Modes -->
+    <div class="mode-toggles">
+      <button class="mode-btn active" data-mode="side-by-side" id="mode-btn-side">
+        <span class="mode-icon">◫</span> Side-by-Side (Sync)
+      </button>
+      <button class="mode-btn" data-mode="swipe" id="mode-btn-swipe">
+        <span class="mode-icon">↔</span> Swipe Split Curtain
+      </button>
+      <button class="mode-btn" data-mode="flicker" id="mode-btn-flicker">
+        <span class="mode-icon">⚡</span> Flicker Toggle
+      </button>
+      <button class="mode-btn" data-mode="overlay" id="mode-btn-overlay">
+        <span class="mode-icon">⧉</span> Diff Ghost Overlay
+      </button>
+    </div>
+
+    <!-- Mode Specific Controls (Dynamic) -->
+    <div class="mode-controls-area">
+      <!-- Flicker Controls (Hidden by default) -->
+      <div class="flicker-controls" id="flicker-controls" style="display: none;">
+        <button id="btn-flicker-play" class="sub-btn">▶ Auto Flicker</button>
+        <label>Speed:</label>
+        <select id="flicker-speed" class="studio-select-small">
+          <option value="250">Fast (250ms)</option>
+          <option value="500" selected>Medium (500ms)</option>
+          <option value="1000">Slow (1000ms)</option>
+        </select>
+        <span class="shortcut-tip">(or press <kbd>Space</kbd> to toggle)</span>
+      </div>
+
+      <!-- Opacity Slider (For Overlay Mode) -->
+      <div class="overlay-controls" id="overlay-controls" style="display: none;">
+        <label for="slider-overlay-opacity">Diff Opacity:</label>
+        <input type="range" id="slider-overlay-opacity" min="0" max="100" value="80" class="studio-slider" />
+        <span id="label-opacity-val" class="slider-val">80%</span>
+        <select id="overlay-blend-mode" class="studio-select-small">
+          <option value="normal" selected>Layer Blend</option>
+          <option value="difference">Difference Blend</option>
+        </select>
+      </div>
+
+      <!-- Metric Diff Badge -->
+      <div class="metric-badge" id="metric-diff-badge" style="display: none;">
+        <span class="badge-label">Mismatch:</span>
+        <span class="badge-value" id="metric-diff-pct">0.00%</span>
+      </div>
+    </div>
+
+    <!-- Active Sync Features -->
+    <div class="sync-toggles-bar">
+      <label class="sync-chip active" id="chip-sync-clicks">
+        <input type="checkbox" id="check-sync-clicks" checked />
+        <span>Click Mirror</span>
+      </label>
+      <label class="sync-chip active" id="chip-sync-scroll">
+        <input type="checkbox" id="check-sync-scroll" checked />
+        <span>Scroll Sync</span>
+      </label>
+      <label class="sync-chip active" id="chip-sync-hover">
+        <input type="checkbox" id="check-sync-hover" checked />
+        <span>Ghost Cursor</span>
+      </label>
+      <label class="sync-chip active" id="chip-sync-inputs">
+        <input type="checkbox" id="check-sync-inputs" checked />
+        <span>Type Mirror</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- MAIN COMPARISON VIEWPORT STAGE -->
+  <main class="studio-stage" id="studio-stage">
+    
+    <!-- STAGE WRAPPER (Allows scaling / fixed device resolution) -->
+    <div class="viewport-scaler" id="viewport-scaler">
+
+      <!-- ============================================== -->
+      <!-- VIEW MODE 1: SIDE BY SIDE -->
+      <!-- ============================================== -->
+      <div class="stage-view mode-view-side active" id="view-side-by-side">
+        <!-- Frame 1: Production (Left) -->
+        <div class="pane-column pane-prod" id="pane-col-prod">
+          <div class="pane-header">
+            <div class="pane-title">
+              <span class="dot-indicator prod-dot"></span>
+              <strong>Production</strong> (Reference)
+            </div>
+            <div class="pane-actions">
+              <button class="pane-btn" id="btn-prod-popout" title="Open in new tab">↗</button>
+            </div>
+          </div>
+          <div class="pane-frame-wrap" id="wrap-frame-prod">
+            <iframe id="iframe-prod" class="compare-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+          </div>
+        </div>
+
+        <!-- Frame 2: Staging (Right) -->
+        <div class="pane-column pane-stg" id="pane-col-stg">
+          <div class="pane-header">
+            <div class="pane-title">
+              <span class="dot-indicator stg-dot"></span>
+              <strong>Staging</strong> (Candidate)
+            </div>
+            <div class="pane-actions">
+              <button class="pane-btn" id="btn-stg-popout" title="Open in new tab">↗</button>
+            </div>
+          </div>
+          <div class="pane-frame-wrap" id="wrap-frame-stg">
+            <iframe id="iframe-stg" class="compare-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- VIEW MODE 2: SWIPE CURTAIN SLIDER -->
+      <!-- ============================================== -->
+      <div class="stage-view mode-view-swipe" id="view-swipe">
+        <div class="swipe-container" id="swipe-container">
+          <!-- Background Base: Staging -->
+          <div class="swipe-layer swipe-base" id="swipe-base-layer">
+            <iframe id="iframe-swipe-stg" class="compare-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+            <div class="layer-tag tag-stg">STAGING (RIGHT)</div>
+          </div>
+
+          <!-- Foreground Overlay: Production (Clipped) -->
+          <div class="swipe-layer swipe-overlay" id="swipe-overlay-layer">
+            <iframe id="iframe-swipe-prod" class="compare-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+            <div class="layer-tag tag-prod">PRODUCTION (LEFT)</div>
+          </div>
+
+          <!-- Draggable Curtain Handle -->
+          <div class="swipe-divider-handle" id="swipe-divider">
+            <div class="handle-line"></div>
+            <div class="handle-pill">
+              <span class="handle-arrow">◀</span>
+              <span class="handle-label">SWIPE</span>
+              <span class="handle-arrow">▶</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- VIEW MODE 3: FLICKER TOGGLE -->
+      <!-- ============================================== -->
+      <div class="stage-view mode-view-flicker" id="view-flicker">
+        <div class="flicker-container" id="flicker-container">
+          <div class="flicker-current-pill" id="flicker-label">SHOWING: PRODUCTION</div>
+          <iframe id="iframe-flicker-prod" class="compare-iframe flicker-pane active" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+          <iframe id="iframe-flicker-stg" class="compare-iframe flicker-pane" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- VIEW MODE 4: DIFF GHOST OVERLAY -->
+      <!-- ============================================== -->
+      <div class="stage-view mode-view-overlay" id="view-overlay">
+        <div class="overlay-container" id="overlay-container">
+          <!-- Base Underlay (Staging) -->
+          <div class="overlay-underlay">
+            <iframe id="iframe-overlay-stg" class="compare-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+          </div>
+          <!-- Ghost Overlay (Production) -->
+          <div class="overlay-ghost" id="overlay-ghost-pane">
+            <iframe id="iframe-overlay-prod" class="compare-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+          </div>
+          <!-- Pixel Diff Canvas Output (When Run Diff is clicked) -->
+          <canvas id="diff-output-canvas" class="diff-canvas"></canvas>
+        </div>
+      </div>
+
+    </div><!-- /viewport-scaler -->
+  </main>
+
+  <!-- Bottom Diagnostic / Event Mirror Log -->
+  <footer class="studio-footer">
+    <div class="footer-left">
+      <span class="log-title">Sync Event Log:</span>
+      <span class="log-entry" id="log-entry">Studio ready. Awaiting interactions...</span>
+    </div>
+    <div class="footer-right">
+      <span class="connection-tag" id="tag-conn-prod">Prod: <span class="status-ok">Connected</span></span>
+      <span class="connection-tag" id="tag-conn-stg">Stg: <span class="status-ok">Connected</span></span>
+      <button id="btn-toggle-event-log" class="btn-micro-text">Clear Log</button>
+    </div>
+  </footer>
+
+  <script src="studio.js"></script>
+</body>
+</html>
