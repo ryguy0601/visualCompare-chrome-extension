@@ -59,8 +59,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Load Demo Test
   btnDemo.addEventListener("click", () => {
-    prodInput.value = "https://example.com";
-    stgInput.value = "https://iana.org";
+    prodInput.value = chrome.runtime.getURL("demo_prod.html");
+    stgInput.value = chrome.runtime.getURL("demo_stg.html");
   });
 
   // Launch Studio

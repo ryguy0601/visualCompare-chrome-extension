@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ApexCloud Analytics - Production</title>
+  <style>
+    /* Reset & Base */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: #090d16;
+      color: #e2e8f0;
+      color-scheme: dark;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+
+    /* Container */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* 1. Header */
+    header.site-header {
+      background: #0f172a;
+      border-bottom: 1px solid #1e293b;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .header-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 72px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 800;
+      font-size: 1.3rem;
+      color: #f8fafc;
+      letter-spacing: -0.5px;
+    }
+    .brand-logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: bold;
+    }
+    nav.nav-links {
+      display: flex;
+      gap: 28px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: #94a3b8;
+    }
+    nav.nav-links a:hover { color: #38bdf8; }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .btn-login {
+      color: #cbd5e1;
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+    .btn-primary {
+      background: #2563eb;
+      color: #ffffff;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      border: 1px solid #3b82f6;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+      transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .btn-primary:hover, .btn-primary.vc-hovered-pseudo {
+      background: #1d4ed8;
+      border-color: #1e40af;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.5);
+      transform: translateY(-1px);
+    }
+    .btn-primary:focus, .btn-primary.vc-focused-pseudo {
+      outline: none;
+    }
+    .btn-login:hover, .btn-login.vc-hovered-pseudo {
+      color: #38bdf8;
+    }
+
+    /* 2. Hero Section */
+    section.hero-section {
+      padding: 90px 0 70px;
+      text-align: center;
+      background: radial-gradient(circle at 50% 20%, rgba(37, 99, 235, 0.15) 0%, transparent 60%);
+      border-bottom: 1px solid #1e293b;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid #334155;
+      font-size: 0.85rem;
+      color: #38bdf8;
+      margin-bottom: 24px;
+    }
+    .hero-title {
+      font-size: 3.2rem;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      color: #f8fafc;
+      margin-bottom: 20px;
+    }
+    .hero-title span.gradient-text {
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-subtitle {
+      font-size: 1.2rem;
+      color: #94a3b8;
+      max-width: 680px;
+      margin: 0 auto 36px;
+    }
+    .hero-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+    }
+    .btn-secondary {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 12px 26px;
+      border-radius: 8px;
+      font-weight: 600;
+      border: 1px solid #334155;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .btn-secondary:hover, .btn-secondary.vc-hovered-pseudo {
+      background: #334155;
+      color: #ffffff;
+      border-color: #475569;
+    }
+    .btn-secondary:focus, .btn-secondary.vc-focused-pseudo {
+      outline: none;
+    }
+
+    /* 3. Metrics Section */
+    section.metrics-section {
+      padding: 50px 0;
+      border-bottom: 1px solid #1e293b;
+      background: #0b1120;
+    }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+    }
+    .metric-card {
+      background: #131d33;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+    }
+    .metric-value {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #f8fafc;
+      margin-bottom: 4px;
+    }
+    .metric-label {
+      font-size: 0.9rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    /* 4. Feature Cards */
+    section.features-section {
+      padding: 80px 0;
+      border-bottom: 1px solid #1e293b;
+    }
+    .section-header {
+      text-align: center;
+      max-width: 600px;
+      margin: 0 auto 50px;
+    }
+    .section-header h2 {
+      font-size: 2.2rem;
+      font-weight: 700;
+      color: #f8fafc;
+      margin-bottom: 12px;
+    }
+    .section-header p {
+      color: #94a3b8;
+      font-size: 1rem;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+    }
+    .feature-card {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 32px;
+    }
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      background: rgba(37, 99, 235, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      margin-bottom: 20px;
+    }
+    .feature-card h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #f8fafc;
+      margin-bottom: 12px;
+    }
+    .feature-card p {
+      color: #94a3b8;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    /* 5. Pricing Table */
+    section.pricing-section {
+      padding: 80px 0;
+      border-bottom: 1px solid #1e293b;
+      background: #0b1120;
+    }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 28px;
+      align-items: stretch;
+    }
+    .pricing-card {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 14px;
+      padding: 36px 30px;
+      display: flex;
+      flex-direction: column;
+    }
+    .pricing-card.featured {
+      border-color: #3b82f6;
+      background: #111b33;
+      box-shadow: 0 0 24px rgba(59, 130, 246, 0.15);
+      position: relative;
+    }
+    .featured-tag {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #2563eb;
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 3px 12px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .plan-name {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #f8fafc;
+      margin-bottom: 8px;
+    }
+    .plan-desc {
+      color: #64748b;
+      font-size: 0.9rem;
+      margin-bottom: 24px;
+      min-height: 44px;
+    }
+    .plan-price {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      margin-bottom: 28px;
+    }
+    .plan-price .amount {
+      font-size: 2.8rem;
+      font-weight: 800;
+      color: #f8fafc;
+    }
+    .plan-price .period {
+      color: #64748b;
+      font-size: 0.95rem;
+    }
+    .plan-features {
+      list-style: none;
+      margin-bottom: 32px;
+      flex-grow: 1;
+    }
+    .plan-features li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.95rem;
+      color: #cbd5e1;
+      margin-bottom: 12px;
+    }
+    .plan-features li::before {
+      content: "✓";
+      color: #10b981;
+      font-weight: bold;
+    }
+
+    /* 6. Testimonials */
+    section.testimonials-section {
+      padding: 80px 0;
+      border-bottom: 1px solid #1e293b;
+    }
+    .testimonials-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 30px;
+    }
+    .testimonial-card {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 30px;
+    }
+    .quote-text {
+      font-size: 1.05rem;
+      color: #cbd5e1;
+      font-style: italic;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+    .author-info {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .author-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: #334155;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+    .author-name {
+      font-weight: 600;
+      color: #f8fafc;
+      font-size: 0.95rem;
+    }
+    .author-role {
+      font-size: 0.85rem;
+      color: #64748b;
+    }
+
+    /* 7. Newsletter CTA */
+    section.cta-section {
+      padding: 70px 0;
+      background: linear-gradient(180deg, #090d16 0%, #0f172a 100%);
+      border-bottom: 1px solid #1e293b;
+      text-align: center;
+    }
+    .cta-box {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .cta-box h2 {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #f8fafc;
+      margin-bottom: 12px;
+    }
+    .cta-box p {
+      color: #94a3b8;
+      font-size: 1rem;
+      margin-bottom: 28px;
+    }
+    .cta-form {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+    .cta-input {
+      padding: 12px 18px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #f8fafc;
+      font-size: 0.95rem;
+      width: 320px;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .cta-input:focus, .cta-input.vc-focused-pseudo {
+      border-color: #38bdf8 !important;
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25) !important;
+    }
+    .cta-submit {
+      padding: 12px 24px;
+      background: #2563eb;
+      color: #ffffff;
+      font-weight: 600;
+      font-size: 0.95rem;
+      border: 1px solid #3b82f6;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+    }
+    .cta-submit:hover, .cta-submit.vc-hovered-pseudo {
+      background: #1d4ed8;
+      border-color: #1e40af;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.5);
+      transform: translateY(-1px);
+    }
+    .cta-submit:focus, .cta-submit.vc-focused-pseudo {
+      outline: none;
+    }
+
+    /* 8. Footer */
+    footer.site-footer {
+      background: #070a10;
+      padding: 40px 0;
+      font-size: 0.9rem;
+      color: #64748b;
+    }
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. Header Navigation -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <div class="brand-logo">A</div>
+        <span>ApexCloud</span>
+      </div>
+      <nav class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#customers">Customers</a>
+        <a href="#docs">Docs</a>
+      </nav>
+      <div class="header-actions">
+        <a href="#login" class="btn-login">Sign In</a>
+        <button class="btn-primary">Start Free Trial</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 2. Hero Section -->
+  <section class="hero-section">
+    <div class="container">
+      <div class="hero-badge">
+        <span>✨ v2.4 Release</span>
+        <span>Real-time anomaly telemetry</span>
+      </div>
+      <h1 class="hero-title">
+        Unified Cloud Observability <br />
+        <span class="gradient-text">Engineered for Velocity</span>
+      </h1>
+      <p class="hero-subtitle">
+        Monitor distributed microservices, traces, and metrics with sub-second latency and automated root cause isolation.
+      </p>
+      <div class="hero-buttons">
+        <button class="btn-primary" style="padding: 12px 28px; font-size: 1rem;">Deploy in 5 Minutes</button>
+        <button class="btn-secondary">Request Demo</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Key Metrics -->
+  <section class="metrics-section">
+    <div class="container">
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-value">99.99%</div>
+          <div class="metric-label">Engine Uptime SLA</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value">12.4M</div>
+          <div class="metric-label">Traces / Second</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value">&lt; 50ms</div>
+          <div class="metric-label">Query Latency</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value">4.9 / 5</div>
+          <div class="metric-label">Customer Satisfaction</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Features Grid -->
+  <section class="features-section" id="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Built for modern DevOps stacks</h2>
+        <p>Zero configuration required. Ingest OpenTelemetry standards out of the box.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>Instant Pipeline Tracing</h3>
+          <p>Graph execution trees across Kubernetes clusters with zero-instrumentation eBPF sensors.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🛡️</div>
+          <h3>Zero-Trust Security Mesh</h3>
+          <p>Continuous compliance monitoring and granular role-based encryption for multi-tenant environments.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>AI-Powered Root Cause</h3>
+          <p>Correlate sudden downstream latency spikes directly to source-code commit diffs in seconds.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Pricing Plans -->
+  <section class="pricing-section" id="pricing">
+    <div class="container">
+      <div class="section-header">
+        <h2>Transparent, scalable pricing</h2>
+        <p>Predictable pricing that scales linearly with telemetry volume.</p>
+      </div>
+      <div class="pricing-grid">
+        <!-- Starter Plan -->
+        <div class="pricing-card">
+          <div class="plan-name">Starter</div>
+          <div class="plan-desc">Essential telemetry for seed startups and small teams.</div>
+          <div class="plan-price">
+            <span class="amount">$29</span>
+            <span class="period">/ mo</span>
+          </div>
+          <ul class="plan-features">
+            <li>5 million events / month</li>
+            <li>30-day log retention</li>
+            <li>Community support</li>
+          </ul>
+          <button class="btn-secondary">Choose Starter</button>
+        </div>
+
+        <!-- Pro Plan (Featured) -->
+        <div class="pricing-card featured">
+          <div class="featured-tag">Most Popular</div>
+          <div class="plan-name">Professional</div>
+          <div class="plan-desc">Full observability suite for fast-growing scaleups.</div>
+          <div class="plan-price">
+            <span class="amount">$49</span>
+            <span class="period">/ mo</span>
+          </div>
+          <ul class="plan-features">
+            <li>50 million events / month</li>
+            <li>90-day log retention</li>
+            <li>eBPF distributed tracing</li>
+            <li>Dedicated Slack support channel</li>
+          </ul>
+          <button class="btn-primary">Choose Pro</button>
+        </div>
+
+        <!-- Enterprise Plan -->
+        <div class="pricing-card">
+          <div class="plan-name">Enterprise</div>
+          <div class="plan-desc">Custom governance, VPC peering, and custom SLAs.</div>
+          <div class="plan-price">
+            <span class="amount">$199</span>
+            <span class="period">/ mo</span>
+          </div>
+          <ul class="plan-features">
+            <li>Unlimited telemetry volume</li>
+            <li>1-year log retention</li>
+            <li>Custom SSO &amp; SAML integrations</li>
+            <li>99.99% contractual uptime SLA</li>
+          </ul>
+          <button class="btn-secondary">Contact Sales</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. Testimonials -->
+  <section class="testimonials-section" id="customers">
+    <div class="container">
+      <div class="section-header">
+        <h2>Trusted by engineering leads</h2>
+        <p>See why high-growth technology companies rely on ApexCloud every day.</p>
+      </div>
+      <div class="testimonials-grid">
+        <div class="testimonial-card">
+          <p class="quote-text">
+            "ApexCloud reduced our mean-time-to-resolution by 78%. We spotted a database connection pool leak within 3 minutes of deploying."
+          </p>
+          <div class="author-info">
+            <div class="author-avatar">SK</div>
+            <div>
+              <div class="author-name">Sarah Jenkins</div>
+              <div class="author-role">VP of Engineering at FinEdge</div>
+            </div>
+          </div>
+        </div>
+        <div class="testimonial-card">
+          <p class="quote-text">
+            "The eBPF integration alone saved our DevOps team 3 weeks of manual config. The dashboard is stunning and exceptionally responsive."
+          </p>
+          <div class="author-info">
+            <div class="author-avatar">MR</div>
+            <div>
+              <div class="author-name">Marcus Rodriguez</div>
+              <div class="author-role">Principal Architect at CloudScale</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. Call To Action -->
+  <section class="cta-section">
+    <div class="container">
+      <div class="cta-box">
+        <h2>Ready to eliminate downtime?</h2>
+        <p>Get started today with our full-featured 14-day free trial. No credit card required.</p>
+        <form class="cta-form" onsubmit="return false;">
+          <input type="email" class="cta-input" placeholder="Enter your work email..." value="dev@example.com" />
+          <button type="submit" class="cta-submit">Start Free Trial</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. Footer -->
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div>&copy; 2026 ApexCloud Technologies Inc. All rights reserved.</div>
+      <div style="display: flex; gap: 20px;">
+        <a href="#privacy">Privacy</a>
+        <a href="#terms">Terms</a>
+        <a href="#security">Security</a>
+        <a href="#status">System Status</a>
+      </div>
+    </div>
+  </footer>
+  <script src="sync_agent.js"></script>
+</body>
+</html>

@@ -125,10 +125,20 @@
         <span class="badge-label">Mismatch:</span>
         <span class="badge-value" id="metric-diff-pct">0.00%</span>
       </div>
+
+      <!-- Layout Shift Hazard Spacer Badge -->
+      <div class="metric-badge metric-shift-badge" id="metric-shift-badge" style="display: none;" title="Total layout shift height compensated by yellow hazard spacers">
+        <span class="badge-label">⚠️ Shift Pad:</span>
+        <span class="badge-value" id="metric-shift-val">+0px</span>
+      </div>
     </div>
 
     <!-- Active Sync Features -->
     <div class="sync-toggles-bar">
+      <label class="sync-chip active chip-hazard" id="chip-sync-hazard" title="DOM-Aware layout shift alignment using yellow hazard spacers (ports VisualCompare Python diff engine)">
+        <input type="checkbox" id="check-sync-hazard" checked />
+        <span>⚠️ Yellow Hazard Spacers</span>
+      </label>
       <label class="sync-chip active" id="chip-sync-clicks">
         <input type="checkbox" id="check-sync-clicks" checked />
         <span>Click Mirror</span>
@@ -137,13 +147,13 @@
         <input type="checkbox" id="check-sync-scroll" checked />
         <span>Scroll Sync</span>
       </label>
-      <label class="sync-chip active" id="chip-sync-hover">
+      <label class="sync-chip active" id="chip-sync-hover" title="Mirror mouse hover states and ghost cursor">
         <input type="checkbox" id="check-sync-hover" checked />
-        <span>Ghost Cursor</span>
+        <span>Hover &amp; Pointer</span>
       </label>
-      <label class="sync-chip active" id="chip-sync-inputs">
+      <label class="sync-chip active" id="chip-sync-inputs" title="Mirror typing and focus states">
         <input type="checkbox" id="check-sync-inputs" checked />
-        <span>Type Mirror</span>
+        <span>Type &amp; Focus</span>
       </label>
     </div>
   </div>
@@ -170,7 +180,7 @@
             </div>
           </div>
           <div class="pane-frame-wrap" id="wrap-frame-prod">
-            <iframe id="iframe-prod" class="compare-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+            <iframe id="iframe-prod" class="compare-iframe" src="about:blank"></iframe>
           </div>
         </div>
 
@@ -186,7 +196,7 @@
             </div>
           </div>
           <div class="pane-frame-wrap" id="wrap-frame-stg">
-            <iframe id="iframe-stg" class="compare-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+            <iframe id="iframe-stg" class="compare-iframe" src="about:blank"></iframe>
           </div>
         </div>
       </div>
@@ -198,13 +208,13 @@
         <div class="swipe-container" id="swipe-container">
           <!-- Background Base: Staging -->
           <div class="swipe-layer swipe-base" id="swipe-base-layer">
-            <iframe id="iframe-swipe-stg" class="compare-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+            <iframe id="iframe-swipe-stg" class="compare-iframe" src="about:blank"></iframe>
             <div class="layer-tag tag-stg">STAGING (RIGHT)</div>
           </div>
 
           <!-- Foreground Overlay: Production (Clipped) -->
           <div class="swipe-layer swipe-overlay" id="swipe-overlay-layer">
-            <iframe id="iframe-swipe-prod" class="compare-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+            <iframe id="iframe-swipe-prod" class="compare-iframe" src="about:blank"></iframe>
             <div class="layer-tag tag-prod">PRODUCTION (LEFT)</div>
           </div>
 
@@ -226,8 +236,8 @@
       <div class="stage-view mode-view-flicker" id="view-flicker">
         <div class="flicker-container" id="flicker-container">
           <div class="flicker-current-pill" id="flicker-label">SHOWING: PRODUCTION</div>
-          <iframe id="iframe-flicker-prod" class="compare-iframe flicker-pane active" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
-          <iframe id="iframe-flicker-stg" class="compare-iframe flicker-pane" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+          <iframe id="iframe-flicker-prod" class="compare-iframe flicker-pane active" src="about:blank"></iframe>
+          <iframe id="iframe-flicker-stg" class="compare-iframe flicker-pane" src="about:blank"></iframe>
         </div>
       </div>
 
@@ -238,11 +248,16 @@
         <div class="overlay-container" id="overlay-container">
           <!-- Base Underlay (Staging) -->
           <div class="overlay-underlay">
-            <iframe id="iframe-overlay-stg" class="compare-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+            <iframe id="iframe-overlay-stg" class="compare-iframe" src="about:blank"></iframe>
           </div>
           <!-- Ghost Overlay (Production) -->
           <div class="overlay-ghost" id="overlay-ghost-pane">
-            <iframe id="iframe-overlay-prod" class="compare-iframe" src="about:blank" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals"></iframe>
+            <iframe id="iframe-overlay-prod" class="compare-iframe" src="about:blank"></iframe>
+          </div>
+          <!-- Diff Legend Pill -->
+          <div class="diff-legend-pill" id="diff-legend-pill" style="display: none;">
+            <span class="legend-chip legend-red"><span class="legend-dot dot-red"></span> Red: Pixel Mismatch</span>
+            <span class="legend-chip legend-yellow"><span class="legend-dot dot-yellow"></span> Yellow: Added Space / Layout Shift</span>
           </div>
           <!-- Pixel Diff Canvas Output (When Run Diff is clicked) -->
           <canvas id="diff-output-canvas" class="diff-canvas"></canvas>
