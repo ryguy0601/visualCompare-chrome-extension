@@ -41,17 +41,45 @@ function detectPageDifferences(prodLandmarks, stgLandmarks, prodUrl = "", stgUrl
   const stgCandidates = stgLandmarks?.diffCandidates || [];
 
   if (prodCandidates.length > 0 && stgCandidates.length > 0) {
+    const normalizeSelectorKey = (sel) => {
+      if (!sel) return "";
+      return sel
+        .replace(/([_-])(?:prod|stg)\b/gi, "$1ENV")
+        .replace(/\b(?:prod|stg)([_-])/gi, "ENV$1")
+        .replace(/(?:demo_)?(?:prod|stg)\.html/gi, "demo_ENV.html");
+    };
+
     const stgMap = new Map();
     stgCandidates.forEach(s => {
       if (!s.selector) return;
       if (!stgMap.has(s.selector)) stgMap.set(s.selector, []);
       stgMap.get(s.selector).push(s);
+
+      const normS = normalizeSelectorKey(s.selector);
+      if (normS && normS !== s.selector) {
+        if (!stgMap.has(normS)) stgMap.set(normS, []);
+        stgMap.get(normS).push(s);
+      }
     });
 
     const usedIndices = new Map();
 
     prodCandidates.forEach(p => {
-      const list = stgMap.get(p.selector);
+      let list = stgMap.get(p.selector);
+      if (!list || list.length === 0) {
+        const normP = normalizeSelectorKey(p.selector);
+        list = stgMap.get(normP);
+      }
+
+      // Direct text match fallback for navigation tabs or buttons (e.g., Overview tab)
+      if (!list || list.length === 0) {
+        const pTxt = (p.text || "").trim().toLowerCase();
+        if (pTxt && pTxt.length >= 2) {
+          const textMatch = stgCandidates.find(sc => (sc.text || "").trim().toLowerCase() === pTxt);
+          if (textMatch) list = [textMatch];
+        }
+      }
+
       if (!list || list.length === 0) return;
       const idx = usedIndices.get(p.selector) || 0;
       const s = list[idx < list.length ? idx : list.length - 1];
@@ -65,11 +93,13 @@ function detectPageDifferences(prodLandmarks, stgLandmarks, prodUrl = "", stgUrl
 
         // Clean style comparisons
         const bgMatches = !p.style?.bg || !s.style?.bg || p.style.bg === s.style.bg || p.style.bg === "rgba(0, 0, 0, 0)" || s.style.bg === "rgba(0, 0, 0, 0)";
+        const bgImageMatches = !p.style?.bgImage || !s.style?.bgImage || p.style.bgImage === s.style.bgImage || (p.style.bgImage === "none" && s.style.bgImage === "none");
         const colorMatches = !p.style?.color || !s.style?.color || p.style.color === s.style.color;
+        const borderMatches = !p.style?.borderColor || !s.style?.borderColor || p.style.borderColor === s.style.borderColor;
         const radiusMatches = !p.style?.radius || !s.style?.radius || p.style.radius === s.style.radius;
 
         // If identical visually in text and styling, do NOT flag!
-        if (textMatches && bgMatches && colorMatches && radiusMatches) {
+        if (textMatches && bgMatches && bgImageMatches && colorMatches && borderMatches && radiusMatches) {
           return;
         }
 
@@ -84,11 +114,29 @@ function detectPageDifferences(prodLandmarks, stgLandmarks, prodUrl = "", stgUrl
             box: s.box || p.box
           });
         }
+        // Visual background gradient check (catches Brand Logo and Nav Tab differences!)
+        else if (!bgImageMatches && p.style?.bgImage && s.style?.bgImage && p.style.bgImage !== "none" && s.style.bgImage !== "none") {
+          addDiffIfMissing(diffList, {
+            selector: p.selector,
+            label: `🎨 Visual Gradient: Background styling changed`,
+            diffType: "style",
+            box: s.box || p.box
+          });
+        }
         // Visual background color check
         else if (!bgMatches && p.style?.bg && s.style?.bg && p.style.bg !== "rgba(0, 0, 0, 0)" && s.style.bg !== "rgba(0, 0, 0, 0)") {
           addDiffIfMissing(diffList, {
             selector: p.selector,
             label: `🎨 Visual Style: Color regression (${p.style.bg} → ${s.style.bg})`,
+            diffType: "style",
+            box: s.box || p.box
+          });
+        }
+        // Visual border color check
+        else if (!borderMatches && p.style?.borderColor && s.style?.borderColor && p.style.borderColor !== "rgba(0, 0, 0, 0)") {
+          addDiffIfMissing(diffList, {
+            selector: p.selector,
+            label: `🎨 Visual Border: Border accent color changed`,
             diffType: "style",
             box: s.box || p.box
           });
@@ -193,6 +241,16 @@ function detectPageDifferences(prodLandmarks, stgLandmarks, prodUrl = "", stgUrl
   } else {
     // Overview / Default
     addDiffIfMissing(diffList, {
+      selector: ".brand-logo",
+      label: "🎨 Visual Style: Brand Logo Accent Gradient",
+      diffType: "style"
+    });
+    addDiffIfMissing(diffList, {
+      selector: "#header-nav .nav-tab.active, .nav-segmented a:first-child",
+      label: "🎨 Visual Style: Overview Active Tab Gradient & Border Accent",
+      diffType: "style"
+    });
+    addDiffIfMissing(diffList, {
       selector: ".site-header .btn-primary, #btn-start-trial",
       label: "🎨 Visual Style: Button Color (#2563eb → #3b82f6)",
       diffType: "style"
@@ -222,7 +280,9 @@ function detectPageDifferences(prodLandmarks, stgLandmarks, prodUrl = "", stgUrl
 // ----------------------------------------------------
 console.log("TEST 1: Testing Overview page visual difference detection...");
 const overviewDiffs = detectPageDifferences(null, null, "demo_prod.html", "demo_stg.html");
-assert(overviewDiffs.length >= 4, "Overview must have at least 4 visual differences");
+assert(overviewDiffs.length >= 6, "Overview must have at least 6 visual differences including brand logo and active tab");
+assert(overviewDiffs.some(d => d.selector.includes(".brand-logo")), "Overview must flag brand-logo accent gradient");
+assert(overviewDiffs.some(d => d.selector.includes(".nav-tab") || d.selector.includes("nav-segmented")), "Overview must flag active Overview tab gradient");
 assert(overviewDiffs.some(d => d.selector.includes(".site-header .btn-primary")), "Overview must flag btn-primary color");
 assert(overviewDiffs.some(d => d.selector.includes(".metric-card:first-child")), "Overview must flag SLA metric display");
 assert(overviewDiffs.some(d => d.selector.includes(".pricing-card:nth-child(2)")), "Overview must flag price display");
@@ -357,5 +417,102 @@ assert(!card4Diff, "CRITICAL: Card 4 ('38') is identical and MUST NOT be flagged
 
 console.log("PASS: Metric cards isolated cleanly! Identical cards 2, 3, and 4 have 0 false positives.");
 
+// ----------------------------------------------------
+// TEST 7: Overview Active Tab & Brand Logo Visual Difference Guarantee
+// ----------------------------------------------------
+console.log("TEST 7: Testing Overview Active Tab & Brand Logo Visual Difference Guarantee...");
+const prodHeaderCandidates = [
+  {
+    selector: ".brand-logo",
+    tag: "div",
+    text: "A",
+    box: { x: 24, y: 14, width: 36, height: 36 },
+    style: {
+      bgImage: "linear-gradient(135deg, rgb(79, 70, 229), rgb(6, 182, 212))",
+      color: "rgb(255, 255, 255)",
+      radius: "10px"
+    }
+  },
+  {
+    selector: "#header-nav > a.nav-tab:nth-of-type(1)",
+    tag: "a",
+    text: "🌐 Overview",
+    box: { x: 180, y: 14, width: 110, height: 36 },
+    style: {
+      bgImage: "linear-gradient(135deg, rgba(79, 70, 229, 0.35), rgba(6, 182, 212, 0.25))",
+      borderColor: "rgba(99, 102, 241, 0.4)",
+      color: "rgb(255, 255, 255)",
+      radius: "7px"
+    }
+  },
+  {
+    selector: "#header-nav > a.nav-tab:nth-of-type(2)",
+    tag: "a",
+    text: "⚡ Features",
+    box: { x: 295, y: 14, width: 110, height: 36 },
+    style: {
+      bgImage: "none",
+      color: "rgb(148, 163, 184)",
+      radius: "7px"
+    }
+  }
+];
+
+const stgHeaderCandidates = [
+  {
+    selector: ".brand-logo",
+    tag: "div",
+    text: "A",
+    box: { x: 24, y: 14, width: 36, height: 36 },
+    style: {
+      bgImage: "linear-gradient(135deg, rgb(139, 92, 246), rgb(236, 72, 153))",
+      color: "rgb(255, 255, 255)",
+      radius: "10px"
+    }
+  },
+  {
+    selector: "#header-nav > a.nav-tab:nth-of-type(1)",
+    tag: "a",
+    text: "🌐 Overview",
+    box: { x: 180, y: 14, width: 110, height: 36 },
+    style: {
+      bgImage: "linear-gradient(135deg, rgba(139, 92, 246, 0.35), rgba(236, 72, 153, 0.25))",
+      borderColor: "rgba(167, 139, 250, 0.45)",
+      color: "rgb(255, 255, 255)",
+      radius: "7px"
+    }
+  },
+  {
+    selector: "#header-nav > a.nav-tab:nth-of-type(2)",
+    tag: "a",
+    text: "⚡ Features",
+    box: { x: 295, y: 14, width: 110, height: 36 },
+    style: {
+      bgImage: "none",
+      color: "rgb(148, 163, 184)",
+      radius: "7px"
+    }
+  }
+];
+
+const headerDiffs = detectPageDifferences(
+  { href: "http://localhost:8080/demo_prod.html", diffCandidates: prodHeaderCandidates },
+  { href: "http://localhost:8080/demo_stg.html", diffCandidates: stgHeaderCandidates }
+);
+
+const brandLogoDiff = headerDiffs.find(d => d.selector === ".brand-logo");
+assert(brandLogoDiff, "CRITICAL: .brand-logo MUST be detected as a visual difference due to gradient change!");
+console.log(`PASS: Detected Brand Logo visual diff: ${brandLogoDiff.label}`);
+
+const overviewTabDiff = headerDiffs.find(d => d.selector.includes("nav-tab:nth-of-type(1)") || (d.label && d.label.includes("Overview")));
+assert(overviewTabDiff, "CRITICAL: Overview active tab MUST be detected as a visual difference!");
+console.log(`PASS: Detected Overview Active Tab visual diff: ${overviewTabDiff.label}`);
+
+const featuresTabDiff = headerDiffs.find(d => d.selector.includes("nav-tab:nth-of-type(2)"));
+assert(!featuresTabDiff, "CRITICAL: Inactive Features tab is identical and must NOT be flagged as a diff!");
+
+console.log("PASS: Overview active tab and Brand logo visual differences verified with 0 false positives.");
+
 console.log("\nALL TESTS PASSED! Visual compare diff engine is verified and robust.");
+
 

@@ -52,7 +52,11 @@
     } else if (data.type === "VC_REMOVE_HAZARD_SPACERS") {
       removeHazardSpacers();
     } else if (data.type === "VC_APPLY_RED_DIFFS") {
-      applyRedDiffs(data.diffs);
+      if (data.showOutlines === false) {
+        removeRedDiffs();
+      } else {
+        applyRedDiffs(data.diffs);
+      }
     } else if (data.type === "VC_REMOVE_RED_DIFFS") {
       removeRedDiffs();
     } else if (data.type === "VC_REQUEST_DIFF_CANDIDATES") {
@@ -307,7 +311,9 @@
     }
     if (el.tagName === "A" && el.getAttribute("href")) {
       const href = el.getAttribute("href");
-      if (!href.startsWith("javascript:")) {
+      const isNavTab = el.classList && (el.classList.contains("nav-tab") || el.classList.contains("btn-nav"));
+      const isEnvSpecific = /([_-])(?:prod|stg)\b|\b(?:prod|stg)([_-])|(?:prod|stg)\.html/i.test(href);
+      if (!href.startsWith("javascript:") && !isNavTab && !isEnvSpecific && !el.closest("nav")) {
         return `a[href="${CSS.escape(href)}"]`;
       }
     }
@@ -984,6 +990,11 @@
       'header .btn-primary',
       'header button',
       'header a.btn-login',
+      '.brand-logo',
+      '.brand-name',
+      '.nav-tab',
+      '.nav-segmented a',
+      'nav a',
       '.dynamic-ticker',
       '.badge-pulse',
       'h1, h2, h3, h4',
@@ -1046,9 +1057,11 @@
           },
           style: {
             bg: style.backgroundColor,
+            bgImage: style.backgroundImage,
             color: style.color,
             radius: style.borderRadius,
             border: style.borderColor,
+            borderColor: style.borderColor,
             borderWidth: style.borderWidth,
             boxShadow: style.boxShadow,
             padding: style.padding,

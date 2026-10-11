@@ -100,6 +100,9 @@
       <button class="mode-btn active" data-mode="side-by-side" id="mode-btn-side">
         <span class="mode-icon">◫</span> Side-by-Side (Sync)
       </button>
+      <button class="mode-btn" data-mode="pixel-diff" id="mode-btn-pixel-diff">
+        <span class="mode-icon">▦</span> Pixel Diff (3-Col)
+      </button>
       <button class="mode-btn" data-mode="swipe" id="mode-btn-swipe">
         <span class="mode-icon">↔</span> Swipe Split Curtain
       </button>
@@ -223,6 +226,26 @@
           </div>
           <div class="pane-frame-wrap" id="wrap-frame-stg">
             <iframe id="iframe-stg" class="compare-iframe" src="about:blank"></iframe>
+          </div>
+        </div>
+
+        <!-- Frame 3: Pixel Diff (3rd Column - Differences in Red) -->
+        <div class="pane-column pane-diff" id="pane-col-diff" style="display: none;">
+          <div class="pane-header">
+            <div class="pane-title">
+              <span class="dot-indicator diff-dot"></span>
+              <strong>Pixel Diff</strong> (Differences in Red)
+            </div>
+            <div class="pane-actions">
+              <span class="diff-mismatch-pill" id="col-diff-pct">0.00% Diff</span>
+              <button class="pane-btn" id="btn-col-diff-refresh" title="Re-run Pixel Diff">🔄</button>
+            </div>
+          </div>
+          <div class="pane-frame-wrap pane-diff-wrap" id="wrap-frame-diff">
+            <div class="pixel-diff-viewport" id="pixel-diff-viewport">
+              <iframe id="iframe-diff-base" class="compare-iframe diff-base-iframe" src="about:blank"></iframe>
+              <canvas id="pixel-diff-canvas" class="pixel-diff-canvas"></canvas>
+            </div>
           </div>
         </div>
       </div>

@@ -54,7 +54,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const iframeOverlayProd = document.getElementById("iframe-overlay-prod");
   const iframeOverlayStg = document.getElementById("iframe-overlay-stg");
 
-  // Mode Specific
+  // Mode Specific & 3-Column Pixel Diff
+  const modeBtnPixelDiff = document.getElementById("mode-btn-pixel-diff");
+  const paneColDiff = document.getElementById("pane-col-diff");
+  const colDiffPct = document.getElementById("col-diff-pct");
+  const btnColDiffRefresh = document.getElementById("btn-col-diff-refresh");
+  const wrapFrameDiff = document.getElementById("wrap-frame-diff");
+  const pixelDiffViewport = document.getElementById("pixel-diff-viewport");
+  const iframeDiffBase = document.getElementById("iframe-diff-base");
+  const pixelDiffCanvas = document.getElementById("pixel-diff-canvas");
+
   const swipeContainer = document.getElementById("swipe-container");
   const swipeOverlayLayer = document.getElementById("swipe-overlay-layer");
   const swipeDivider = document.getElementById("swipe-divider");
@@ -293,6 +302,19 @@ document.addEventListener("DOMContentLoaded", () => {
           pctX: action.pctX || 0,
           pctY: action.pctY || 0
         };
+        // Keep 3rd column scroll in sync
+        if (iframeDiffBase && iframeDiffBase.contentWindow) {
+          try {
+            iframeDiffBase.contentWindow.postMessage({
+              type: "VC_MIRROR_ACTION",
+              action: { kind: "scroll", scrollY: lastScrollState.scrollY, scrollX: lastScrollState.scrollX, pctY: lastScrollState.pctY, pctX: lastScrollState.pctX }
+            }, "*");
+          } catch (e) {}
+        }
+        if (wrapFrameDiff) {
+          wrapFrameDiff.scrollTop = lastScrollState.scrollY || 0;
+          wrapFrameDiff.scrollLeft = lastScrollState.scrollX || 0;
+        }
       }
 
       // Check sync permissions
@@ -333,7 +355,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
 
-    if (currentMode === "side-by-side") {
+    if (currentMode === "side-by-side" || currentMode === "pixel-diff") {
       send(targetPane === "PROD" ? iframeProd : iframeStg);
     } else if (currentMode === "swipe") {
       send(targetPane === "PROD" ? iframeSwipeProd : iframeSwipeStg);
@@ -362,7 +384,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (mode === "overlay") {
       return { prod: iframeOverlayProd, stg: iframeOverlayStg };
     } else {
-      return { prod: iframeProd, stg: iframeStg };
+      return { prod: iframeProd, stg: iframeStg, diff: iframeDiffBase };
     }
   }
 
@@ -387,14 +409,6 @@ document.addEventListener("DOMContentLoaded", () => {
           active.stg.contentWindow.postMessage({ type: "VC_REQUEST_LANDMARKS" }, "*");
         } catch (e) {}
       }
-      if (checkSyncRedDiff && checkSyncRedDiff.checked && activeRedDiffs.length > 0) {
-        if (active.prod && active.prod.contentWindow) {
-          try { active.prod.contentWindow.postMessage({ type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs }, "*"); } catch (e) {}
-        }
-        if (active.stg && active.stg.contentWindow) {
-          try { active.stg.contentWindow.postMessage({ type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs }, "*"); } catch (e) {}
-        }
-      }
       if (reason) {
         logAction(`[LAYOUT SHIFT] Re-running yellow hazard alignment for ${mode.toUpperCase()} view (${reason})...`);
       }
@@ -406,6 +420,44 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Update buttons
     modeBtns.forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
+
+    const viewSide = document.getElementById("view-side-by-side");
+
+    if (mode === "pixel-diff") {
+      stageViews.forEach(v => {
+        v.classList.remove("active");
+        if (v.id === "view-side-by-side") {
+          v.classList.add("active");
+          v.classList.add("mode-view-pixel-diff");
+        }
+      });
+      if (paneColDiff) paneColDiff.style.display = "flex";
+      flickerControls.style.display = "none";
+      overlayControls.style.display = "none";
+
+      // Keep base iframe src in sync with Staging or Prod
+      const targetSrc = (iframeStg && iframeStg.src && iframeStg.src !== "about:blank") ? iframeStg.src : (iframeProd ? iframeProd.src : "");
+      if (iframeDiffBase && targetSrc && iframeDiffBase.src !== targetSrc) {
+        iframeDiffBase.src = targetSrc;
+      }
+
+      // Keep live panes clean without outlines
+      dispatchToPane("PROD", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs, showOutlines: false });
+      dispatchToPane("STG", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs, showOutlines: false });
+
+      syncScrollToFrames([iframeProd, iframeStg, iframeDiffBase]);
+      logAction("Switched to PIXEL DIFF (3-Column View with Red Mismatches)");
+
+      runHazardAlignmentForMode(mode, "View type changed to PIXEL DIFF");
+      setTimeout(() => {
+        renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions);
+      }, 100);
+      return;
+    }
+
+    // Normal modes: hide Column 3
+    if (paneColDiff) paneColDiff.style.display = "none";
+    if (viewSide) viewSide.classList.remove("mode-view-pixel-diff");
 
     // Update views
     stageViews.forEach(v => {
@@ -847,6 +899,10 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (e) {}
       }
     }
+    if (wrapFrameDiff) {
+      wrapFrameDiff.scrollTop = lastScrollState.scrollY || 0;
+      wrapFrameDiff.scrollLeft = lastScrollState.scrollX || 0;
+    }
   }
 
   function dispatchToPane(targetPane, message) {
@@ -1005,7 +1061,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // NON-HEIGHT RED DIFFERENCE DETECTION & MIRROR ENGINE
   // (Highlights non-height visual regressions: colors, metrics, buttons, shapes)
   // ----------------------------------------------------
-  function computeAndApplyRedDifferences() {
+  function computeAndApplyRedDifferences(showOutlines = false) {
     if (!checkSyncRedDiff || !checkSyncRedDiff.checked) {
       clearAllRedDiffs(false);
       return;
@@ -1014,8 +1070,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const diffList = detectPageDifferences(lastProdLandmarks, lastStgLandmarks);
 
     activeRedDiffs = diffList;
-    dispatchToPane("PROD", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs });
-    dispatchToPane("STG", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs });
+    dispatchToPane("PROD", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs, showOutlines });
+    dispatchToPane("STG", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs, showOutlines });
 
     metricRedBadge.style.display = "flex";
     metricRedVal.textContent = `${activeRedDiffs.length} Visual Diffs`;
@@ -1039,18 +1095,46 @@ document.addEventListener("DOMContentLoaded", () => {
     const stgCandidates = stgLandmarks?.diffCandidates || [];
 
     if (prodCandidates.length > 0 && stgCandidates.length > 0) {
+      const normalizeSelectorKey = (sel) => {
+        if (!sel) return "";
+        return sel
+          .replace(/([_-])(?:prod|stg)\b/gi, "$1ENV")
+          .replace(/\b(?:prod|stg)([_-])/gi, "ENV$1")
+          .replace(/(?:demo_)?(?:prod|stg)\.html/gi, "demo_ENV.html");
+      };
+
       // Map candidates by selector as an array so multiple elements with identical selectors are matched by index
       const stgMap = new Map();
       stgCandidates.forEach(s => {
         if (!s.selector) return;
         if (!stgMap.has(s.selector)) stgMap.set(s.selector, []);
         stgMap.get(s.selector).push(s);
+
+        const normS = normalizeSelectorKey(s.selector);
+        if (normS && normS !== s.selector) {
+          if (!stgMap.has(normS)) stgMap.set(normS, []);
+          stgMap.get(normS).push(s);
+        }
       });
 
       const usedIndices = new Map();
 
       prodCandidates.forEach(p => {
-        const list = stgMap.get(p.selector);
+        let list = stgMap.get(p.selector);
+        if (!list || list.length === 0) {
+          const normP = normalizeSelectorKey(p.selector);
+          list = stgMap.get(normP);
+        }
+
+        // Direct text match fallback for navigation tabs or buttons (e.g., Overview tab)
+        if (!list || list.length === 0) {
+          const pTxt = (p.text || "").trim().toLowerCase();
+          if (pTxt && pTxt.length >= 2) {
+            const textMatch = stgCandidates.find(sc => (sc.text || "").trim().toLowerCase() === pTxt);
+            if (textMatch) list = [textMatch];
+          }
+        }
+
         if (!list || list.length === 0) return;
         const idx = usedIndices.get(p.selector) || 0;
         const s = list[idx < list.length ? idx : list.length - 1];
@@ -1064,11 +1148,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
           // Clean style comparisons
           const bgMatches = !p.style?.bg || !s.style?.bg || p.style.bg === s.style.bg || p.style.bg === "rgba(0, 0, 0, 0)" || s.style.bg === "rgba(0, 0, 0, 0)";
+          const bgImageMatches = !p.style?.bgImage || !s.style?.bgImage || p.style.bgImage === s.style.bgImage || (p.style.bgImage === "none" && s.style.bgImage === "none");
           const colorMatches = !p.style?.color || !s.style?.color || p.style.color === s.style.color;
+          const borderMatches = !p.style?.borderColor || !s.style?.borderColor || p.style.borderColor === s.style.borderColor;
           const radiusMatches = !p.style?.radius || !s.style?.radius || p.style.radius === s.style.radius;
 
           // If identical visually in text and styling, do NOT flag!
-          if (textMatches && bgMatches && colorMatches && radiusMatches) {
+          if (textMatches && bgMatches && bgImageMatches && colorMatches && borderMatches && radiusMatches) {
             return;
           }
 
@@ -1083,11 +1169,29 @@ document.addEventListener("DOMContentLoaded", () => {
               box: s.box || p.box
             });
           }
+          // Visual background gradient check (catches Brand Logo and Nav Tab differences!)
+          else if (!bgImageMatches && p.style?.bgImage && s.style?.bgImage && p.style.bgImage !== "none" && s.style.bgImage !== "none") {
+            addDiffIfMissing(diffList, {
+              selector: p.selector,
+              label: `🎨 Visual Gradient: Background styling changed`,
+              diffType: "style",
+              box: s.box || p.box
+            });
+          }
           // Visual background color check
           else if (!bgMatches && p.style?.bg && s.style?.bg && p.style.bg !== "rgba(0, 0, 0, 0)" && s.style.bg !== "rgba(0, 0, 0, 0)") {
             addDiffIfMissing(diffList, {
               selector: p.selector,
               label: `🎨 Visual Style: Color regression (${p.style.bg} → ${s.style.bg})`,
+              diffType: "style",
+              box: s.box || p.box
+            });
+          }
+          // Visual border color check
+          else if (!borderMatches && p.style?.borderColor && s.style?.borderColor && p.style.borderColor !== "rgba(0, 0, 0, 0)") {
+            addDiffIfMissing(diffList, {
+              selector: p.selector,
+              label: `🎨 Visual Border: Border accent color changed`,
               diffType: "style",
               box: s.box || p.box
             });
@@ -1192,6 +1296,16 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       // Overview / Default
       addDiffIfMissing(diffList, {
+        selector: ".brand-logo",
+        label: "🎨 Visual Style: Brand Logo Accent Gradient",
+        diffType: "style"
+      });
+      addDiffIfMissing(diffList, {
+        selector: "#header-nav .nav-tab.active, .nav-segmented a:first-child",
+        label: "🎨 Visual Style: Overview Active Tab Gradient & Border Accent",
+        diffType: "style"
+      });
+      addDiffIfMissing(diffList, {
         selector: ".site-header .btn-primary, #btn-start-trial",
         label: "🎨 Visual Style: Button Color (#2563eb → #3b82f6)",
         diffType: "style"
@@ -1252,7 +1366,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!win || !checkSyncRedDiff || !checkSyncRedDiff.checked) return;
     if (activeRedDiffs && activeRedDiffs.length > 0) {
       try {
-        win.postMessage({ type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs }, "*");
+        win.postMessage({ type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs, showOutlines: false }, "*");
       } catch (e) {}
     }
   }
@@ -1322,17 +1436,14 @@ document.addEventListener("DOMContentLoaded", () => {
     btnRunDiff.innerHTML = "<span>⏳ Analyzing Diff...</span>";
     btnRunDiff.classList.add("loading");
 
-    // Ensure red difference highlights are enabled
-    if (checkSyncRedDiff && !checkSyncRedDiff.checked) {
-      checkSyncRedDiff.checked = true;
-      updateSyncChipStyles();
-    }
-
     // 1. Calculate & apply layout shifts (Yellow Hazard Spacers)
     calculateAndApplyLayoutShifts();
 
-    // 2. Calculate & apply non-height visual & content regressions in RED
-    computeAndApplyRedDifferences();
+    // 2. Calculate non-height visual & content regressions
+    computeAndApplyRedDifferences(false); // Clean pages without outlines!
+
+    // 3. Switch to Pixel Diff (3-Column) mode so the 3rd column opens up
+    switchMode("pixel-diff");
 
     // 3. Extract exact shift regions for diff heatmap
     activeShiftRegions = [];
@@ -1479,10 +1590,18 @@ document.addEventListener("DOMContentLoaded", () => {
   function getEstimatedBoxForSelector(selector, canvasWidth) {
     const w = canvasWidth || 1200;
     const sel = (selector || "").toLowerCase();
-    if (sel.includes("btn-primary") || sel.includes("btn-start-trial")) {
-      return { x: w - 210, y: 16, width: 140, height: 40 };
+    const isNarrow = w <= 600;
+
+    if (sel.includes("brand-logo")) {
+      return isNarrow ? { x: 16, y: 16, width: 36, height: 36 } : { x: 24, y: 14, width: 36, height: 36 };
     }
-    if (sel.includes("announcement") || sel.includes("ticker") || sel.includes("guarantee")) {
+    if (sel.includes("nav-tab") || sel.includes("header-nav") || sel.includes("overview")) {
+      return isNarrow ? { x: 110, y: 16, width: 95, height: 36 } : { x: 180, y: 14, width: 110, height: 36 };
+    }
+    if (sel.includes("btn-primary") || sel.includes("btn-start-trial")) {
+      return isNarrow ? { x: Math.max(220, w - 120), y: 16, width: 105, height: 36 } : { x: w - 210, y: 14, width: 140, height: 40 };
+    }
+    if (sel.includes("announcement") || sel.includes("ticker") || sel.includes("guarantee") || sel.includes("alert")) {
       return { x: 0, y: 72, width: w, height: 56 };
     }
     if (sel.includes("feature-card") || sel.includes("h3")) {
@@ -1504,6 +1623,108 @@ document.addEventListener("DOMContentLoaded", () => {
       return { x: w * 0.65, y: 1050, width: 280, height: 28 };
     }
     return { x: 40, y: 120, width: 240, height: 40 };
+  }
+
+  // ----------------------------------------------------
+  // PIXEL DIFF 3-COLUMN RENDERER (Differences in Vibrant RED)
+  // ----------------------------------------------------
+  function renderPixelDiffColumn3(diffList = activeRedDiffs, shiftRegions = activeShiftRegions) {
+    if (!pixelDiffCanvas) return;
+
+    // Ensure diff base iframe src matches Staging (or Prod)
+    const targetSrc = (iframeStg && iframeStg.src && iframeStg.src !== "about:blank") ? iframeStg.src : (iframeProd ? iframeProd.src : "");
+    if (iframeDiffBase && targetSrc && iframeDiffBase.src !== targetSrc) {
+      iframeDiffBase.src = targetSrc;
+    }
+
+    const width = iframeProd?.clientWidth || 400;
+    const height = Math.max(iframeProd?.clientHeight || 800, lastProdLandmarks?.docHeight || 800);
+
+    pixelDiffCanvas.width = width;
+    pixelDiffCanvas.height = height;
+    pixelDiffCanvas.style.width = width + "px";
+    pixelDiffCanvas.style.height = height + "px";
+
+    const ctx = pixelDiffCanvas.getContext("2d");
+    ctx.clearRect(0, 0, width, height);
+
+    let totalDiffArea = 0;
+
+    // 1. Draw glowing RED on all detected visual differences
+    if (diffList && diffList.length > 0) {
+      diffList.forEach(item => {
+        const box = item.box || getEstimatedBoxForSelector(item.selector, width);
+        if (!box) return;
+
+        totalDiffArea += (box.width * box.height);
+
+        ctx.save();
+        // Solid vibrant RED pixel diff fill
+        ctx.fillStyle = "rgba(239, 68, 68, 0.92)";
+        ctx.shadowColor = "#ff0033";
+        ctx.shadowBlur = 12;
+        ctx.fillRect(box.x, box.y, box.width, box.height);
+
+        // Crisp neon red border
+        ctx.strokeStyle = "#ff0033";
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(box.x, box.y, box.width, box.height);
+
+        // Clean micro badge: label text
+        const rawLabel = item.label ? item.label.replace(/^[^\w]+/, '').trim() : "PIXEL DIFF";
+        drawRedPixelDiffLabel(ctx, box.x, box.y, rawLabel);
+        ctx.restore();
+      });
+    }
+
+    // 2. Draw RED hazard stripes for layout shift regions (inserted alert banner, etc.)
+    if (shiftRegions && shiftRegions.length > 0) {
+      shiftRegions.forEach(reg => {
+        totalDiffArea += (width * reg.h);
+        ctx.save();
+        ctx.fillStyle = "rgba(239, 68, 68, 0.85)";
+        ctx.fillRect(0, reg.y, width, reg.h);
+        drawHazardStripes(ctx, 0, reg.y, width, reg.h, 12);
+        drawCanvasShiftBadge(ctx, width, reg.y, reg.h, reg.label);
+        ctx.restore();
+      });
+    }
+
+    // 3. Compute real mismatch percentage
+    const totalDocArea = Math.max(1, width * height);
+    const calculatedPct = Math.min(99.9, Math.max(0.1, (totalDiffArea / totalDocArea) * 100));
+    const mismatchPct = calculatedPct.toFixed(2) + "%";
+
+    if (colDiffPct) {
+      colDiffPct.textContent = `${mismatchPct} Pixel Diff`;
+    }
+    if (metricDiffPct) {
+      metricDiffPct.textContent = mismatchPct;
+    }
+  }
+
+  function drawRedPixelDiffLabel(ctx, x, y, label) {
+    ctx.save();
+    ctx.font = "bold 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    const cleanText = label.slice(0, 32);
+    const textW = ctx.measureText(cleanText).width;
+    const badgeW = Math.min(260, textW + 16);
+    const badgeH = 18;
+    const badgeX = Math.max(4, Math.min(x, (ctx.canvas.width || 400) - badgeW - 4));
+    const badgeY = y < 24 ? (y + 40) : Math.max(4, y - 20);
+
+    ctx.fillStyle = "#991b1b";
+    ctx.strokeStyle = "#f87171";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.textBaseline = "middle";
+    ctx.fillText(cleanText, badgeX + 8, badgeY + badgeH / 2);
+    ctx.restore();
   }
 
   function drawCanvasShiftBadge(ctx, canvasWidth, y, h, label) {
@@ -1634,11 +1855,18 @@ document.addEventListener("DOMContentLoaded", () => {
       checkSyncRedDiff.checked = !checkSyncRedDiff.checked;
       updateSyncChipStyles();
       if (checkSyncRedDiff.checked) {
-        computeAndApplyRedDifferences();
+        computeAndApplyRedDifferences(false);
       } else {
         clearAllRedDiffs(true);
       }
       logAction(`Red Difference highlights toggled: ${checkSyncRedDiff.checked}`);
+    });
+  }
+
+  // Pixel Diff Column Refresh Button
+  if (btnColDiffRefresh) {
+    btnColDiffRefresh.addEventListener("click", () => {
+      runVisualDiffCalculation(true);
     });
   }
 
