@@ -3,683 +3,641 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ApexCloud Analytics - Production</title>
+  <title>ApexCloud Telemetry - Overview [Production]</title>
   <style>
-    /* Reset & Base */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --bg-base: #080c15;
+      --bg-surface: #0e1424;
+      --bg-card: rgba(18, 25, 44, 0.75);
+      --bg-card-hover: rgba(24, 34, 60, 0.85);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --color-primary: #4f46e5;
+      --color-primary-hover: #4338ca;
+      --color-accent: #06b6d4;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
     html, body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background: #090d16;
-      color: #e2e8f0;
+      font-family: var(--font-stack);
+      background-color: var(--bg-base);
+      color: var(--text-main);
       color-scheme: dark;
       line-height: 1.6;
       overflow-x: hidden;
+      min-height: 100vh;
     }
-    a { color: inherit; text-decoration: none; }
 
-    /* Container */
+    a { color: inherit; text-decoration: none; }
+    button, input, select { font-family: inherit; }
+
+    .ambient-glow {
+      position: fixed;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1000px;
+      height: 480px;
+      background: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.18), rgba(6, 182, 212, 0.08) 50%, transparent 75%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
     .container {
       max-width: 1200px;
       margin: 0 auto;
       padding: 0 24px;
+      position: relative;
+      z-index: 1;
     }
 
-    /* 1. Header */
+    /* Sticky Header */
     header.site-header {
-      background: #0f172a;
-      border-bottom: 1px solid #1e293b;
+      background: rgba(14, 20, 36, 0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border-subtle);
       position: sticky;
       top: 0;
       z-index: 50;
     }
+
     .header-inner {
       display: flex;
       justify-content: space-between;
       align-items: center;
       height: 72px;
+      gap: 16px;
     }
-    .brand {
+
+    .brand-wrap {
       display: flex;
       align-items: center;
       gap: 12px;
-      font-weight: 800;
-      font-size: 1.3rem;
-      color: #f8fafc;
-      letter-spacing: -0.5px;
     }
+
     .brand-logo {
-      width: 34px;
-      height: 34px;
-      border-radius: 8px;
-      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #fff;
-      font-weight: bold;
-    }
-    nav.nav-links {
-      display: flex;
-      gap: 28px;
-      font-size: 0.95rem;
-      font-weight: 500;
-      color: #94a3b8;
-    }
-    nav.nav-links a:hover { color: #38bdf8; }
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-    .btn-login {
-      color: #cbd5e1;
-      font-weight: 500;
-      font-size: 0.9rem;
-    }
-    .btn-primary {
-      background: #2563eb;
-      color: #ffffff;
-      padding: 10px 20px;
-      border-radius: 8px;
-      font-weight: 600;
-      font-size: 0.9rem;
-      border: 1px solid #3b82f6;
-      cursor: pointer;
-      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
-      transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
-    }
-    .btn-primary:hover, .btn-primary.vc-hovered-pseudo {
-      background: #1d4ed8;
-      border-color: #1e40af;
-      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.5);
-      transform: translateY(-1px);
-    }
-    .btn-primary:focus, .btn-primary.vc-focused-pseudo {
-      outline: none;
-    }
-    .btn-login:hover, .btn-login.vc-hovered-pseudo {
-      color: #38bdf8;
-    }
-
-    /* 2. Hero Section */
-    section.hero-section {
-      padding: 90px 0 70px;
-      text-align: center;
-      background: radial-gradient(circle at 50% 20%, rgba(37, 99, 235, 0.15) 0%, transparent 60%);
-      border-bottom: 1px solid #1e293b;
-    }
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 14px;
-      border-radius: 9999px;
-      background: rgba(30, 41, 59, 0.8);
-      border: 1px solid #334155;
-      font-size: 0.85rem;
-      color: #38bdf8;
-      margin-bottom: 24px;
-    }
-    .hero-title {
-      font-size: 3.2rem;
-      font-weight: 800;
-      line-height: 1.15;
-      letter-spacing: -1px;
-      color: #f8fafc;
-      margin-bottom: 20px;
-    }
-    .hero-title span.gradient-text {
-      background: linear-gradient(135deg, #38bdf8, #818cf8);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .hero-subtitle {
-      font-size: 1.2rem;
-      color: #94a3b8;
-      max-width: 680px;
-      margin: 0 auto 36px;
-    }
-    .hero-buttons {
-      display: flex;
-      justify-content: center;
-      gap: 16px;
-    }
-    .btn-secondary {
-      background: #1e293b;
-      color: #e2e8f0;
-      padding: 12px 26px;
-      border-radius: 8px;
-      font-weight: 600;
-      border: 1px solid #334155;
-      cursor: pointer;
-      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-    }
-    .btn-secondary:hover, .btn-secondary.vc-hovered-pseudo {
-      background: #334155;
-      color: #ffffff;
-      border-color: #475569;
-    }
-    .btn-secondary:focus, .btn-secondary.vc-focused-pseudo {
-      outline: none;
-    }
-
-    /* 3. Metrics Section */
-    section.metrics-section {
-      padding: 50px 0;
-      border-bottom: 1px solid #1e293b;
-      background: #0b1120;
-    }
-    .metrics-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 24px;
-    }
-    .metric-card {
-      background: #131d33;
-      border: 1px solid #1e293b;
-      border-radius: 12px;
-      padding: 24px;
-      text-align: center;
-    }
-    .metric-value {
-      font-size: 2.2rem;
-      font-weight: 800;
-      color: #f8fafc;
-      margin-bottom: 4px;
-    }
-    .metric-label {
-      font-size: 0.9rem;
-      color: #64748b;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      font-weight: 600;
-    }
-
-    /* 4. Feature Cards */
-    section.features-section {
-      padding: 80px 0;
-      border-bottom: 1px solid #1e293b;
-    }
-    .section-header {
-      text-align: center;
-      max-width: 600px;
-      margin: 0 auto 50px;
-    }
-    .section-header h2 {
-      font-size: 2.2rem;
-      font-weight: 700;
-      color: #f8fafc;
-      margin-bottom: 12px;
-    }
-    .section-header p {
-      color: #94a3b8;
-      font-size: 1rem;
-    }
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 28px;
-    }
-    .feature-card {
-      background: #0f172a;
-      border: 1px solid #1e293b;
-      border-radius: 12px;
-      padding: 32px;
-    }
-    .feature-icon {
-      width: 48px;
-      height: 48px;
+      width: 36px;
+      height: 36px;
       border-radius: 10px;
-      background: rgba(37, 99, 235, 0.15);
-      border: 1px solid rgba(59, 130, 246, 0.3);
+      background: linear-gradient(135deg, #4f46e5, #06b6d4);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.4rem;
-      margin-bottom: 20px;
-    }
-    .feature-card h3 {
-      font-size: 1.25rem;
-      font-weight: 700;
-      color: #f8fafc;
-      margin-bottom: 12px;
-    }
-    .feature-card p {
-      color: #94a3b8;
-      font-size: 0.95rem;
-      line-height: 1.6;
+      font-weight: 800;
+      font-size: 1.15rem;
+      color: #fff;
+      box-shadow: 0 0 16px rgba(79, 70, 229, 0.45);
     }
 
-    /* 5. Pricing Table */
-    section.pricing-section {
-      padding: 80px 0;
-      border-bottom: 1px solid #1e293b;
-      background: #0b1120;
-    }
-    .pricing-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 28px;
-      align-items: stretch;
-    }
-    .pricing-card {
-      background: #0f172a;
-      border: 1px solid #1e293b;
-      border-radius: 14px;
-      padding: 36px 30px;
-      display: flex;
-      flex-direction: column;
-    }
-    .pricing-card.featured {
-      border-color: #3b82f6;
-      background: #111b33;
-      box-shadow: 0 0 24px rgba(59, 130, 246, 0.15);
-      position: relative;
-    }
-    .featured-tag {
-      position: absolute;
-      top: -12px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #2563eb;
+    .brand-name {
+      font-weight: 800;
+      font-size: 1.15rem;
+      letter-spacing: -0.4px;
       color: #fff;
-      font-size: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .env-badge {
+      font-size: 10px;
       font-weight: 700;
-      padding: 3px 12px;
-      border-radius: 9999px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
-    .plan-name {
-      font-size: 1.2rem;
-      font-weight: 700;
-      color: #f8fafc;
-      margin-bottom: 8px;
-    }
-    .plan-desc {
-      color: #64748b;
-      font-size: 0.9rem;
-      margin-bottom: 24px;
-      min-height: 44px;
-    }
-    .plan-price {
+
+    nav.nav-segmented {
       display: flex;
-      align-items: baseline;
+      background: rgba(18, 25, 44, 0.9);
+      border: 1px solid var(--border-subtle);
+      padding: 4px;
+      border-radius: 10px;
       gap: 4px;
-      margin-bottom: 28px;
-    }
-    .plan-price .amount {
-      font-size: 2.8rem;
-      font-weight: 800;
-      color: #f8fafc;
-    }
-    .plan-price .period {
-      color: #64748b;
-      font-size: 0.95rem;
-    }
-    .plan-features {
-      list-style: none;
-      margin-bottom: 32px;
-      flex-grow: 1;
-    }
-    .plan-features li {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 0.95rem;
-      color: #cbd5e1;
-      margin-bottom: 12px;
-    }
-    .plan-features li::before {
-      content: "✓";
-      color: #10b981;
-      font-weight: bold;
     }
 
-    /* 6. Testimonials */
-    section.testimonials-section {
-      padding: 80px 0;
-      border-bottom: 1px solid #1e293b;
+    .nav-tab {
+      padding: 6px 14px;
+      border-radius: 7px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
     }
-    .testimonials-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 30px;
+
+    .nav-tab:hover, .nav-tab.vc-hovered-pseudo {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
     }
-    .testimonial-card {
-      background: #0f172a;
-      border: 1px solid #1e293b;
-      border-radius: 12px;
-      padding: 30px;
+
+    .nav-tab.active {
+      background: linear-gradient(135deg, rgba(79, 70, 229, 0.35), rgba(6, 182, 212, 0.25));
+      color: #fff;
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
     }
-    .quote-text {
-      font-size: 1.05rem;
-      color: #cbd5e1;
-      font-style: italic;
-      margin-bottom: 20px;
-      line-height: 1.6;
-    }
-    .author-info {
+
+    .header-actions {
       display: flex;
       align-items: center;
       gap: 14px;
     }
-    .author-avatar {
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      background: #334155;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 700;
-      color: #38bdf8;
-    }
-    .author-name {
+
+    .btn-login {
+      color: var(--text-muted);
       font-weight: 600;
-      color: #f8fafc;
-      font-size: 0.95rem;
-    }
-    .author-role {
-      font-size: 0.85rem;
-      color: #64748b;
+      font-size: 0.88rem;
+      padding: 8px 12px;
+      border-radius: 6px;
+      transition: color 0.15s;
     }
 
-    /* 7. Newsletter CTA */
-    section.cta-section {
-      padding: 70px 0;
-      background: linear-gradient(180deg, #090d16 0%, #0f172a 100%);
-      border-bottom: 1px solid #1e293b;
-      text-align: center;
-    }
-    .cta-box {
-      max-width: 600px;
-      margin: 0 auto;
-    }
-    .cta-box h2 {
-      font-size: 2rem;
-      font-weight: 800;
-      color: #f8fafc;
-      margin-bottom: 12px;
-    }
-    .cta-box p {
-      color: #94a3b8;
-      font-size: 1rem;
-      margin-bottom: 28px;
-    }
-    .cta-form {
-      display: flex;
-      gap: 12px;
-      justify-content: center;
-    }
-    .cta-input {
-      padding: 12px 18px;
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      color: #f8fafc;
-      font-size: 0.95rem;
-      width: 320px;
-      outline: none;
-      transition: border-color 0.15s ease, box-shadow 0.15s ease;
-    }
-    .cta-input:focus, .cta-input.vc-focused-pseudo {
-      border-color: #38bdf8 !important;
-      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25) !important;
-    }
-    .cta-submit {
-      padding: 12px 24px;
+    .btn-login:hover, .btn-login.vc-hovered-pseudo { color: #fff; }
+
+    .btn-primary {
       background: #2563eb;
       color: #ffffff;
-      font-weight: 600;
-      font-size: 0.95rem;
-      border: 1px solid #3b82f6;
+      padding: 9px 18px;
       border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.88rem;
+      border: 1px solid #3b82f6;
       cursor: pointer;
-      transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
-    }
-    .cta-submit:hover, .cta-submit.vc-hovered-pseudo {
-      background: #1d4ed8;
-      border-color: #1e40af;
-      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.5);
-      transform: translateY(-1px);
-    }
-    .cta-submit:focus, .cta-submit.vc-focused-pseudo {
-      outline: none;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
 
-    /* 8. Footer */
-    footer.site-footer {
-      background: #070a10;
-      padding: 40px 0;
-      font-size: 0.9rem;
-      color: #64748b;
+    .btn-primary:hover, .btn-primary.vc-hovered-pseudo {
+      background: #1d4ed8;
+      border-color: #1e40af;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.5);
     }
-    .footer-inner {
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-main);
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.88rem;
+      border: 1px solid var(--border-subtle);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-secondary:hover, .btn-secondary.vc-hovered-pseudo {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.18);
+      transform: translateY(-1px);
+    }
+
+    /* Hero Section */
+    .hero-section {
+      padding: 64px 0 48px;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(79, 70, 229, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.35);
+      padding: 4px 14px;
+      border-radius: 9999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #a5b4fc;
+      margin-bottom: 20px;
+    }
+
+    .hero-pill .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    .hero-title {
+      font-size: 3.2rem;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1.2px;
+      margin-bottom: 18px;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #a5b4fc 0%, #38bdf8 50%, #c084fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      max-width: 660px;
+      margin: 0 auto 32px;
+      line-height: 1.6;
+    }
+
+    .hero-actions {
+      display: flex;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 48px;
+    }
+
+    /* Telemetry Preview */
+    .telemetry-preview {
+      background: #090e1a;
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      overflow: hidden;
+      max-width: 860px;
+      margin: 0 auto 60px;
+      box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.6), 0 0 30px rgba(79, 70, 229, 0.15);
+      text-align: left;
+    }
+
+    .terminal-bar {
+      background: #0d1424;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border-subtle);
       display: flex;
       justify-content: space-between;
       align-items: center;
+    }
+
+    .terminal-dots { display: flex; gap: 6px; }
+    .terminal-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dot-red { background: #ef4444; }
+    .dot-yellow { background: #f59e0b; }
+    .dot-green { background: #10b981; }
+
+    .terminal-title { font-size: 0.78rem; font-family: monospace; color: var(--text-dim); }
+    .terminal-body {
+      padding: 20px 24px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.85rem;
+      line-height: 1.7;
+    }
+
+    .log-line { display: flex; gap: 12px; }
+    .log-time { color: var(--text-dim); }
+    .log-tag { font-weight: 700; }
+    .tag-ok { color: #34d399; }
+    .tag-info { color: #38bdf8; }
+    .tag-warn { color: #fbbf24; }
+    .log-msg { color: #cbd5e1; }
+
+    /* Metrics Grid */
+    .metrics-section { padding: 20px 0 60px; }
+    .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 24px 20px;
+      text-align: center;
+      transition: all 0.2s ease;
+      backdrop-filter: blur(8px);
+    }
+    .metric-card:hover, .metric-card.vc-hovered-pseudo {
+      background: var(--bg-card-hover);
+      border-color: rgba(99, 102, 241, 0.4);
+      transform: translateY(-2px);
+    }
+    .metric-value {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+    .metric-value.highlight {
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .metric-value.warning { color: #f87171; }
+    .metric-label { font-size: 0.85rem; color: var(--text-muted); font-weight: 500; }
+
+    /* Capabilities */
+    .features-section { padding: 60px 0 80px; }
+    .section-header { text-align: center; max-width: 680px; margin: 0 auto 48px; }
+    .section-header h2 { font-size: 2.2rem; font-weight: 800; margin-bottom: 12px; }
+    .section-header p { color: var(--text-muted); font-size: 1.05rem; }
+    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; text-align: left; }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 32px 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .feature-card:hover, .feature-card.vc-hovered-pseudo {
+      background: var(--bg-card-hover);
+      border-color: rgba(6, 182, 212, 0.4);
+      transform: translateY(-2px);
+    }
+    .feature-icon-box {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      color: #818cf8;
+    }
+    .feature-card h3 { font-size: 1.2rem; font-weight: 700; color: #fff; }
+    .feature-card p { font-size: 0.92rem; color: var(--text-muted); line-height: 1.6; }
+
+    /* CTA */
+    .cta-section { padding: 40px 0 80px; }
+    .cta-card {
+      background: radial-gradient(circle at 50% 0%, rgba(79, 70, 229, 0.35), rgba(14, 20, 36, 0.9) 70%);
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      border-radius: 20px;
+      padding: 56px 40px;
+      text-align: center;
+      box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.5);
+    }
+    .cta-card h2 { font-size: 2.2rem; font-weight: 800; margin-bottom: 12px; }
+    .cta-card p { color: var(--text-muted); font-size: 1.05rem; max-width: 580px; margin: 0 auto 32px; }
+    .cta-form { display: flex; justify-content: center; gap: 12px; max-width: 480px; margin: 0 auto; }
+    .cta-input {
+      flex: 1;
+      background: rgba(9, 14, 26, 0.85);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 12px 18px;
+      color: #fff;
+      outline: none;
+    }
+    .cta-submit {
+      background: #2563eb;
+      color: #fff;
+      border: 1px solid #3b82f6;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* Footer */
+    footer.site-footer {
+      background: #060911;
+      border-top: 1px solid var(--border-subtle);
+      padding: 50px 0 35px;
+      font-size: 0.88rem;
+      color: var(--text-dim);
+    }
+    .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+    .footer-col h4 { color: #fff; margin-bottom: 16px; }
+    .footer-links { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .footer-bottom { border-top: 1px solid rgba(255,255,255,0.05); padding-top: 24px; display: flex; justify-content: space-between; }
+
+    @media (max-width: 900px) {
+      .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .footer-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 680px) {
+      .header-inner { flex-direction: column; height: auto; padding: 12px 0; gap: 12px; }
+      .hero-title { font-size: 2.2rem; }
+      .metrics-grid { grid-template-columns: 1fr; }
+      .features-grid { grid-template-columns: 1fr; }
+      .cta-form { flex-direction: column; }
+      .footer-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
 
-  <!-- 1. Header Navigation -->
+  <div class="ambient-glow"></div>
+
+  <!-- Header Navigation -->
   <header class="site-header">
     <div class="container header-inner">
-      <div class="brand">
+      <div class="brand-wrap">
         <div class="brand-logo">A</div>
-        <span>ApexCloud</span>
+        <div class="brand-name">
+          ApexCloud
+          <span class="env-badge">PROD</span>
+        </div>
       </div>
-      <nav class="nav-links">
-        <a href="#features">Features</a>
-        <a href="#pricing">Pricing</a>
-        <a href="#customers">Customers</a>
-        <a href="#docs">Docs</a>
+
+      <nav class="nav-segmented" id="header-nav">
+        <a href="demo_prod.html" class="nav-tab active">
+          🌐 Overview
+        </a>
+        <a href="demo_prod_features.html" class="nav-tab">
+          ⚡ Features
+        </a>
+        <a href="demo_prod_pricing.html" class="nav-tab">
+          💳 Pricing
+        </a>
       </nav>
+
       <div class="header-actions">
-        <a href="#login" class="btn-login">Sign In</a>
-        <button class="btn-primary">Start Free Trial</button>
+        <a href="#signin" class="btn-login">Sign In</a>
+        <button class="btn-primary" id="btn-start-trial">Start Free Trial</button>
       </div>
     </div>
   </header>
 
-  <!-- 2. Hero Section -->
-  <section class="hero-section">
-    <div class="container">
-      <div class="hero-badge">
-        <span>✨ v2.4 Release</span>
-        <span>Real-time anomaly telemetry</span>
-      </div>
-      <h1 class="hero-title">
-        Unified Cloud Observability <br />
-        <span class="gradient-text">Engineered for Velocity</span>
-      </h1>
-      <p class="hero-subtitle">
-        Monitor distributed microservices, traces, and metrics with sub-second latency and automated root cause isolation.
-      </p>
-      <div class="hero-buttons">
-        <button class="btn-primary" style="padding: 12px 28px; font-size: 1rem;">Deploy in 5 Minutes</button>
-        <button class="btn-secondary">Request Demo</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- 3. Key Metrics -->
-  <section class="metrics-section">
-    <div class="container">
-      <div class="metrics-grid">
-        <div class="metric-card">
-          <div class="metric-value">99.99%</div>
-          <div class="metric-label">Engine Uptime SLA</div>
+  <main>
+    <!-- Hero Section -->
+    <section class="hero-section" id="overview-hero">
+      <div class="container">
+        <div class="hero-pill">
+          <span class="dot"></span>
+          <span>v3.2 Production Release &bull; Autonomous eBPF Kernel Mesh</span>
         </div>
-        <div class="metric-card">
-          <div class="metric-value">12.4M</div>
-          <div class="metric-label">Traces / Second</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-value">&lt; 50ms</div>
-          <div class="metric-label">Query Latency</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-value">4.9 / 5</div>
-          <div class="metric-label">Customer Satisfaction</div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 4. Features Grid -->
-  <section class="features-section" id="features">
-    <div class="container">
-      <div class="section-header">
-        <h2>Built for modern DevOps stacks</h2>
-        <p>Zero configuration required. Ingest OpenTelemetry standards out of the box.</p>
-      </div>
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">⚡</div>
-          <h3>Instant Pipeline Tracing</h3>
-          <p>Graph execution trees across Kubernetes clusters with zero-instrumentation eBPF sensors.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">🛡️</div>
-          <h3>Zero-Trust Security Mesh</h3>
-          <p>Continuous compliance monitoring and granular role-based encryption for multi-tenant environments.</p>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">📊</div>
-          <h3>AI-Powered Root Cause</h3>
-          <p>Correlate sudden downstream latency spikes directly to source-code commit diffs in seconds.</p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 5. Pricing Plans -->
-  <section class="pricing-section" id="pricing">
-    <div class="container">
-      <div class="section-header">
-        <h2>Transparent, scalable pricing</h2>
-        <p>Predictable pricing that scales linearly with telemetry volume.</p>
-      </div>
-      <div class="pricing-grid">
-        <!-- Starter Plan -->
-        <div class="pricing-card">
-          <div class="plan-name">Starter</div>
-          <div class="plan-desc">Essential telemetry for seed startups and small teams.</div>
-          <div class="plan-price">
-            <span class="amount">$29</span>
-            <span class="period">/ mo</span>
-          </div>
-          <ul class="plan-features">
-            <li>5 million events / month</li>
-            <li>30-day log retention</li>
-            <li>Community support</li>
-          </ul>
-          <button class="btn-secondary">Choose Starter</button>
+        <h1 class="hero-title">
+          Unified Cloud Observability <br />
+          <span class="gradient-text">Engineered for Velocity</span>
+        </h1>
+        <p class="hero-subtitle">
+          Continuous telemetry, distributed trace graphs, and automated anomaly isolation across multi-cloud Kubernetes clusters in sub-seconds.
+        </p>
+        <div class="hero-actions">
+          <button class="btn-primary" style="padding: 12px 28px; font-size: 1rem;">Deploy in 5 Minutes</button>
+          <a href="demo_prod_pricing.html" class="btn-secondary" style="padding: 12px 24px; font-size: 1rem;">Explore Plans &rarr;</a>
         </div>
 
-        <!-- Pro Plan (Featured) -->
-        <div class="pricing-card featured">
-          <div class="featured-tag">Most Popular</div>
-          <div class="plan-name">Professional</div>
-          <div class="plan-desc">Full observability suite for fast-growing scaleups.</div>
-          <div class="plan-price">
-            <span class="amount">$49</span>
-            <span class="period">/ mo</span>
-          </div>
-          <ul class="plan-features">
-            <li>50 million events / month</li>
-            <li>90-day log retention</li>
-            <li>eBPF distributed tracing</li>
-            <li>Dedicated Slack support channel</li>
-          </ul>
-          <button class="btn-primary">Choose Pro</button>
-        </div>
-
-        <!-- Enterprise Plan -->
-        <div class="pricing-card">
-          <div class="plan-name">Enterprise</div>
-          <div class="plan-desc">Custom governance, VPC peering, and custom SLAs.</div>
-          <div class="plan-price">
-            <span class="amount">$199</span>
-            <span class="period">/ mo</span>
-          </div>
-          <ul class="plan-features">
-            <li>Unlimited telemetry volume</li>
-            <li>1-year log retention</li>
-            <li>Custom SSO &amp; SAML integrations</li>
-            <li>99.99% contractual uptime SLA</li>
-          </ul>
-          <button class="btn-secondary">Contact Sales</button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 6. Testimonials -->
-  <section class="testimonials-section" id="customers">
-    <div class="container">
-      <div class="section-header">
-        <h2>Trusted by engineering leads</h2>
-        <p>See why high-growth technology companies rely on ApexCloud every day.</p>
-      </div>
-      <div class="testimonials-grid">
-        <div class="testimonial-card">
-          <p class="quote-text">
-            "ApexCloud reduced our mean-time-to-resolution by 78%. We spotted a database connection pool leak within 3 minutes of deploying."
-          </p>
-          <div class="author-info">
-            <div class="author-avatar">SK</div>
-            <div>
-              <div class="author-name">Sarah Jenkins</div>
-              <div class="author-role">VP of Engineering at FinEdge</div>
+        <!-- Terminal Telemetry Preview -->
+        <div class="telemetry-preview">
+          <div class="terminal-bar">
+            <div class="terminal-dots">
+              <span class="terminal-dot dot-red"></span>
+              <span class="terminal-dot dot-yellow"></span>
+              <span class="terminal-dot dot-green"></span>
             </div>
+            <div class="terminal-title">apex-agent --daemon --cluster us-east-1</div>
+            <span style="font-size: 11px; color: #34d399; font-weight: 700;">● STREAMING</span>
           </div>
-        </div>
-        <div class="testimonial-card">
-          <p class="quote-text">
-            "The eBPF integration alone saved our DevOps team 3 weeks of manual config. The dashboard is stunning and exceptionally responsive."
-          </p>
-          <div class="author-info">
-            <div class="author-avatar">MR</div>
-            <div>
-              <div class="author-name">Marcus Rodriguez</div>
-              <div class="author-role">Principal Architect at CloudScale</div>
+          <div class="terminal-body">
+            <div class="log-line">
+              <span class="log-time">17:42:01.104</span>
+              <span class="log-tag tag-ok">[PROBE-OK]</span>
+              <span class="log-msg">eBPF socket telemetry hook attached (kernel 6.8.0-generic)</span>
+            </div>
+            <div class="log-line">
+              <span class="log-time">17:42:01.218</span>
+              <span class="log-tag tag-info">[INGEST]</span>
+              <span class="log-msg">Aggregating 148,290 spans/sec across 42 microservices</span>
+            </div>
+            <div class="log-line">
+              <span class="log-time">17:42:01.382</span>
+              <span class="log-tag tag-ok">[ANOMALY]</span>
+              <span class="log-msg">Zero latency regressions detected across payment-service DAG</span>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- 7. Call To Action -->
-  <section class="cta-section">
-    <div class="container">
-      <div class="cta-box">
-        <h2>Ready to eliminate downtime?</h2>
-        <p>Get started today with our full-featured 14-day free trial. No credit card required.</p>
-        <form class="cta-form" onsubmit="return false;">
-          <input type="email" class="cta-input" placeholder="Enter your work email..." value="dev@example.com" />
-          <button type="submit" class="cta-submit">Start Free Trial</button>
-        </form>
+    <!-- Key Metrics Section -->
+    <section class="metrics-section" id="overview-metrics">
+      <div class="container">
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-value highlight">99.99%</div>
+            <div class="metric-label">Engine Uptime SLA</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">14.8M</div>
+            <div class="metric-label">Traces / Second</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">&lt; 24ms</div>
+            <div class="metric-label">P99 Query Latency</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-value">38</div>
+            <div class="metric-label">Global Datacenter Regions</div>
+          </div>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- 8. Footer -->
+    <!-- Capabilities Grid -->
+    <section class="features-section" id="overview-capabilities">
+      <div class="container">
+        <div class="section-header">
+          <h2>Autonomous Cloud Architecture</h2>
+          <p>Eliminate alert fatigue with zero-instrumentation telemetry and continuous topology mapping.</p>
+        </div>
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon-box">⚡</div>
+            <h3>Instant Pipeline Tracing</h3>
+            <p>Graph execution trees across thousands of pods without code changes or SDK recompilation.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon-box">🛡️</div>
+            <h3>Zero-Trust Security Mesh</h3>
+            <p>Cryptographic mTLS validation, continuous compliance scans, and automated token rotation.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon-box">📊</div>
+            <h3>AI-Powered Root Cause</h3>
+            <p>Correlate sudden downstream latency spikes directly to source-code commit diffs in seconds.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Call to Action Section -->
+    <section class="cta-section" id="global-cta">
+      <div class="container">
+        <div class="cta-card">
+          <h2>Transform Your Cloud Observability Today</h2>
+          <p>Deploy our lightweight eBPF collector in under 5 minutes and see your live trace topology instantly.</p>
+          <form class="cta-form" onsubmit="event.preventDefault(); alert('Demo environment: Registration submitted!');">
+            <input type="email" class="cta-input" placeholder="Enter your work email..." required />
+            <button type="submit" class="cta-submit">Start Free Trial</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
   <footer class="site-footer">
-    <div class="container footer-inner">
-      <div>&copy; 2026 ApexCloud Technologies Inc. All rights reserved.</div>
-      <div style="display: flex; gap: 20px;">
-        <a href="#privacy">Privacy</a>
-        <a href="#terms">Terms</a>
-        <a href="#security">Security</a>
-        <a href="#status">System Status</a>
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="brand-name">
+            <div class="brand-logo" style="width:28px; height:28px; font-size:0.9rem;">A</div>
+            ApexCloud
+          </div>
+          <p>The autonomous cloud observability engine engineered for velocity, sub-millisecond eBPF tracing, and automated root cause analysis.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Pages</h4>
+          <ul class="footer-links">
+            <li><a href="demo_prod.html">Overview</a></li>
+            <li><a href="demo_prod_features.html">Features</a></li>
+            <li><a href="demo_prod_pricing.html">Pricing</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Integrations</h4>
+          <ul class="footer-links">
+            <li><a href="#k8s">Kubernetes</a></li>
+            <li><a href="#aws">AWS Fargate</a></li>
+            <li><a href="#gcp">Google Cloud</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Security &amp; Trust</h4>
+          <ul class="footer-links">
+            <li><a href="#soc2">SOC-2 Type II</a></li>
+            <li><a href="#privacy">Privacy Policy</a></li>
+            <li><a href="#status">System Status</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div>&copy; 2026 ApexCloud Technologies, Inc. All rights reserved.</div>
+        <div style="color: #38bdf8; font-weight: 600;">Production Environment (v3.2)</div>
       </div>
     </div>
   </footer>
+
   <script src="sync_agent.js"></script>
 </body>
 </html>

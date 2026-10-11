@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ApexCloud Telemetry - Features &amp; Architecture [Production]</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --bg-base: #080c15;
+      --bg-surface: #0e1424;
+      --bg-card: rgba(18, 25, 44, 0.75);
+      --bg-card-hover: rgba(24, 34, 60, 0.85);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --color-primary: #4f46e5;
+      --color-primary-hover: #4338ca;
+      --color-accent: #06b6d4;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    html, body {
+      font-family: var(--font-stack);
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      color-scheme: dark;
+      line-height: 1.6;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button, input, select { font-family: inherit; }
+
+    .ambient-glow {
+      position: fixed;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1000px;
+      height: 480px;
+      background: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.18), rgba(6, 182, 212, 0.08) 50%, transparent 75%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Sticky Header */
+    header.site-header {
+      background: rgba(14, 20, 36, 0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border-subtle);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .header-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 72px;
+      gap: 16px;
+    }
+
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #4f46e5, #06b6d4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.15rem;
+      color: #fff;
+      box-shadow: 0 0 16px rgba(79, 70, 229, 0.45);
+    }
+
+    .brand-name {
+      font-weight: 800;
+      font-size: 1.15rem;
+      letter-spacing: -0.4px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .env-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    nav.nav-segmented {
+      display: flex;
+      background: rgba(18, 25, 44, 0.9);
+      border: 1px solid var(--border-subtle);
+      padding: 4px;
+      border-radius: 10px;
+      gap: 4px;
+    }
+
+    .nav-tab {
+      padding: 6px 14px;
+      border-radius: 7px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .nav-tab:hover, .nav-tab.vc-hovered-pseudo {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .nav-tab.active {
+      background: linear-gradient(135deg, rgba(79, 70, 229, 0.35), rgba(6, 182, 212, 0.25));
+      color: #fff;
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .btn-login {
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.88rem;
+      padding: 8px 12px;
+      border-radius: 6px;
+      transition: color 0.15s;
+    }
+
+    .btn-login:hover, .btn-login.vc-hovered-pseudo { color: #fff; }
+
+    .btn-primary {
+      background: #2563eb;
+      color: #ffffff;
+      padding: 9px 18px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.88rem;
+      border: 1px solid #3b82f6;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-primary:hover, .btn-primary.vc-hovered-pseudo {
+      background: #1d4ed8;
+      border-color: #1e40af;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.5);
+    }
+
+    /* Hero Section */
+    .hero-section {
+      padding: 64px 0 48px;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(79, 70, 229, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.35);
+      padding: 4px 14px;
+      border-radius: 9999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #a5b4fc;
+      margin-bottom: 20px;
+    }
+
+    .hero-pill .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    .hero-title {
+      font-size: 3.2rem;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1.2px;
+      margin-bottom: 18px;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #a5b4fc 0%, #38bdf8 50%, #c084fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      max-width: 660px;
+      margin: 0 auto 48px;
+      line-height: 1.6;
+    }
+
+    /* 6 Features Grid */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-bottom: 60px;
+      text-align: left;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 32px 28px;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .feature-card:hover, .feature-card.vc-hovered-pseudo {
+      background: var(--bg-card-hover);
+      border-color: rgba(6, 182, 212, 0.4);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 30px -10px rgba(6, 182, 212, 0.2);
+    }
+
+    .feature-icon-box {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      color: #818cf8;
+    }
+
+    .feature-card h3 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .feature-card p {
+      font-size: 0.92rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* SDK Box */
+    .sdk-box {
+      background: #090e1a;
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      overflow: hidden;
+      margin: 40px auto 70px;
+      max-width: 860px;
+      text-align: left;
+      box-shadow: 0 20px 50px -10px rgba(0,0,0,0.5);
+    }
+
+    .sdk-tabs {
+      background: #0d1424;
+      display: flex;
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 6px 12px;
+      gap: 6px;
+    }
+
+    .sdk-tab-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .sdk-tab-btn.active {
+      background: rgba(79, 70, 229, 0.25);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+    }
+
+    .sdk-code-pane {
+      padding: 24px;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.88rem;
+      line-height: 1.7;
+      color: #e2e8f0;
+    }
+
+    /* Comparison Table */
+    .section-header {
+      text-align: center;
+      max-width: 680px;
+      margin: 0 auto 36px;
+    }
+
+    .section-header h2 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      margin-bottom: 12px;
+    }
+
+    .section-header p {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+    }
+
+    .table-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      overflow-x: auto;
+      margin: 30px 0 80px;
+    }
+
+    table.compare-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.92rem;
+    }
+
+    table.compare-table th, table.compare-table td {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    table.compare-table th {
+      background: rgba(14, 20, 36, 0.95);
+      color: var(--text-muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      letter-spacing: 0.6px;
+    }
+
+    table.compare-table tr:last-child td { border-bottom: none; }
+
+    table.compare-table td.col-highlight {
+      background: rgba(99, 102, 241, 0.08);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    /* CTA Box */
+    .cta-card {
+      background: radial-gradient(circle at 50% 0%, rgba(79, 70, 229, 0.35), rgba(14, 20, 36, 0.9) 70%);
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      border-radius: 20px;
+      padding: 56px 40px;
+      text-align: center;
+      box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.5);
+      margin-bottom: 80px;
+    }
+
+    .cta-card h2 { font-size: 2.2rem; font-weight: 800; margin-bottom: 12px; }
+    .cta-card p { color: var(--text-muted); font-size: 1.05rem; max-width: 580px; margin: 0 auto 32px; }
+    .cta-form { display: flex; justify-content: center; gap: 12px; max-width: 480px; margin: 0 auto; }
+    .cta-input {
+      flex: 1;
+      background: rgba(9, 14, 26, 0.85);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 12px 18px;
+      color: #fff;
+      outline: none;
+    }
+    .cta-submit {
+      background: #2563eb;
+      color: #fff;
+      border: 1px solid #3b82f6;
+      border-radius: 8px;
+      padding: 12px 24px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* Footer */
+    footer.site-footer {
+      background: #060911;
+      border-top: 1px solid var(--border-subtle);
+      padding: 50px 0 35px;
+      font-size: 0.88rem;
+      color: var(--text-dim);
+    }
+    .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+    .footer-col h4 { color: #fff; margin-bottom: 16px; }
+    .footer-links { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .footer-bottom { border-top: 1px solid rgba(255,255,255,0.05); padding-top: 24px; display: flex; justify-content: space-between; }
+
+    @media (max-width: 900px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .footer-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 680px) {
+      .header-inner { flex-direction: column; height: auto; padding: 12px 0; gap: 12px; }
+      .hero-title { font-size: 2.2rem; }
+      .features-grid { grid-template-columns: 1fr; }
+      .cta-form { flex-direction: column; }
+      .footer-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ambient-glow"></div>
+
+  <!-- Header Navigation -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand-wrap">
+        <div class="brand-logo">A</div>
+        <div class="brand-name">
+          ApexCloud
+          <span class="env-badge">PROD</span>
+        </div>
+      </div>
+
+      <nav class="nav-segmented" id="header-nav">
+        <a href="demo_prod.html" class="nav-tab">
+          🌐 Overview
+        </a>
+        <a href="demo_prod_features.html" class="nav-tab active">
+          ⚡ Features
+        </a>
+        <a href="demo_prod_pricing.html" class="nav-tab">
+          💳 Pricing
+        </a>
+      </nav>
+
+      <div class="header-actions">
+        <a href="#signin" class="btn-login">Sign In</a>
+        <button class="btn-primary" id="btn-start-trial">Start Free Trial</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero-section" id="features-hero">
+      <div class="container">
+        <div class="hero-pill">
+          <span class="dot"></span>
+          <span>Architectural Capabilities</span>
+        </div>
+        <h1 class="hero-title">
+          Deep-Tier Infrastructure &amp; <br />
+          <span class="gradient-text">Microservice Observability</span>
+        </h1>
+        <p class="hero-subtitle">
+          Gain granular line-by-line visibility across your entire distributed cloud stack with sub-millisecond overhead.
+        </p>
+
+        <!-- 6 Feature Cards Grid -->
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon-box">🚀</div>
+            <h3>Zero-Overhead eBPF Probes</h3>
+            <p>Extract system calls, HTTP metrics, and TCP retransmits directly from Linux kernel space without touching application memory.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon-box">🌐</div>
+            <h3>Live Topology Graphing</h3>
+            <p>Real-time DAG visualization of every service dependency, ingress router, database connection, and Redis cache cluster.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon-box">🧠</div>
+            <h3>Automated Incident Isolation</h3>
+            <p>Pinpoint memory leaks, cascading thread pool exhaustion, and unindexed SQL queries before customers report degraded SLAs.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon-box">🔗</div>
+            <h3>OpenTelemetry Native</h3>
+            <p>100% interoperable with OTLP grpc collectors, Prometheus exporters, Jaeger traces, and Fluentbit logs without lock-in.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon-box">🔒</div>
+            <h3>Role-Based Access &amp; SOC2</h3>
+            <p>Granular RBAC workspace segmentation, HIPAA audit trails, and automatic PII masking at ingestion gateways.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon-box">💰</div>
+            <h3>Cloud Cost Intelligence</h3>
+            <p>Correlate exact compute expenses to specific API endpoints and discover overprovisioned Kubernetes deployments.</p>
+          </div>
+        </div>
+
+        <!-- Interactive SDK Code Sandbox -->
+        <div class="sdk-box">
+          <div class="sdk-tabs">
+            <button class="sdk-tab-btn active" data-lang="js">Node.js</button>
+            <button class="sdk-tab-btn" data-lang="py">Python</button>
+            <button class="sdk-tab-btn" data-lang="go">Go</button>
+            <button class="sdk-tab-btn" data-lang="rs">Rust</button>
+          </div>
+          <div class="sdk-code-pane" id="sdk-code-display">
+<span style="color:#60a5fa">import</span> { ApexTelemetry } <span style="color:#60a5fa">from</span> <span style="color:#34d399">'@apexcloud/telemetry'</span>;
+
+<span style="color:#60a5fa">const</span> apex = <span style="color:#60a5fa">new</span> <span style="color:#f59e0b">ApexTelemetry</span>({
+  serviceName: <span style="color:#34d399">'payment-gateway'</span>,
+  apiKey: process.env.APEX_SECRET_KEY,
+  autoKernelInstrumentation: <span style="color:#c084fc">true</span>
+});
+
+apex.<span style="color:#38bdf8">startClusterTracing</span>();
+          </div>
+        </div>
+
+        <!-- Comparison Table -->
+        <div class="section-header">
+          <h2>ApexCloud vs Traditional APM</h2>
+          <p>See why engineering leaders are replacing legacy monitoring vendors with ApexCloud.</p>
+        </div>
+        <div class="table-container">
+          <table class="compare-table">
+            <thead>
+              <tr>
+                <th>Capability</th>
+                <th style="color: #38bdf8;">ApexCloud Platform</th>
+                <th>Legacy Vendor A</th>
+                <th>Legacy Vendor B</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Agent CPU Overhead</strong></td>
+                <td class="col-highlight">&lt; 0.4% CPU (Kernel eBPF)</td>
+                <td>3.5% - 7.0% CPU</td>
+                <td>4.2% - 8.5% CPU</td>
+              </tr>
+              <tr>
+                <td><strong>Setup Time</strong></td>
+                <td class="col-highlight">Single bash one-liner</td>
+                <td>Code refactoring required</td>
+                <td>Complex YAML operators</td>
+              </tr>
+              <tr>
+                <td><strong>Trace Sampling</strong></td>
+                <td class="col-highlight">100% Ingestion (No dropping)</td>
+                <td>Aggressive 1% sampling</td>
+                <td>10% trace sampling</td>
+              </tr>
+              <tr>
+                <td><strong>Anomaly Resolution</strong></td>
+                <td class="col-highlight">Automated AI Root Cause</td>
+                <td>Manual log grep</td>
+                <td>Static thresholds only</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Call to Action -->
+        <div class="cta-card">
+          <h2>Ready to Supercharge Your Distributed Telemetry?</h2>
+          <p>Deploy our lightweight kernel eBPF collector in under 5 minutes without altering source code.</p>
+          <form class="cta-form" onsubmit="event.preventDefault(); alert('Demo environment: Registration submitted!');">
+            <input type="email" class="cta-input" placeholder="Enter your work email..." required />
+            <button type="submit" class="cta-submit">Start Free Trial</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="brand-name">
+            <div class="brand-logo" style="width:28px; height:28px; font-size:0.9rem;">A</div>
+            ApexCloud
+          </div>
+          <p>The autonomous cloud observability engine engineered for velocity, sub-millisecond eBPF tracing, and automated root cause analysis.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Pages</h4>
+          <ul class="footer-links">
+            <li><a href="demo_prod.html">Overview</a></li>
+            <li><a href="demo_prod_features.html">Features</a></li>
+            <li><a href="demo_prod_pricing.html">Pricing</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Integrations</h4>
+          <ul class="footer-links">
+            <li><a href="#k8s">Kubernetes</a></li>
+            <li><a href="#aws">AWS Fargate</a></li>
+            <li><a href="#gcp">Google Cloud</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Security &amp; Trust</h4>
+          <ul class="footer-links">
+            <li><a href="#soc2">SOC-2 Type II</a></li>
+            <li><a href="#privacy">Privacy Policy</a></li>
+            <li><a href="#status">System Status</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div>&copy; 2026 ApexCloud Technologies, Inc. All rights reserved.</div>
+        <div style="color: #38bdf8; font-weight: 600;">Production Environment (v3.2)</div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const sdkSnippets = {
+      js: `<span style="color:#60a5fa">import</span> { ApexTelemetry } <span style="color:#60a5fa">from</span> <span style="color:#34d399">'@apexcloud/telemetry'</span>;
+
+<span style="color:#60a5fa">const</span> apex = <span style="color:#60a5fa">new</span> <span style="color:#f59e0b">ApexTelemetry</span>({
+  serviceName: <span style="color:#34d399">'payment-gateway'</span>,
+  apiKey: process.env.APEX_SECRET_KEY,
+  autoKernelInstrumentation: <span style="color:#c084fc">true</span>
+});
+
+apex.<span style="color:#38bdf8">startClusterTracing</span>();`,
+
+      py: `<span style="color:#60a5fa">from</span> apex_cloud <span style="color:#60a5fa">import</span> TelemetryCollector
+
+collector = TelemetryCollector(
+    service_name=<span style="color:#34d399">"payment-gateway"</span>,
+    sample_rate=<span style="color:#c084fc">1.0</span>,
+    ebpf_probe_enabled=<span style="color:#c084fc">True</span>
+)
+
+collector.<span style="color:#38bdf8">instrument_asgi</span>(app)`,
+
+      go: `<span style="color:#60a5fa">package</span> main
+
+<span style="color:#60a5fa">import</span> <span style="color:#34d399">"github.com/apexcloud/telemetry-go"</span>
+
+<span style="color:#60a5fa">func</span> <span style="color:#f59e0b">main</span>() {
+    agent := telemetry.<span style="color:#38bdf8">NewAgent</span>(<span style="color:#34d399">"payment-gateway"</span>)
+    <span style="color:#60a5fa">defer</span> agent.<span style="color:#38bdf8">Close</span>()
+    agent.<span style="color:#38bdf8">AttachKernelHooks</span>()
+}`,
+
+      rs: `<span style="color:#60a5fa">use</span> apexcloud::prelude::*;
+
+<span style="color:#60a5fa">fn</span> <span style="color:#f59e0b">main</span>() -> Result&lt;()&gt; {
+    <span style="color:#60a5fa">let</span> _agent = TelemetryBuilder::<span style="color:#38bdf8">new</span>(<span style="color:#34d399">"payment-gateway"</span>)
+        .with_ebpf_mesh(<span style="color:#c084fc">true</span>)
+        .build()?;
+    Ok(())
+}`
+    };
+
+    document.querySelectorAll(".sdk-tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".sdk-tab-btn").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        const lang = btn.getAttribute("data-lang");
+        const display = document.getElementById("sdk-code-display");
+        if (display && sdkSnippets[lang]) {
+          display.innerHTML = sdkSnippets[lang];
+        }
+      });
+    });
+  </script>
+  <script src="sync_agent.js"></script>
+</body>
+</html>

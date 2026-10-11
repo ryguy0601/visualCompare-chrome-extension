@@ -51,12 +51,43 @@
       applyHazardSpacer(data);
     } else if (data.type === "VC_REMOVE_HAZARD_SPACERS") {
       removeHazardSpacers();
+    } else if (data.type === "VC_APPLY_RED_DIFFS") {
+      applyRedDiffs(data.diffs);
+    } else if (data.type === "VC_REMOVE_RED_DIFFS") {
+      removeRedDiffs();
+    } else if (data.type === "VC_REQUEST_DIFF_CANDIDATES") {
+      sendDiffCandidatesReport();
     }
   });
 
   // If in frame, notify parent immediately in case parent is waiting
   if (isFramed && window.parent) {
     window.parent.postMessage({ type: "VC_FRAME_PING", href: window.location.href }, "*");
+
+    // Intercept client-side route changes (pushState, replaceState, hashchange)
+    const origPushState = history.pushState;
+    if (typeof origPushState === "function") {
+      history.pushState = function(...args) {
+        origPushState.apply(this, args);
+        if (paneId) {
+          window.parent.postMessage({ type: "VC_AGENT_READY", paneId, href: window.location.href }, "*");
+        }
+      };
+    }
+    const origReplaceState = history.replaceState;
+    if (typeof origReplaceState === "function") {
+      history.replaceState = function(...args) {
+        origReplaceState.apply(this, args);
+        if (paneId) {
+          window.parent.postMessage({ type: "VC_AGENT_READY", paneId, href: window.location.href }, "*");
+        }
+      };
+    }
+    window.addEventListener("hashchange", () => {
+      if (paneId) {
+        window.parent.postMessage({ type: "VC_AGENT_READY", paneId, href: window.location.href }, "*");
+      }
+    });
   }
 
   // ----------------------------------------------------
@@ -281,11 +312,14 @@
       }
     }
 
-    // Tag + meaningful classes
+    // Filter out modifier/state/pseudo/regression classes that differ between environments
+    const ignoredClasses = /^(vc-|hover|active|focus|selected|current|open|highlight|warning|danger|success|error|info|disabled)/i;
+
+    // Tag + meaningful base classes
     let sel = el.tagName.toLowerCase();
     if (el.classList && el.classList.length > 0) {
       const classes = Array.from(el.classList)
-        .filter(c => !c.startsWith("vc-") && !c.includes("hover") && !c.includes("active") && c.length < 30);
+        .filter(c => !ignoredClasses.test(c) && c.length < 30);
       if (classes.length > 0) {
         sel += "." + classes.slice(0, 2).map(c => CSS.escape(c)).join(".");
       }
@@ -300,18 +334,30 @@
       }
     }
 
-    // Climb up 2 levels for hierarchy
+    // Climb up to 3 levels for hierarchy with parent sibling disambiguation
     let parent = el.parentElement;
     let path = [sel];
     let count = 0;
-    while (parent && parent !== document.body && count < 2) {
-      let pSel = parent.tagName.toLowerCase();
-      if (parent.id && !parent.id.match(/\d{4,}/)) {
+    while (parent && parent !== document.body && count < 3) {
+      if (parent.id && !parent.id.match(/\d{4,}/) && !parent.id.includes(":")) {
         path.unshift(`#${CSS.escape(parent.id)}`);
         break;
       }
+      let pSel = parent.tagName.toLowerCase();
       if (parent.classList && parent.classList.length > 0) {
-        pSel += "." + CSS.escape(parent.classList[0]);
+        const pClasses = Array.from(parent.classList)
+          .filter(c => !ignoredClasses.test(c) && c.length < 30);
+        if (pClasses.length > 0) {
+          pSel += "." + CSS.escape(pClasses[0]);
+        }
+      }
+      // CRITICAL: Disambiguate parent among siblings of the same tag so sibling containers never collide!
+      if (parent.parentElement) {
+        const sameTagParentSiblings = Array.from(parent.parentElement.children).filter(c => c.tagName === parent.tagName);
+        if (sameTagParentSiblings.length > 1) {
+          const pIdx = sameTagParentSiblings.indexOf(parent) + 1;
+          pSel += `:nth-of-type(${pIdx})`;
+        }
       }
       path.unshift(pSel);
       parent = parent.parentElement;
@@ -327,8 +373,21 @@
     // 1. Link matching by href (most unambiguous for navigation/anchors)
     if (action.href) {
       try {
-        const link = document.querySelector(`a[href="${CSS.escape(action.href)}"]`);
+        let link = document.querySelector(`a[href="${CSS.escape(action.href)}"]`);
         if (link) return link;
+
+        // Counterpart environment filename translation (_prod <-> _stg)
+        const counterpartHref = paneId === "STG"
+          ? action.href.replace(/([_-])prod\b/gi, '$1stg').replace(/\bprod([_-])/gi, 'stg$1')
+          : action.href.replace(/([_-])stg\b/gi, '$1prod').replace(/\bstg([_-])/gi, 'prod$1');
+
+        if (counterpartHref && counterpartHref !== action.href) {
+          link = document.querySelector(`a[href="${CSS.escape(counterpartHref)}"]`);
+          if (link) return link;
+          link = document.querySelector(`a[href$="${CSS.escape(counterpartHref)}"]`);
+          if (link) return link;
+        }
+
         const urlObj = new URL(action.href, window.location.href);
         const link2 = document.querySelector(`a[href="${CSS.escape(urlObj.pathname)}"], a[href="${CSS.escape(urlObj.hash)}"]`);
         if (link2) return link2;
@@ -596,22 +655,24 @@
           el.dispatchEvent(clickEvt);
 
           // If native .click() didn't fire handlers
-          if (typeof el.click === "function" && el.tagName !== "A") {
+          if (typeof el.click === "function" && (el.tagName !== "A" || el.hasAttribute("data-page") || (el.closest && el.closest("[data-page]")))) {
             el.click();
           }
 
-          // If it's a link and action didn't navigate
-          if (action.href && (el.tagName === "A" || el.closest("a"))) {
+          // If it's a normal navigation link without in-page routing, navigate
+          if (!el.hasAttribute("data-page") && (!el.closest || !el.closest("[data-page]")) && action.href && (el.tagName === "A" || el.closest("a"))) {
             const link = el.tagName === "A" ? el : el.closest("a");
             if (link.href && link.target !== "_blank") {
               window.location.href = link.href;
             }
           }
         } else if (action.href) {
-          // If element wasn't in DOM but href is known, navigate matching route
+          // If element wasn't in DOM but href is known, navigate matching counterpart route
           try {
-            const destUrl = new URL(action.href, window.location.href);
-            window.location.pathname = destUrl.pathname;
+            const destHref = paneId === "STG"
+              ? action.href.replace(/([_-])prod\b/gi, '$1stg').replace(/\bprod([_-])/gi, 'stg$1')
+              : action.href.replace(/([_-])stg\b/gi, '$1prod').replace(/\bstg([_-])/gi, 'prod$1');
+            window.location.href = destHref;
           } catch (e) {}
         }
       } else if (action.kind === "hover") {
@@ -882,6 +943,7 @@
 
     try {
       const data = extractLandmarks();
+      const diffCandidates = extractDiffCandidates();
       if (window.parent) {
         window.parent.postMessage({
           type: "VC_LANDMARKS_REPORT",
@@ -889,12 +951,118 @@
           landmarks: data.landmarks,
           docHeight: data.docHeight,
           docWidth: data.docWidth,
-          href: window.location.href
+          href: window.location.href,
+          diffCandidates
         }, "*");
       }
     } catch (err) {
       console.warn("[VisualCompare Live] Error extracting landmarks:", err);
     }
+  }
+
+  function sendDiffCandidatesReport() {
+    if (!isFramed || !window.parent) return;
+    try {
+      const diffCandidates = extractDiffCandidates();
+      window.parent.postMessage({
+        type: "VC_DIFF_CANDIDATES_REPORT",
+        paneId,
+        candidates: diffCandidates,
+        href: window.location.href
+      }, "*");
+    } catch (err) {
+      console.warn("[VisualCompare Live] Error sending diff candidates report:", err);
+    }
+  }
+
+  function extractDiffCandidates() {
+    const candidates = [];
+    const scrollY = window.scrollY || window.pageYOffset || 0;
+    const scrollX = window.scrollX || window.pageXOffset || 0;
+
+    const selector = [
+      'header .btn-primary',
+      'header button',
+      'header a.btn-login',
+      '.dynamic-ticker',
+      '.badge-pulse',
+      'h1, h2, h3, h4',
+      '.metric-card .metric-value',
+      '.metric-value',
+      '.pricing-card .amount',
+      '.pricing-card .btn-plan',
+      '.pricing-card .badge',
+      '.pricing-card .plan-features li',
+      '.feature-card h3',
+      '.feature-card p',
+      '.compare-table th',
+      '.compare-table td.col-highlight',
+      '.cta-submit',
+      '.cta-card h2',
+      '.cta-card p',
+      '.footer-bottom div:last-child',
+      'button',
+      '.btn-primary',
+      '.btn-secondary'
+    ].join(',');
+
+    const seenElements = new Set();
+    try {
+      document.querySelectorAll(selector).forEach(el => {
+        if (seenElements.has(el)) return;
+        if (el.classList.contains('vc-hazard-stripe-spacer') || el.id === 'vc-ghost-pointer' || el.classList.contains('vc-red-diff-badge')) return;
+
+        const style = window.getComputedStyle(el);
+        if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity) === 0) return;
+
+        const rect = el.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        seenElements.add(el);
+
+        // Sanitize element text: remove any diff badge text so badges never bleed into candidate text
+        let text = "";
+        if (el.querySelector(".vc-red-diff-badge")) {
+          const clone = el.cloneNode(true);
+          clone.querySelectorAll(".vc-red-diff-badge").forEach(b => b.remove());
+          text = (clone.innerText || clone.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 100);
+        } else {
+          text = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 100);
+        }
+        text = text.replace(/Visual (Text|Metric|Style|Heading|Geometry):[^\n]*/gi, '').trim();
+
+        const tag = el.tagName.toLowerCase();
+        const elSelector = getElementSelector(el);
+
+        candidates.push({
+          selector: elSelector,
+          tag,
+          text,
+          box: {
+            x: Math.round(rect.left + scrollX),
+            y: Math.round(rect.top + scrollY),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height)
+          },
+          style: {
+            bg: style.backgroundColor,
+            color: style.color,
+            radius: style.borderRadius,
+            border: style.borderColor,
+            borderWidth: style.borderWidth,
+            boxShadow: style.boxShadow,
+            padding: style.padding,
+            opacity: style.opacity,
+            fontSize: style.fontSize,
+            fontWeight: style.fontWeight
+          }
+        });
+      });
+    } catch (e) {
+      console.warn("[VisualCompare Live] Error extracting diff candidates:", e);
+    }
+
+    return candidates;
   }
 
   function ensureHazardSpacerStyles() {
@@ -977,13 +1145,47 @@
   }
 
   function applyHazardSpacer(info) {
+    if (document.readyState === "loading" || !document.body) {
+      window.addEventListener("DOMContentLoaded", () => applyHazardSpacer(info), { once: true });
+      return;
+    }
+
     ensureHazardSpacerStyles();
     const { spacerId, targetSelector, targetY, height, counterpart, insertPosition } = info;
     if (!height || height <= 2) return;
 
+    let targetEl = null;
+    if (targetSelector) {
+      try {
+        targetEl = document.querySelector(targetSelector);
+      } catch (e) {}
+    }
+
+    if (!targetEl && targetY !== undefined) {
+      const all = document.querySelectorAll(LANDMARK_SELECTORS);
+      for (const el of all) {
+        if (el.classList.contains("vc-hazard-stripe-spacer")) continue;
+        const r = el.getBoundingClientRect();
+        const y = r.top + (window.scrollY || 0);
+        if (y > 0 && y >= targetY - 10) {
+          targetEl = el;
+          break;
+        }
+      }
+    }
+
     let spacer = document.querySelector(`.vc-hazard-stripe-spacer[data-spacer-id="${spacerId}"]`);
     if (spacer) {
       spacer.style.height = `${height}px`;
+      // If spacer was previously appended to document.body (e.g., when frame was hidden or target not yet ready),
+      // relocate it directly to target element now that targetEl is found
+      if (spacer.parentElement === document.body && targetEl && targetEl.parentNode && targetEl !== document.body) {
+        if (insertPosition === "before") {
+          targetEl.insertAdjacentElement("beforebegin", spacer);
+        } else {
+          targetEl.insertAdjacentElement("afterend", spacer);
+        }
+      }
       return;
     }
 
@@ -1012,26 +1214,6 @@
 
     spacer.appendChild(badge);
 
-    let targetEl = null;
-    if (targetSelector) {
-      try {
-        targetEl = document.querySelector(targetSelector);
-      } catch (e) {}
-    }
-
-    if (!targetEl && targetY !== undefined) {
-      const all = document.querySelectorAll(LANDMARK_SELECTORS);
-      for (const el of all) {
-        if (el.classList.contains("vc-hazard-stripe-spacer")) continue;
-        const r = el.getBoundingClientRect();
-        const y = r.top + (window.scrollY || 0);
-        if (y >= targetY - 10) {
-          targetEl = el;
-          break;
-        }
-      }
-    }
-
     if (targetEl && targetEl.parentNode) {
       if (insertPosition === "before") {
         targetEl.insertAdjacentElement("beforebegin", spacer);
@@ -1046,6 +1228,159 @@
 
   function removeHazardSpacers() {
     document.querySelectorAll(".vc-hazard-stripe-spacer").forEach(el => el.remove());
+  }
+
+  // ----------------------------------------------------
+  // NON-HEIGHT RED DIFFERENCE ENGINE
+  // (Highlights non-height visual, styling, & content regressions in RED)
+  // ----------------------------------------------------
+  function ensureRedDiffStyles() {
+    let style = document.getElementById("vc-red-diff-styles");
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "vc-red-diff-styles";
+      document.head.appendChild(style);
+    }
+    style.textContent = `
+      .vc-red-diff-highlight {
+        outline: 3px solid #ef4444 !important;
+        outline-offset: 2px !important;
+        box-shadow: 0 0 14px rgba(239, 68, 68, 0.75), inset 0 0 10px rgba(239, 68, 68, 0.12) !important;
+        position: relative !important;
+        animation: vc-red-diff-pulse 2s infinite ease-in-out !important;
+      }
+      @keyframes vc-red-diff-pulse {
+        0%, 100% { outline-color: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.75); }
+        50% { outline-color: #f43f5e; box-shadow: 0 0 22px rgba(244, 63, 94, 0.95); }
+      }
+      .vc-red-diff-badge {
+        display: inline-flex !important;
+        align-items: center !important;
+        gap: 5px !important;
+        position: absolute !important;
+        top: -24px !important;
+        left: 0 !important;
+        background: rgba(185, 28, 28, 0.96) !important;
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        -webkit-background-clip: border-box !important;
+        background-clip: border-box !important;
+        border: 1px solid #f87171 !important;
+        border-radius: 9999px !important;
+        padding: 2px 8px !important;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        font-size: 10px !important;
+        font-weight: 700 !important;
+        line-height: 1.4 !important;
+        letter-spacing: 0.3px !important;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6) !important;
+        white-space: nowrap !important;
+        z-index: 999999 !important;
+        pointer-events: none !important;
+        animation: vc-red-badge-anim 0.2s ease-out !important;
+      }
+      .vc-red-diff-badge *,
+      .vc-red-diff-badge span,
+      .vc-red-diff-text {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        -webkit-background-clip: border-box !important;
+        background-clip: border-box !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+      }
+      @keyframes vc-red-badge-anim {
+        from { opacity: 0; transform: translateY(4px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .vc-red-diff-dot {
+        width: 6px !important;
+        height: 6px !important;
+        border-radius: 50% !important;
+        background: #fecaca !important;
+        box-shadow: 0 0 6px #fff !important;
+        display: inline-block !important;
+        flex-shrink: 0 !important;
+      }
+    `;
+  }
+
+  function applyRedDiffs(diffList) {
+    if (!Array.isArray(diffList) || diffList.length === 0) {
+      removeRedDiffs();
+      return;
+    }
+    ensureRedDiffStyles();
+    removeRedDiffs(); // Clear existing highlights before applying
+
+    const appliedBoxes = [];
+    const scrollY = window.scrollY || window.pageYOffset || 0;
+    const scrollX = window.scrollX || window.pageXOffset || 0;
+    const processedElements = new Set();
+
+    for (const item of diffList) {
+      if (!item || !item.selector) continue;
+      try {
+        const elements = document.querySelectorAll(item.selector);
+        elements.forEach(el => {
+          if (el.classList.contains("vc-hazard-stripe-spacer")) return;
+          if (processedElements.has(el)) return;
+          processedElements.add(el);
+
+          el.classList.add("vc-red-diff-highlight");
+
+          // Remove old badge if any exists inside element
+          el.querySelectorAll(".vc-red-diff-badge").forEach(b => b.remove());
+
+          // Clean, reliable label text
+          const rawLabel = (item.label && typeof item.label === "string") ? item.label.trim() : "";
+          const labelText = rawLabel || "🔴 Visual Difference";
+
+          // Add floating diff badge
+          const badge = document.createElement("div");
+          badge.className = "vc-red-diff-badge";
+          badge.innerHTML = `<span class="vc-red-diff-dot"></span><span class="vc-red-diff-text">${labelText}</span>`;
+
+          // If element is at top of viewport, position badge below element so it doesn't clip
+          const rect = el.getBoundingClientRect();
+          if (rect.top < 30) {
+            badge.style.top = "auto";
+            badge.style.bottom = "-24px";
+          }
+
+          el.appendChild(badge);
+
+          appliedBoxes.push({
+            selector: item.selector,
+            label: labelText,
+            x: Math.round(rect.left + scrollX),
+            y: Math.round(rect.top + scrollY),
+            width: Math.round(rect.width),
+            height: Math.round(rect.height)
+          });
+        });
+      } catch (err) {
+        console.warn("[VisualCompare Live] Error applying red diff selector:", item.selector, err);
+      }
+    }
+
+    if (isFramed && window.parent && appliedBoxes.length > 0) {
+      window.parent.postMessage({
+        type: "VC_RED_DIFFS_APPLIED",
+        paneId,
+        count: appliedBoxes.length,
+        boxes: appliedBoxes
+      }, "*");
+    }
+  }
+
+  function removeRedDiffs() {
+    document.querySelectorAll(".vc-red-diff-highlight").forEach(el => {
+      el.classList.remove("vc-red-diff-highlight");
+    });
+    document.querySelectorAll(".vc-red-diff-badge").forEach(badge => {
+      badge.remove();
+    });
   }
 
   // ----------------------------------------------------
@@ -1080,6 +1415,9 @@
   function onDimensionMaybeChanged(source = "unknown") {
     if (!isFramed) return;
     const current = getRawContentDimensions();
+
+    // If frame is hidden or collapsed (0x0 viewport), ignore to avoid false layout shift triggers
+    if (current.viewportWidth <= 0 || current.viewportHeight <= 0) return;
 
     if (!lastContentDimensions) {
       lastContentDimensions = current;

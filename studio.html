@@ -70,10 +70,26 @@
         </select>
       </div>
 
+      <!-- Visual Differences Button -->
+      <button id="btn-toggle-red-diffs" class="btn-diff-action btn-red-diffs" title="Highlight all non-height visual regressions (colors, shapes, typography, borders) in RED on live pages">
+        <span>🔴 Visual Diffs</span>
+      </button>
+
       <!-- Live Diff Button -->
       <button id="btn-run-diff" class="btn-diff-action" title="Capture snapshots and calculate visual pixel mismatch">
         <span>📸 Run Diff</span>
       </button>
+
+      <!-- Export Comparison ZIP Package -->
+      <button id="btn-export-zip" class="btn-diff-action btn-export-zip" title="Export comparison report, links, and PDFs of both pages with differences into a ZIP package">
+        <span>📦 Export ZIP</span>
+      </button>
+
+      <!-- Import Comparison ZIP Package -->
+      <button id="btn-import-zip" class="btn-diff-action btn-import-zip" title="Import previously exported comparison ZIP package">
+        <span>📥 Import ZIP</span>
+      </button>
+      <input type="file" id="file-import-zip" accept=".zip" style="display: none;" />
     </div>
   </header>
 
@@ -121,7 +137,7 @@
       </div>
 
       <!-- Metric Diff Badge -->
-      <div class="metric-badge" id="metric-diff-badge" style="display: none;">
+      <div class="metric-badge" id="metric-diff-badge" style="display: none;" title="Visual pixel & layout mismatch percentage (click to clear diff)">
         <span class="badge-label">Mismatch:</span>
         <span class="badge-value" id="metric-diff-pct">0.00%</span>
       </div>
@@ -131,6 +147,12 @@
         <span class="badge-label">⚠️ Shift Pad:</span>
         <span class="badge-value" id="metric-shift-val">+0px</span>
       </div>
+
+      <!-- Visual Differences Badge -->
+      <div class="metric-badge metric-red-badge" id="metric-red-badge" style="display: none;" title="Total visual regressions (colors, typography, shapes) highlighted in red">
+        <span class="badge-label">🔴 Visual Diffs:</span>
+        <span class="badge-value" id="metric-red-val">0</span>
+      </div>
     </div>
 
     <!-- Active Sync Features -->
@@ -138,6 +160,10 @@
       <label class="sync-chip active chip-hazard" id="chip-sync-hazard" title="DOM-Aware layout shift alignment using yellow hazard spacers (ports VisualCompare Python diff engine)">
         <input type="checkbox" id="check-sync-hazard" checked />
         <span>⚠️ Yellow Hazard Spacers</span>
+      </label>
+      <label class="sync-chip active chip-red-diff" id="chip-sync-red-diff" title="Highlight non-height visual regressions (colors, shapes, typography, borders) in RED on live pages">
+        <input type="checkbox" id="check-sync-red-diff" checked />
+        <span>🔴 Visual Diffs</span>
       </label>
       <label class="sync-chip active" id="chip-sync-clicks">
         <input type="checkbox" id="check-sync-clicks" checked />
@@ -280,6 +306,19 @@
     </div>
   </footer>
 
+  <!-- Import Notification Toast -->
+  <div id="import-notification-toast" class="import-toast" style="display: none;">
+    <div class="toast-content">
+      <span class="toast-icon">✅</span>
+      <div class="toast-text">
+        <strong id="toast-title">Package Imported Successfully</strong>
+        <p id="toast-desc">Restored comparison session.</p>
+      </div>
+      <button id="btn-close-toast" class="toast-close" title="Dismiss notification">✕</button>
+    </div>
+  </div>
+
+  <script src="zip_exporter.js"></script>
   <script src="studio.js"></script>
 </body>
 </html>

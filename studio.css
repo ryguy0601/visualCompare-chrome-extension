@@ -285,6 +285,62 @@ header.studio-header {
   box-shadow: 0 0 14px rgba(244, 63, 94, 0.5);
 }
 
+.btn-diff-action.diff-active {
+  background: linear-gradient(135deg, #059669, #0d9488);
+  border-color: #10b981;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+}
+
+.btn-diff-action.diff-active:hover {
+  filter: brightness(1.2);
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.7);
+}
+
+.btn-diff-action.loading {
+  opacity: 0.8;
+  cursor: wait;
+}
+
+.btn-diff-action.btn-red-diffs {
+  background: linear-gradient(135deg, #b91c1c, #dc2626);
+  border: 1px solid #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+}
+
+.btn-diff-action.btn-red-diffs:hover {
+  filter: brightness(1.2);
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.7);
+}
+
+.btn-diff-action.btn-red-diffs.inactive {
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #94a3b8;
+  box-shadow: none;
+}
+
+.btn-diff-action.btn-export-zip {
+  background: linear-gradient(135deg, #059669, #0d9488);
+  border: 1px solid #10b981;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
+}
+
+.btn-diff-action.btn-export-zip:hover {
+  filter: brightness(1.2);
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.6);
+}
+
+.btn-diff-action.btn-import-zip {
+  background: linear-gradient(135deg, #4f46e5, #3b82f6);
+  border: 1px solid #6366f1;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.35);
+}
+
+.btn-diff-action.btn-import-zip:hover {
+  filter: brightness(1.2);
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.6);
+}
+
 /* ----------------------------------------------------
    2. SECONDARY TOOLBAR (MODES & SYNC)
    ---------------------------------------------------- */
@@ -428,6 +484,18 @@ header.studio-header {
   font-family: monospace;
 }
 
+.metric-badge#metric-diff-badge {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.metric-badge#metric-diff-badge:hover {
+  background: rgba(244, 63, 94, 0.28);
+  border-color: #f43f5e;
+  box-shadow: 0 0 8px rgba(244, 63, 94, 0.5);
+  transform: translateY(-1px);
+}
+
 .metric-badge.metric-shift-badge {
   background: rgba(250, 204, 21, 0.15);
   border: 1px solid rgba(250, 204, 21, 0.45);
@@ -478,6 +546,26 @@ header.studio-header {
 
 .sync-chip.chip-hazard input[type="checkbox"] {
   accent-color: #facc15;
+}
+
+.sync-chip.chip-red-diff.active {
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.14);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.2);
+}
+
+.sync-chip.chip-red-diff input[type="checkbox"] {
+  accent-color: #ef4444;
+}
+
+.metric-badge.metric-red-badge {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
+
+.metric-badge.metric-red-badge .badge-value {
+  color: #f87171;
 }
 
 .sync-chip input[type="checkbox"] {
@@ -601,6 +689,22 @@ main.studio-stage {
   border: 1px solid var(--border);
   border-radius: 8px;
   user-select: none;
+  cursor: ew-resize;
+}
+
+/* While dragging, completely disable pointer events on iframes so the drag never drops or freezes */
+.swipe-container.is-dragging {
+  cursor: ew-resize !important;
+  user-select: none !important;
+}
+
+.swipe-container.is-dragging iframe {
+  pointer-events: none !important;
+}
+
+body.is-dragging-curtain {
+  cursor: ew-resize !important;
+  user-select: none !important;
 }
 
 .swipe-layer {
@@ -649,44 +753,60 @@ main.studio-stage {
   border: 1px solid var(--color-stg);
 }
 
-/* Draggable Split Handle */
+/* Draggable Split Handle with generous 44px hit-box */
 .swipe-divider-handle {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 50%;
-  width: 4px;
-  z-index: 20;
-  transform: translateX(-50%);
+  width: 44px;
+  margin-left: -22px;
+  z-index: 30;
   cursor: ew-resize;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .handle-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
   width: 2px;
   height: 100%;
   background: var(--accent-cyan);
   box-shadow: 0 0 10px rgba(56, 189, 248, 0.8);
-  margin: 0 auto;
+  pointer-events: none;
 }
 
 .handle-pill {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  position: relative;
+  z-index: 2;
   background: #0f172a;
   border: 2px solid var(--accent-cyan);
   border-radius: 20px;
-  padding: 4px 10px;
+  padding: 5px 12px;
   display: flex;
   align-items: center;
   gap: 6px;
   font-size: 10px;
   font-weight: 800;
   color: #fff;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.8), 0 0 12px rgba(56, 189, 248, 0.4);
   pointer-events: none;
   white-space: nowrap;
+  user-select: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.swipe-divider-handle:hover .handle-pill,
+.swipe-container.is-dragging .handle-pill {
+  transform: scale(1.08);
+  border-color: #38bdf8;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.9), 0 0 18px rgba(56, 189, 248, 0.7);
 }
 
 .handle-arrow {
@@ -732,11 +852,14 @@ main.studio-stage {
   left: 0;
   width: 100%;
   height: 100%;
-  display: none;
+  opacity: 0;
+  pointer-events: none;
+  visibility: visible;
 }
 
 .flicker-pane.active {
-  display: block;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* ----------------------------------------------------
@@ -897,3 +1020,174 @@ footer.studio-footer {
   cursor: pointer;
 }
 .btn-micro-text:hover { color: var(--text-main); }
+
+/* ----------------------------------------------------
+   RESPONSIVE & MOBILE STUDIO STYLING
+   ---------------------------------------------------- */
+@media (max-width: 1080px) {
+  .studio-header {
+    height: auto;
+    min-height: 48px;
+    padding: 8px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .header-left {
+    flex: 0 0 auto;
+  }
+  .header-center {
+    order: 3;
+    width: 100%;
+    max-width: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .url-input-wrap {
+    min-width: 140px;
+    flex: 1 1 220px;
+  }
+  .header-right {
+    flex: 1 0 auto;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .secondary-toolbar {
+    height: auto;
+    min-height: 44px;
+    padding: 6px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .mode-toggles {
+    overflow-x: auto;
+    max-width: 100%;
+    flex-shrink: 0;
+  }
+  .sync-toggles-bar {
+    overflow-x: auto;
+    max-width: 100%;
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .studio-header {
+    padding: 6px 10px;
+  }
+  .logo-text {
+    font-size: 13px;
+  }
+  .url-input-wrap input {
+    font-size: 11px;
+  }
+  .btn-diff-action {
+    padding: 5px 10px;
+    font-size: 10px;
+  }
+  .control-group {
+    font-size: 10px;
+  }
+  .studio-select {
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+
+  .secondary-toolbar {
+    padding: 6px 10px;
+  }
+  .mode-btn {
+    padding: 4px 8px;
+    font-size: 10px;
+  }
+  .sync-chip {
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+
+  /* On narrow screens, side-by-side stacks cleanly so both frames remain readable */
+  .mode-view-side {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .mode-view-side .pane-column {
+    min-height: 380px;
+    height: 50%;
+  }
+
+  .studio-footer {
+    height: auto;
+    padding: 6px 10px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .footer-left {
+    width: 100%;
+  }
+  .footer-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/* ----------------------------------------------------
+   IMPORT NOTIFICATION TOAST
+   ---------------------------------------------------- */
+.import-toast {
+  position: fixed;
+  bottom: 40px;
+  right: 24px;
+  background: #0f172a;
+  border: 1px solid #10b981;
+  border-radius: 8px;
+  padding: 12px 18px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8), 0 0 16px rgba(16, 185, 129, 0.35);
+  z-index: 9999999;
+  animation: toast-slide-in 0.3s ease-out;
+  max-width: 440px;
+}
+
+@keyframes toast-slide-in {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.toast-icon {
+  font-size: 22px;
+}
+
+.toast-text strong {
+  display: block;
+  font-size: 13px;
+  color: #f8fafc;
+  margin-bottom: 2px;
+}
+
+.toast-text p {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.toast-close {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 14px;
+  cursor: pointer;
+  margin-left: 8px;
+  padding: 4px;
+}
+
+.toast-close:hover {
+  color: #fff;
+}

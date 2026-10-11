@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ApexCloud Telemetry - Pricing &amp; Enterprise Plans [Staging]</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --bg-base: #080c15;
+      --bg-surface: #0e1424;
+      --bg-card: rgba(18, 25, 44, 0.75);
+      --bg-card-hover: rgba(24, 34, 60, 0.85);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --color-primary: #4f46e5;
+      --color-primary-hover: #4338ca;
+      --color-accent: #06b6d4;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    html, body {
+      font-family: var(--font-stack);
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      color-scheme: dark;
+      line-height: 1.6;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button, input, select { font-family: inherit; }
+
+    .ambient-glow {
+      position: fixed;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1000px;
+      height: 480px;
+      background: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.18), rgba(6, 182, 212, 0.08) 50%, transparent 75%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Sticky Header */
+    header.site-header {
+      background: rgba(14, 20, 36, 0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border-subtle);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .header-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      height: 72px;
+      gap: 16px;
+    }
+
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.15rem;
+      color: #fff;
+      box-shadow: 0 0 16px rgba(139, 92, 246, 0.45);
+    }
+
+    .brand-name {
+      font-weight: 800;
+      font-size: 1.15rem;
+      letter-spacing: -0.4px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .env-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(167, 139, 250, 0.15);
+      color: #c084fc;
+      border: 1px solid rgba(167, 139, 250, 0.35);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    nav.nav-segmented {
+      display: flex;
+      background: rgba(18, 25, 44, 0.9);
+      border: 1px solid var(--border-subtle);
+      padding: 4px;
+      border-radius: 10px;
+      gap: 4px;
+    }
+
+    .nav-tab {
+      padding: 6px 14px;
+      border-radius: 7px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+
+    .nav-tab:hover, .nav-tab.vc-hovered-pseudo {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .nav-tab.active {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.35), rgba(236, 72, 153, 0.25));
+      color: #fff;
+      border: 1px solid rgba(167, 139, 250, 0.45);
+      box-shadow: 0 2px 8px rgba(139, 92, 246, 0.25);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .btn-login {
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.88rem;
+      padding: 8px 12px;
+      border-radius: 6px;
+      transition: color 0.15s;
+    }
+
+    .btn-login:hover, .btn-login.vc-hovered-pseudo { color: #fff; }
+
+    /* REGRESSION 1: Subtly altered button color & radius */
+    .btn-primary {
+      background: #3b82f6;
+      color: #ffffff;
+      padding: 9px 18px;
+      border-radius: 5px;
+      font-weight: 600;
+      font-size: 0.88rem;
+      border: 1px solid #60a5fa;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-primary:hover, .btn-primary.vc-hovered-pseudo {
+      background: #2563eb;
+      border-color: #3b82f6;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.5);
+    }
+
+    /* Dynamic Ticker Banner (Layout shift generator on pricing) */
+    .dynamic-ticker {
+      background: rgba(16, 185, 129, 0.16);
+      border-bottom: 1px solid rgba(16, 185, 129, 0.4);
+      color: #6ee7b7;
+      padding: 14px 24px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      position: relative;
+      z-index: 40;
+    }
+
+    .badge-pulse {
+      background: #10b981;
+      color: #0f172a;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      animation: pulse-alert 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse-alert {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(0.96); }
+    }
+
+    /* Hero Section */
+    .hero-section {
+      padding: 64px 0 48px;
+      text-align: center;
+      position: relative;
+    }
+
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(139, 92, 246, 0.12);
+      border: 1px solid rgba(167, 139, 250, 0.35);
+      padding: 4px 14px;
+      border-radius: 9999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #c084fc;
+      margin-bottom: 20px;
+    }
+
+    .hero-pill .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #c084fc;
+      box-shadow: 0 0 8px #c084fc;
+    }
+
+    .hero-title {
+      font-size: 3.2rem;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1.2px;
+      margin-bottom: 18px;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #c084fc 0%, #38bdf8 50%, #f472b6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      max-width: 660px;
+      margin: 0 auto 36px;
+      line-height: 1.6;
+    }
+
+    /* Billing Toggle */
+    .pricing-toggle-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 48px;
+    }
+
+    .toggle-label {
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .toggle-label.active { color: #fff; }
+
+    .toggle-pill {
+      background: rgba(18, 25, 44, 0.9);
+      border: 1px solid var(--border-subtle);
+      border-radius: 9999px;
+      padding: 4px;
+      display: flex;
+      cursor: pointer;
+      gap: 4px;
+    }
+
+    .toggle-opt {
+      padding: 6px 16px;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+
+    .toggle-opt.active {
+      background: #8b5cf6;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
+    }
+
+    .discount-badge {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    /* Pricing Grid */
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      margin-bottom: 70px;
+      align-items: stretch;
+      text-align: left;
+    }
+
+    .pricing-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 36px 30px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      transition: all 0.25s ease;
+    }
+
+    .pricing-card:hover, .pricing-card.vc-hovered-pseudo {
+      transform: translateY(-4px);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .pricing-card.featured {
+      background: linear-gradient(180deg, rgba(46, 16, 101, 0.85) 0%, rgba(18, 25, 44, 0.95) 100%);
+      border-color: rgba(167, 139, 250, 0.55);
+      box-shadow: 0 16px 40px -10px rgba(139, 92, 246, 0.35);
+    }
+
+    .pricing-badge {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #8b5cf6, #ec4899);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 800;
+      padding: 4px 14px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+    }
+
+    .plan-name { font-size: 1.3rem; font-weight: 800; color: #fff; margin-bottom: 8px; }
+    .plan-desc { font-size: 0.88rem; color: var(--text-muted); margin-bottom: 24px; min-height: 42px; }
+    .plan-price { display: flex; align-items: baseline; gap: 4px; margin-bottom: 28px; }
+    .plan-price .currency { font-size: 1.5rem; font-weight: 700; color: #fff; }
+    .plan-price .amount { font-size: 3rem; font-weight: 800; color: #fff; line-height: 1; }
+    .plan-price .period { font-size: 0.9rem; color: var(--text-dim); }
+
+    .plan-features {
+      list-style: none;
+      padding: 0;
+      margin: 0 0 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex-grow: 1;
+    }
+
+    .plan-feature-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.9rem;
+      color: #cbd5e1;
+    }
+
+    .plan-feature-item .check { color: #10b981; font-weight: 800; }
+
+    /* FAQ */
+    .section-header { text-align: center; max-width: 680px; margin: 0 auto 36px; }
+    .section-header h2 { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.8px; margin-bottom: 12px; }
+    .section-header p { color: var(--text-muted); font-size: 1.05rem; }
+
+    .faq-section { max-width: 800px; margin: 0 auto 80px; text-align: left; }
+    .faq-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      margin-bottom: 14px;
+      overflow: hidden;
+      transition: border-color 0.15s;
+    }
+    .faq-item:hover, .faq-item.vc-hovered-pseudo { border-color: rgba(255, 255, 255, 0.18); }
+    .faq-summary {
+      padding: 18px 22px;
+      font-weight: 700;
+      font-size: 1rem;
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .faq-content { padding: 0 22px 20px; font-size: 0.92rem; color: var(--text-muted); line-height: 1.6; }
+
+    /* CTA Box */
+    .cta-card {
+      background: radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.35), rgba(14, 20, 36, 0.9) 70%);
+      border: 1px solid rgba(167, 139, 250, 0.4);
+      border-radius: 20px;
+      padding: 56px 40px;
+      text-align: center;
+      box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.5);
+      margin-bottom: 80px;
+    }
+    .cta-card h2 { font-size: 2.2rem; font-weight: 800; margin-bottom: 12px; }
+    .cta-card p { color: var(--text-muted); font-size: 1.05rem; max-width: 580px; margin: 0 auto 32px; }
+    .cta-form { display: flex; justify-content: center; gap: 12px; max-width: 480px; margin: 0 auto; }
+    .cta-input {
+      flex: 1;
+      background: rgba(9, 14, 26, 0.85);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 12px 18px;
+      color: #fff;
+      outline: none;
+    }
+    .cta-submit {
+      background: #3b82f6;
+      color: #fff;
+      border: 1px solid #60a5fa;
+      border-radius: 4px;
+      padding: 12px 24px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* Footer */
+    footer.site-footer {
+      background: #060911;
+      border-top: 1px solid var(--border-subtle);
+      padding: 50px 0 35px;
+      font-size: 0.88rem;
+      color: var(--text-dim);
+    }
+    .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 40px; }
+    .footer-col h4 { color: #fff; margin-bottom: 16px; }
+    .footer-links { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+    .footer-bottom { border-top: 1px solid rgba(255,255,255,0.05); padding-top: 24px; display: flex; justify-content: space-between; }
+
+    @media (max-width: 900px) {
+      .pricing-grid { grid-template-columns: 1fr; max-width: 480px; margin-left: auto; margin-right: auto; }
+      .footer-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 680px) {
+      .header-inner { flex-direction: column; height: auto; padding: 12px 0; gap: 12px; }
+      .hero-title { font-size: 2.2rem; }
+      .cta-form { flex-direction: column; }
+      .footer-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="ambient-glow"></div>
+
+  <!-- Header Navigation -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand-wrap">
+        <div class="brand-logo">A</div>
+        <div class="brand-name">
+          ApexCloud
+          <span class="env-badge">STAGING</span>
+        </div>
+      </div>
+
+      <nav class="nav-segmented" id="header-nav">
+        <a href="demo_stg.html" class="nav-tab">
+          🌐 Overview
+        </a>
+        <a href="demo_stg_features.html" class="nav-tab">
+          ⚡ Features
+        </a>
+        <a href="demo_stg_pricing.html" class="nav-tab active">
+          💳 Pricing
+        </a>
+      </nav>
+
+      <div class="header-actions">
+        <a href="#signin" class="btn-login">Sign In</a>
+        <!-- REGRESSION 1: Subtly altered button color & radius -->
+        <button class="btn-primary" id="btn-start-trial">Start Free Trial</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- INSERTED ELEMENT: Promo Banner on Pricing (+60px Layout Shift) -->
+  <section class="dynamic-ticker" id="pricing-promo">
+    <span class="badge-pulse">Q4 Offer</span>
+    <span>🎉 Fall Cloud Migration Deal: 20% Off Enterprise Migrations &amp; Free Architecture Review</span>
+  </section>
+
+  <main>
+    <section class="hero-section" id="pricing-hero">
+      <div class="container">
+        <div class="hero-pill">
+          <span class="dot"></span>
+          <span>Transparent Economics</span>
+        </div>
+        <h1 class="hero-title">
+          Predictable Pricing for <br />
+          <span class="gradient-text">High-Velocity Teams</span>
+        </h1>
+        <p class="hero-subtitle">
+          Start free with no credit card required. Upgrade as your distributed cluster traffic expands.
+        </p>
+
+        <!-- Billing Toggle -->
+        <div class="pricing-toggle-wrap">
+          <span class="toggle-label active" id="label-monthly">Monthly</span>
+          <div class="toggle-pill" id="billing-toggle">
+            <span class="toggle-opt active" id="opt-monthly">Monthly</span>
+            <span class="toggle-opt" id="opt-annual">Annual</span>
+          </div>
+          <span class="toggle-label" id="label-annual">Annually</span>
+          <span class="discount-badge">SAVE 20%</span>
+        </div>
+
+        <!-- 3-Tier Pricing Grid -->
+        <div class="pricing-grid">
+          <!-- Tier 1: Starter -->
+          <div class="pricing-card">
+            <div class="plan-name">Developer</div>
+            <div class="plan-desc">Perfect for independent developers and side projects.</div>
+            <div class="plan-price">
+              <span class="currency">$</span>
+              <span class="amount">0</span>
+              <span class="period">/ month</span>
+            </div>
+            <ul class="plan-features">
+              <li class="plan-feature-item"><span class="check">✓</span> 500,000 traces / month</li>
+              <li class="plan-feature-item"><span class="check">✓</span> Up to 3 active cluster hosts</li>
+              <li class="plan-feature-item"><span class="check">✓</span> 3-day data retention</li>
+              <li class="plan-feature-item"><span class="check">✓</span> Community Discord support</li>
+            </ul>
+            <button class="btn-secondary" style="width: 100%;">Get Started Free</button>
+          </div>
+
+          <!-- Tier 2: Pro (Scale) -->
+          <div class="pricing-card featured">
+            <span class="pricing-badge">MOST POPULAR</span>
+            <div class="plan-name">Scale / Pro</div>
+            <div class="plan-desc">Engineered for fast-growing SaaS startups and microservices.</div>
+            <div class="plan-price">
+              <span class="currency">$</span>
+              <!-- REGRESSION 4: Price changed from $49 to $59 -->
+              <span class="amount warning" id="pro-price-amount" style="color:#f87171;">59</span>
+              <span class="period">/ month</span>
+            </div>
+            <ul class="plan-features">
+              <li class="plan-feature-item"><span class="check">✓</span> 25,000,000 traces / month</li>
+              <li class="plan-feature-item"><span class="check">✓</span> Up to 25 cluster nodes</li>
+              <li class="plan-feature-item"><span class="check">✓</span> 30-day high-res retention</li>
+              <li class="plan-feature-item"><span class="check">✓</span> Automated root cause isolation</li>
+              <li class="plan-feature-item"><span class="check">✓</span> Priority Slack integration</li>
+            </ul>
+            <button class="btn-primary" style="width: 100%;">Start 14-Day Pro Trial</button>
+          </div>
+
+          <!-- Tier 3: Enterprise -->
+          <div class="pricing-card">
+            <div class="plan-name">Enterprise</div>
+            <div class="plan-desc">For mission-critical distributed systems requiring compliance.</div>
+            <div class="plan-price">
+              <span class="currency">$</span>
+              <span class="amount">249</span>
+              <span class="period">/ month</span>
+            </div>
+            <ul class="plan-features">
+              <li class="plan-feature-item"><span class="check">✓</span> Unlimited trace volume</li>
+              <li class="plan-feature-item"><span class="check">✓</span> Unlimited Kubernetes nodes</li>
+              <li class="plan-feature-item"><span class="check">✓</span> 1-year compliance retention</li>
+              <li class="plan-feature-item"><span class="check">✓</span> SOC2, HIPAA, ISO27001 audit logs</li>
+              <li class="plan-feature-item"><span class="check">✓</span> Dedicated TAM &amp; 99.99% SLA</li>
+            </ul>
+            <button class="btn-secondary" style="width: 100%;">Contact Solutions Team</button>
+          </div>
+        </div>
+
+        <!-- FAQ Section -->
+        <div class="section-header">
+          <h2>Frequently Asked Questions</h2>
+          <p>Everything you need to know about our billing and infrastructure telemetry.</p>
+        </div>
+        <div class="faq-section">
+          <details class="faq-item" open>
+            <summary class="faq-summary">How does the 14-day Pro trial work? <span>▼</span></summary>
+            <div class="faq-content">You get full access to all Pro features with no credit card required. If you decide not to upgrade after 14 days, your account seamlessly drops to the free Developer plan.</div>
+          </details>
+          <details class="faq-item">
+            <summary class="faq-summary">Can I host the telemetry collector on-premise? <span>▼</span></summary>
+            <div class="faq-content">Yes. ApexCloud Enterprise offers air-gapped Helm charts for VPC, AWS GovCloud, and on-premises OpenShift Kubernetes clusters.</div>
+          </details>
+          <details class="faq-item">
+            <summary class="faq-summary">What happens if our cluster spikes over the trace quota? <span>▼</span></summary>
+            <div class="faq-content">We never drop your mission-critical traces. Overage is billed at a flat rate of $0.002 per additional 10,000 spans without surprise throttling.</div>
+          </details>
+        </div>
+
+        <!-- Call to Action -->
+        <div class="cta-card">
+          <h2>Deploy Without Surprise Invoices</h2>
+          <p>Join thousands of high-velocity engineering organizations monitoring microservices with ApexCloud.</p>
+          <form class="cta-form" onsubmit="event.preventDefault(); alert('Demo environment: Registration submitted!');">
+            <input type="email" class="cta-input" placeholder="Enter your work email..." required />
+            <button type="submit" class="cta-submit">Join Waitlist</button>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="brand-name">
+            <div class="brand-logo" style="width:28px; height:28px; font-size:0.9rem;">A</div>
+            ApexCloud
+          </div>
+          <p>The autonomous cloud observability engine engineered for velocity, sub-millisecond eBPF tracing, and automated root cause analysis.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Pages</h4>
+          <ul class="footer-links">
+            <li><a href="demo_stg.html">Overview</a></li>
+            <li><a href="demo_stg_features.html">Features</a></li>
+            <li><a href="demo_stg_pricing.html">Pricing</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Integrations</h4>
+          <ul class="footer-links">
+            <li><a href="#k8s">Kubernetes</a></li>
+            <li><a href="#aws">AWS Fargate</a></li>
+            <li><a href="#gcp">Google Cloud</a></li>
+          </ul>
+        </div>
+        <div class="footer-col">
+          <h4>Security &amp; Trust</h4>
+          <ul class="footer-links">
+            <li><a href="#soc2">SOC-2 Type II</a></li>
+            <li><a href="#privacy">Privacy Policy</a></li>
+            <li><a href="#status">System Status</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div>&copy; 2026 ApexCloud Technologies, Inc. All rights reserved.</div>
+        <div style="color: #c084fc; font-weight: 600;">Staging Candidate Environment (v3.3)</div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const billingToggle = document.getElementById("billing-toggle");
+    const optMonthly = document.getElementById("opt-monthly");
+    const optAnnual = document.getElementById("opt-annual");
+    const labelMonthly = document.getElementById("label-monthly");
+    const labelAnnual = document.getElementById("label-annual");
+    const proPriceAmount = document.getElementById("pro-price-amount");
+
+    if (billingToggle) {
+      function setAnnualBilling(isAnnual) {
+        if (optMonthly) optMonthly.classList.toggle("active", !isAnnual);
+        if (optAnnual) optAnnual.classList.toggle("active", isAnnual);
+        if (labelMonthly) labelMonthly.classList.toggle("active", !isAnnual);
+        if (labelAnnual) labelAnnual.classList.toggle("active", isAnnual);
+        if (proPriceAmount) proPriceAmount.textContent = isAnnual ? "49" : "59";
+      }
+
+      optMonthly.addEventListener("click", () => setAnnualBilling(false));
+      optAnnual.addEventListener("click", () => setAnnualBilling(true));
+    }
+  </script>
+  <script src="sync_agent.js"></script>
+</body>
+</html>
