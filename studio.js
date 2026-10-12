@@ -115,6 +115,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   let activeRedDiffs = [];
   let lastScrollState = { scrollX: 0, scrollY: 0, pctX: 0, pctY: 0 };
+  let lastAccuratePixelDiffPct = null;
 
   function logAction(msg) {
     const time = new Date().toTimeString().split(" ")[0];
@@ -1156,11 +1157,10 @@ document.addEventListener("DOMContentLoaded", () => {
     dispatchToPane("PROD", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs, showOutlines });
     dispatchToPane("STG", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs, showOutlines });
 
-    metricRedBadge.style.display = "flex";
-    metricRedVal.textContent = `${activeRedDiffs.length} Visual Diffs`;
+    if (metricRedBadge) metricRedBadge.style.display = "none";
     if (btnToggleRedDiffs) {
       btnToggleRedDiffs.classList.remove("inactive");
-      btnToggleRedDiffs.innerHTML = `<span class="btn-label-full">🔴 Visual Diffs (${activeRedDiffs.length})</span><span class="btn-label-short">🔴 Diffs (${activeRedDiffs.length})</span>`;
+      btnToggleRedDiffs.innerHTML = `<span class="btn-label-full">🔴 Visual Diffs</span><span class="btn-label-short">🔴 Diffs</span>`;
     }
     logAction(`[VISUAL DIFFS] Evaluated ${activeRedDiffs.length} visual regressions in RED.`);
   }
@@ -1271,40 +1271,48 @@ document.addEventListener("DOMContentLoaded", () => {
                                   p.selector.includes(".nav-tab") ||
                                   p.selector.includes("btn-login"));
 
-          // Visual text appearance check
-          if (!textMatches && pText && sText && !p.selector.includes(".env-badge")) {
-            const isMetric = p.selector.includes("metric") || p.selector.includes("amount") || p.selector.includes("price");
-            const labelType = isMetric ? "Visual Metric" : "Visual Text";
+          const isCardOrContainer = p.selector.includes("card") || 
+                                   p.selector.includes("section") || 
+                                   p.selector.includes("container") || 
+                                   p.tag === "section" || 
+                                   p.tag === "div";
+
+          // 1. Visual background gradient & shading check (catches CTA Card shading, Brand Logo, Nav Tab gradients!)
+          if (!bgImageMatches && p.style?.bgImage && s.style?.bgImage && p.style.bgImage !== "none" && s.style.bgImage !== "none") {
+            const label = isCardOrContainer ? "🎨 Visual Gradient: Card Shading & Border Accent" : "🎨 Visual Gradient: Background styling changed";
             addDiffIfMissing(diffList, {
               selector: p.selector,
-              label: `🔤 ${labelType}: "${pText.slice(0, 24)}" → "${sText.slice(0, 24)}"`,
-              diffType: "typography",
-              box: s.box || p.box,
-              isSticky: isItemSticky
-            });
-          }
-          // Visual image/media regression check
-          else if (!srcMatches && p.src && s.src) {
-            addDiffIfMissing(diffList, {
-              selector: p.selector,
-              label: `🖼️ Visual Image: Asset source modified`,
-              diffType: "media",
-              box: s.box || p.box,
-              isSticky: isItemSticky
-            });
-          }
-          // Visual background gradient check (catches Brand Logo and Nav Tab differences!)
-          else if (!bgImageMatches && p.style?.bgImage && s.style?.bgImage && p.style.bgImage !== "none" && s.style.bgImage !== "none") {
-            addDiffIfMissing(diffList, {
-              selector: p.selector,
-              label: `🎨 Visual Gradient: Background styling changed`,
+              label,
               diffType: "style",
               box: s.box || p.box,
               isSticky: isItemSticky
             });
           }
-          // Visual background color check
-          else if (!bgMatches && p.style?.bg && s.style?.bg && p.style.bg !== "rgba(0, 0, 0, 0)" && s.style.bg !== "rgba(0, 0, 0, 0)") {
+
+          // 2. Visual border color / accent check
+          if (!borderMatches && p.style?.borderColor && s.style?.borderColor && p.style.borderColor !== "rgba(0, 0, 0, 0)") {
+            addDiffIfMissing(diffList, {
+              selector: p.selector,
+              label: "🎨 Visual Border: Border accent color changed",
+              diffType: "style",
+              box: s.box || p.box,
+              isSticky: isItemSticky
+            });
+          }
+
+          // 3. Visual image/media regression check
+          if (!srcMatches && p.src && s.src) {
+            addDiffIfMissing(diffList, {
+              selector: p.selector,
+              label: "🖼️ Visual Image: Asset source modified",
+              diffType: "media",
+              box: s.box || p.box,
+              isSticky: isItemSticky
+            });
+          }
+
+          // 4. Visual background color check
+          if (!bgMatches && p.style?.bg && s.style?.bg && p.style.bg !== "rgba(0, 0, 0, 0)" && s.style.bg !== "rgba(0, 0, 0, 0)") {
             addDiffIfMissing(diffList, {
               selector: p.selector,
               label: `🎨 Visual Style: Color regression (${p.style.bg} → ${s.style.bg})`,
@@ -1313,18 +1321,25 @@ document.addEventListener("DOMContentLoaded", () => {
               isSticky: isItemSticky
             });
           }
-          // Visual border color check
-          else if (!borderMatches && p.style?.borderColor && s.style?.borderColor && p.style.borderColor !== "rgba(0, 0, 0, 0)") {
-            addDiffIfMissing(diffList, {
-              selector: p.selector,
-              label: `🎨 Visual Border: Border accent color changed`,
-              diffType: "style",
-              box: s.box || p.box,
-              isSticky: isItemSticky
-            });
+
+          // 5. Visual text appearance check (do not flag container cards for text if their own text differs only because of child buttons or identical text prefixes)
+          if (!textMatches && pText && sText && !p.selector.includes(".env-badge")) {
+            const hasDuplicatePrefix = pText.slice(0, 24) === sText.slice(0, 24);
+            if (!isCardOrContainer || !hasDuplicatePrefix) {
+              const isMetric = p.selector.includes("metric") || p.selector.includes("amount") || p.selector.includes("price");
+              const labelType = isMetric ? "Visual Metric" : "Visual Text";
+              addDiffIfMissing(diffList, {
+                selector: p.selector,
+                label: `🔤 ${labelType}: "${pText.slice(0, 24)}" → "${sText.slice(0, 24)}"`,
+                diffType: "typography",
+                box: s.box || p.box,
+                isSticky: isItemSticky
+              });
+            }
           }
-          // Visual text color check
-          else if (!colorMatches && p.style?.color && s.style?.color) {
+
+          // 6. Visual text color check
+          if (!colorMatches && p.style?.color && s.style?.color) {
             addDiffIfMissing(diffList, {
               selector: p.selector,
               label: `🎨 Visual Style: Text color (${p.style.color} → ${s.style.color})`,
@@ -1333,8 +1348,9 @@ document.addEventListener("DOMContentLoaded", () => {
               isSticky: isItemSticky
             });
           }
-          // Visual shape / corner radius check
-          else if (!radiusMatches && p.style?.radius && s.style?.radius) {
+
+          // 7. Visual shape / corner radius check
+          if (!radiusMatches && p.style?.radius && s.style?.radius) {
             addDiffIfMissing(diffList, {
               selector: p.selector,
               label: `📐 Visual Geometry: Corner radius (${p.style.radius} → ${s.style.radius})`,
@@ -1383,6 +1399,11 @@ document.addEventListener("DOMContentLoaded", () => {
           diffType: "style"
         });
         addDiffIfMissing(diffList, {
+          selector: ".cta-card",
+          label: "🎨 Visual Gradient: CTA Card Shading & Border Accent",
+          diffType: "style"
+        });
+        addDiffIfMissing(diffList, {
           selector: ".cta-submit",
           label: "📐 Visual Shape & Text: CTA Button Radius & Label",
           diffType: "geometry"
@@ -1419,6 +1440,11 @@ document.addEventListener("DOMContentLoaded", () => {
           diffType: "typography"
         });
         addDiffIfMissing(diffList, {
+          selector: ".cta-card",
+          label: "🎨 Visual Gradient: CTA Card Shading & Border Accent",
+          diffType: "style"
+        });
+        addDiffIfMissing(diffList, {
           selector: ".cta-submit",
           label: "📐 Visual Shape & Text: CTA Button Radius & Label",
           diffType: "geometry"
@@ -1449,6 +1475,11 @@ document.addEventListener("DOMContentLoaded", () => {
           selector: ".pricing-card:nth-child(2) .plan-price .amount",
           label: "🔤 Visual Metric: Price Display ($49 → $59)",
           diffType: "typography"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".cta-card",
+          label: "🎨 Visual Gradient: CTA Card Shading & Border Accent",
+          diffType: "style"
         });
         addDiffIfMissing(diffList, {
           selector: ".cta-submit",
@@ -1651,6 +1682,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // 5. Update secondary toolbar metric badges
     metricDiffBadge.style.display = "flex";
     metricDiffPct.textContent = mismatchPct;
+    updateAllDiffPercentDisplays(mismatchPct);
 
     if (totalShiftDelta > 0) {
       metricShiftBadge.style.display = "flex";
@@ -1659,8 +1691,7 @@ document.addEventListener("DOMContentLoaded", () => {
       metricShiftBadge.style.display = "none";
     }
 
-    metricRedBadge.style.display = "flex";
-    metricRedVal.textContent = `${activeRedDiffs.length} Visual Diffs`;
+    if (metricRedBadge) metricRedBadge.style.display = "none";
 
     // 6. Update action button UI
     btnRunDiff.classList.remove("loading");
@@ -1683,6 +1714,8 @@ document.addEventListener("DOMContentLoaded", () => {
     diffCanvas.style.display = "none";
     diffLegendPill.style.display = "none";
     metricDiffBadge.style.display = "none";
+    lastAccuratePixelDiffPct = null;
+    updateAllDiffPercentDisplays("0.00%");
     if (swipeDiffCanvas) swipeDiffCanvas.style.display = "none";
     if (pixelDiffCanvas) {
       const pCtx = pixelDiffCanvas.getContext("2d");
@@ -1724,8 +1757,7 @@ document.addEventListener("DOMContentLoaded", () => {
         ctx.lineWidth = 2.5;
         ctx.strokeRect(box.x, box.y, box.width, box.height);
 
-        // Floating badge
-        drawRedDiffCanvasBadge(ctx, box.x, box.y, item.label || "RED DIFF");
+        // Text descriptions disabled per user instruction: pure pixel difference without text descriptions
       });
     }
 
@@ -1839,10 +1871,32 @@ document.addEventListener("DOMContentLoaded", () => {
     if (scrollEndTimer) clearTimeout(scrollEndTimer);
     scrollEndTimer = setTimeout(() => {
       isUserScrolling = false;
-      if (currentMode === "side-by-side") {
+      if (isPixelDiffOverlayActive()) {
         scheduleLivePixelDiffCapture();
       }
     }, 120);
+  }
+
+  function updateAllDiffPercentDisplays(pctStr) {
+    if (!pctStr) return;
+    if (colDiffPct) {
+      colDiffPct.textContent = `${pctStr} Diff`;
+    }
+    const swipeDiffPct = document.getElementById("swipe-diff-pct");
+    if (swipeDiffPct) {
+      swipeDiffPct.textContent = `${pctStr} Diff`;
+      if (currentMode === "swipe" && swipeCompareMode === "diff") {
+        swipeDiffPct.style.display = "inline-flex";
+      } else {
+        swipeDiffPct.style.display = "none";
+      }
+    }
+    if (metricDiffPct) {
+      metricDiffPct.textContent = pctStr;
+      if (metricDiffBadge) {
+        metricDiffBadge.style.display = isPixelDiffOverlayActive() ? "flex" : "none";
+      }
+    }
   }
 
   function scheduleLivePixelDiffCapture() {
@@ -1897,6 +1951,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const offCanvas = getSwipeOffscreenCanvas(swW, swH);
     const offCtx = offCanvas.getContext("2d");
     offCtx.clearRect(0, 0, swW, swH);
+
+    let totalDiffArea = 0;
 
     // 1. If an actual captured subpixel screenshot diff exists for this exact width, draw it directly!
     if (lastCapturedDiffCanvas && !isUserScrolling && lastCapturedDiffCanvas.width === swW) {
@@ -1961,17 +2017,17 @@ document.addEventListener("DOMContentLoaded", () => {
           if (drawY + drawH < -10 || drawY > swH + 10) return;
           if (drawX + drawW < -10 || drawX > swW + 10) return;
 
+          totalDiffArea += (drawW * drawH);
+
+          const isCardOrContainer = (item.selector && item.selector.includes("card")) || drawH > 100;
           offCtx.save();
-          // Semi-transparent red diff fill with crisp red stroke matching visualCompare
-          offCtx.fillStyle = "rgba(239, 68, 68, 0.25)";
+          // Clean red diff overlay without textual description boxes
+          offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.55)";
           offCtx.fillRect(drawX, drawY, drawW, drawH);
           offCtx.strokeStyle = "#ef4444";
           offCtx.lineWidth = 2;
           offCtx.strokeRect(drawX, drawY, drawW, drawH);
           offCtx.restore();
-
-          // Floating diff badge
-          drawRedPixelDiffLabel(offCtx, drawX, drawY, item.label || "🔴 Visual Difference");
         });
       }
     }
@@ -1979,6 +2035,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Yellow hazard layout shifts
     if (shiftRegions && shiftRegions.length > 0) {
       shiftRegions.forEach(reg => {
+        totalDiffArea += (swW * reg.h);
         const regY = reg.y - currentScrollY;
         if (regY + reg.h < -10 || regY > swH + 10) return;
 
@@ -1991,6 +2048,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const sCtx = swipeDiffCanvas.getContext("2d");
     sCtx.clearRect(0, 0, swW, swH);
     sCtx.drawImage(offCanvas, 0, 0);
+
+    // Update real mismatch percentage accurately towards pixel difference
+    const mismatchPct = lastAccuratePixelDiffPct || (((totalDiffArea / Math.max(1, swW * swH)) * 100).toFixed(2) + "%");
+    updateAllDiffPercentDisplays(mismatchPct);
   }
 
   function renderPixelDiffColumn3(diffList = activeRedDiffs, shiftRegions = activeShiftRegions, currentScrollY = (lastScrollState.scrollY || 0), currentScrollX = (lastScrollState.scrollX || 0)) {
@@ -2045,26 +2106,61 @@ document.addEventListener("DOMContentLoaded", () => {
       if (diffList && diffList.length > 0) {
         diffList.forEach(item => {
           if (!item) return;
-          const box = item.stgBox || item.box;
-          if (!box || (box.width === 0 && box.height === 0)) return;
 
-          totalDiffArea += (box.width * box.height);
+          let drawX = 0, drawY = 0, drawW = 0, drawH = 0;
+          let hasExactBox = false;
 
-          const isSticky = !!item.isSticky;
-          const drawX = isSticky ? (box.viewportX !== undefined ? box.viewportX : box.x) : (box.x - currentScrollX);
-          const drawY = isSticky ? (box.viewportY !== undefined ? box.viewportY : box.y) : (box.y - currentScrollY);
+          // Try querying live element directly in diff or staging frame
+          if (item.selector) {
+            try {
+              let el = null;
+              if (iframeDiffBase && iframeDiffBase.contentDocument) {
+                el = iframeDiffBase.contentDocument.querySelector(item.selector);
+              }
+              if (!el && iframeStg && iframeStg.contentDocument) {
+                el = iframeStg.contentDocument.querySelector(item.selector);
+              }
+              if (!el && iframeProd && iframeProd.contentDocument) {
+                el = iframeProd.contentDocument.querySelector(item.selector);
+              }
+              if (el) {
+                const r = el.getBoundingClientRect();
+                if (r.width > 0 && r.height > 0) {
+                  drawX = Math.round(r.left);
+                  drawY = Math.round(r.top);
+                  drawW = Math.round(r.width);
+                  drawH = Math.round(r.height);
+                  hasExactBox = true;
+                }
+              }
+            } catch (e) {}
+          }
+
+          if (!hasExactBox) {
+            const box = item.stgBox || item.box;
+            if (!box || (box.width === 0 && box.height === 0)) return;
+
+            const isSticky = !!item.isSticky;
+            drawX = isSticky ? (box.viewportX !== undefined ? box.viewportX : box.x) : (box.x - currentScrollX);
+            drawY = isSticky ? (box.viewportY !== undefined ? box.viewportY : box.y) : (box.y - currentScrollY);
+            drawW = box.width;
+            drawH = box.height;
+          }
 
           // VIEWPORT-ONLY FILTERING: Clip diff items scrolled outside visible viewport
-          if (drawY + box.height < -10 || drawY > height + 10) return;
-          if (drawX + box.width < -10 || drawX > width + 10) return;
+          if (drawY + drawH < -10 || drawY > height + 10) return;
+          if (drawX + drawW < -10 || drawX > width + 10) return;
 
+          totalDiffArea += (drawW * drawH);
+
+          const isCardOrContainer = (item.selector && item.selector.includes("card")) || drawH > 100;
           offCtx.save();
-          // Pure solid RED diff fill (identical to visualCompare diff_canvas.paste(RED, ...))
-          offCtx.fillStyle = "rgba(239, 68, 68, 0.92)";
-          offCtx.fillRect(drawX, drawY, box.width, box.height);
+          // Clean red diff overlay without textual description boxes
+          offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.65)";
+          offCtx.fillRect(drawX, drawY, drawW, drawH);
           offCtx.strokeStyle = "#ef4444";
-          offCtx.lineWidth = 1.8;
-          offCtx.strokeRect(drawX, drawY, box.width, box.height);
+          offCtx.lineWidth = 2;
+          offCtx.strokeRect(drawX, drawY, drawW, drawH);
           offCtx.restore();
         });
       }
@@ -2088,21 +2184,13 @@ document.addEventListener("DOMContentLoaded", () => {
     ctx.clearRect(0, 0, width, height);
     ctx.drawImage(offCanvas, 0, 0);
 
-    // 4. Compute real mismatch percentage
-    const docHeight = Math.max(height, lastProdLandmarks?.docHeight || 800);
-    const totalDocArea = Math.max(1, width * docHeight);
-    const calculatedPct = Math.min(99.9, Math.max(0.1, (totalDiffArea / totalDocArea) * 100));
-    const mismatchPct = calculatedPct.toFixed(2) + "%";
-    if (colDiffPct) {
-      colDiffPct.textContent = `${mismatchPct} Diff`;
-    }
-    if (metricDiffPct) {
-      metricDiffPct.textContent = mismatchPct;
-    }
+    // 4. Update real mismatch percentage accurately towards pixel difference
+    const mismatchPct = lastAccuratePixelDiffPct || (((totalDiffArea / Math.max(1, width * height)) * 100).toFixed(2) + "%");
+    updateAllDiffPercentDisplays(mismatchPct);
   }
 
   function applyCapturedPixelDiff(dataUrl, shiftRegions = activeShiftRegions) {
-    if (!pixelDiffCanvas || !iframeProd || !iframeStg) {
+    if (!pixelDiffCanvas) {
       isCapturingDiff = false;
       return;
     }
@@ -2114,8 +2202,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const img = new Image();
     img.onload = () => {
       try {
-        const rProd = iframeProd.getBoundingClientRect();
-        const rStg = iframeStg.getBoundingClientRect();
+        const active = getActiveFramesForMode(currentMode);
+        const activeProd = (currentMode === "swipe") ? (iframeSwipeProd || active.prod) : (active.prod || iframeProd);
+        const activeStg = (currentMode === "swipe") ? (iframeSwipeStg || active.stg) : (active.stg || iframeStg);
+        if (!activeProd || !activeStg) {
+          isCapturingDiff = false;
+          return;
+        }
+
+        const rProd = activeProd.getBoundingClientRect();
+        const rStg = activeStg.getBoundingClientRect();
         if (rProd.width <= 0 || rStg.width <= 0) {
           isCapturingDiff = false;
           return;
@@ -2149,15 +2245,19 @@ document.addEventListener("DOMContentLoaded", () => {
         const diffImg = outCtx.createImageData(cropW, cropH);
         const outData = diffImg.data;
 
-        // Tolerance delta matching diff_engine.py make_diff_mask_subpixel
-        const tolerance = 24;
+        // Sensitive delta matching diff_engine.py make_diff_mask_subpixel
+        // Accurately flags subtle background shading gradients, radial fills, and border accents
         let diffPixels = 0;
 
         for (let i = 0; i < dataP.length; i += 4) {
           const rD = Math.abs(dataP[i] - dataS[i]);
           const gD = Math.abs(dataP[i + 1] - dataS[i + 1]);
           const bD = Math.abs(dataP[i + 2] - dataS[i + 2]);
-          if ((rD + gD + bD) / 3 > tolerance) {
+          const maxD = Math.max(rD, gD, bD);
+          const avgD = (rD + gD + bD) / 3;
+
+          // Sensitive detection for subtle radial shading, dark-mode gradients, and border accents
+          if (maxD > 10 || avgD > 6) {
             outData[i] = 239;     // R (RED = 239, 68, 68)
             outData[i + 1] = 68;  // G
             outData[i + 2] = 68;  // B
@@ -2168,17 +2268,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
         outCtx.putImageData(diffImg, 0, 0);
 
+        const totalPixels = Math.max(1, cropW * cropH);
+        const accuratePctNum = (diffPixels / totalPixels) * 100;
+        const pct = accuratePctNum.toFixed(2) + "%";
+        lastAccuratePixelDiffPct = pct;
+
         if (diffPixels > 0) {
           lastCapturedDiffCanvas = outCanvas;
-          if (currentMode === "swipe" && swipeCompareMode === "diff") {
-            renderSwipeDiffCanvas(activeRedDiffs, shiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
-          } else {
-            renderPixelDiffColumn3(activeRedDiffs, shiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
-          }
+        }
 
-          const totalPixels = cropW * cropH;
-          const pct = Math.min(99.9, Math.max(0.1, (diffPixels / totalPixels) * 100)).toFixed(2) + "%";
-          if (colDiffPct) colDiffPct.textContent = `${pct} Diff`;
+        updateAllDiffPercentDisplays(pct);
+
+        if (currentMode === "swipe" && swipeCompareMode === "diff") {
+          renderSwipeDiffCanvas(activeRedDiffs, shiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+        } else if (isColDiffActive) {
+          renderPixelDiffColumn3(activeRedDiffs, shiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
         }
       } catch (err) {
         console.warn("[VisualCompare Live] Pixel capture comparison error:", err);
@@ -2193,27 +2297,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function drawRedPixelDiffLabel(ctx, x, y, label) {
-    ctx.save();
-    ctx.font = "bold 10px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-    const cleanText = label.slice(0, 32);
-    const textW = ctx.measureText(cleanText).width;
-    const badgeW = Math.min(260, textW + 16);
-    const badgeH = 18;
-    const badgeX = Math.max(4, Math.min(x, (ctx.canvas.width || 400) - badgeW - 4));
-    const badgeY = y < 24 ? (y + 40) : Math.max(4, y - 20);
-
-    ctx.fillStyle = "#991b1b";
-    ctx.strokeStyle = "#f87171";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 4);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.textBaseline = "middle";
-    ctx.fillText(cleanText, badgeX + 8, badgeY + badgeH / 2);
-    ctx.restore();
+    // Disabled per user instruction: pure pixel difference without text descriptions
   }
 
   function drawCanvasShiftBadge(ctx, canvasWidth, y, h, label) {
@@ -2239,25 +2323,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function drawRedDiffCanvasBadge(ctx, x, y, label) {
-    ctx.save();
-    ctx.fillStyle = "rgba(185, 28, 28, 0.94)";
-    ctx.strokeStyle = "#f87171";
-    ctx.lineWidth = 1.2;
-    const badgeW = Math.min(280, label.length * 6.8 + 22);
-    const badgeH = 20;
-    const badgeX = Math.max(8, x);
-    const badgeY = Math.max(4, y - 22);
-    ctx.beginPath();
-    ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 10);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 9px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(`🔴 ${label}`, badgeX + badgeW / 2, badgeY + badgeH / 2);
-    ctx.restore();
+    // Disabled per user instruction: pure pixel difference without text descriptions
   }
 
   // ----------------------------------------------------
@@ -2460,10 +2526,13 @@ document.addEventListener("DOMContentLoaded", () => {
         if (paneColDiff) paneColDiff.style.display = "flex";
         if (viewSide) viewSide.classList.add("mode-view-pixel-diff");
         renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions);
+        updateAllDiffPercentDisplays(lastAccuratePixelDiffPct || "0.00%");
+        scheduleLivePixelDiffCapture();
         logAction("3rd Column Pixel Diff toggled ON");
       } else {
         if (paneColDiff) paneColDiff.style.display = "none";
         if (viewSide) viewSide.classList.remove("mode-view-pixel-diff");
+        updateAllDiffPercentDisplays(lastAccuratePixelDiffPct || "0.00%");
         logAction("3rd Column Pixel Diff toggled OFF (2-column side-by-side view)");
       }
     });
@@ -2566,6 +2635,8 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       renderSwipeDiffCanvas(activeRedDiffs, activeShiftRegions, currentY, currentX);
+      updateAllDiffPercentDisplays(lastAccuratePixelDiffPct || "0.00%");
+      scheduleLivePixelDiffCapture();
       logAction("Swipe slider comparison set to: STAGE ↔ DIFF (Invisible live Production base)");
     } else {
       if (iframeSwipeProd) {
@@ -2593,6 +2664,7 @@ document.addEventListener("DOMContentLoaded", () => {
         swipeBaseTag.style.borderColor = "var(--color-stg)";
         swipeBaseTag.style.color = "var(--color-stg)";
       }
+      updateAllDiffPercentDisplays(lastAccuratePixelDiffPct || "0.00%");
 
       // Sync scroll to the production frame
       if (iframeSwipeProd && iframeSwipeProd.contentWindow) {
@@ -2765,11 +2837,10 @@ document.addEventListener("DOMContentLoaded", () => {
           activeRedDiffs = meta.redDiffs;
           dispatchToPane("PROD", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs });
           dispatchToPane("STG", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs });
-          metricRedBadge.style.display = "flex";
-          metricRedVal.textContent = `${activeRedDiffs.length} Found`;
+          if (metricRedBadge) metricRedBadge.style.display = "none";
           if (btnToggleRedDiffs) {
             btnToggleRedDiffs.classList.remove("inactive");
-            btnToggleRedDiffs.innerHTML = `<span class="btn-label-full">🔴 Red Diffs (${activeRedDiffs.length})</span><span class="btn-label-short">🔴 Diffs (${activeRedDiffs.length})</span>`;
+            btnToggleRedDiffs.innerHTML = `<span class="btn-label-full">🔴 Visual Diffs</span><span class="btn-label-short">🔴 Diffs</span>`;
           }
         }
 

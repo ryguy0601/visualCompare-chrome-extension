@@ -139,6 +139,7 @@
           <button id="btn-swipe-target-prod" class="sub-btn active" title="Swipe between Production and Staging">Prod ↔ Stage</button>
           <button id="btn-swipe-target-diff" class="sub-btn" title="Swipe between Staging and Pixel Difference">Stage ↔ Diff</button>
         </div>
+        <span class="diff-mismatch-pill" id="swipe-diff-pct" style="display: none;">0.00% Diff</span>
       </div>
 
       <!-- Flicker Controls (Hidden by default) -->
@@ -176,8 +177,8 @@
         <span class="badge-value" id="metric-shift-val">+0px</span>
       </div>
 
-      <!-- Visual Differences Badge -->
-      <div class="metric-badge metric-red-badge" id="metric-red-badge" style="display: none;" title="Total visual regressions (colors, typography, shapes) highlighted in red">
+      <!-- Visual Differences Badge (hidden: count removed) -->
+      <div class="metric-badge metric-red-badge" id="metric-red-badge" style="display: none !important;" title="Visual regressions highlighted in red">
         <span class="badge-label">🔴 Visual Diffs:</span>
         <span class="badge-value" id="metric-red-val">0</span>
       </div>

@@ -1305,44 +1305,7 @@
         50% { outline-color: #f43f5e; box-shadow: 0 0 22px rgba(244, 63, 94, 0.95); }
       }
       .vc-red-diff-badge {
-        display: inline-flex !important;
-        align-items: center !important;
-        gap: 5px !important;
-        position: absolute !important;
-        top: -24px !important;
-        left: 0 !important;
-        background: rgba(185, 28, 28, 0.96) !important;
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-        -webkit-background-clip: border-box !important;
-        background-clip: border-box !important;
-        border: 1px solid #f87171 !important;
-        border-radius: 9999px !important;
-        padding: 2px 8px !important;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
-        font-size: 10px !important;
-        font-weight: 700 !important;
-        line-height: 1.4 !important;
-        letter-spacing: 0.3px !important;
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6) !important;
-        white-space: nowrap !important;
-        z-index: 999999 !important;
-        pointer-events: none !important;
-        animation: vc-red-badge-anim 0.2s ease-out !important;
-      }
-      .vc-red-diff-badge *,
-      .vc-red-diff-badge span,
-      .vc-red-diff-text {
-        color: #ffffff !important;
-        -webkit-text-fill-color: #ffffff !important;
-        -webkit-background-clip: border-box !important;
-        background-clip: border-box !important;
-        opacity: 1 !important;
-        visibility: visible !important;
-      }
-      @keyframes vc-red-badge-anim {
-        from { opacity: 0; transform: translateY(4px); }
-        to { opacity: 1; transform: translateY(0); }
+        display: none !important;
       }
       .vc-red-diff-dot {
         width: 6px !important;
@@ -1380,26 +1343,11 @@
 
           el.classList.add("vc-red-diff-highlight");
 
-          // Remove old badge if any exists inside element
+          // Remove any text description badges so differences have no text clutter
           el.querySelectorAll(".vc-red-diff-badge").forEach(b => b.remove());
 
-          // Clean, reliable label text
-          const rawLabel = (item.label && typeof item.label === "string") ? item.label.trim() : "";
-          const labelText = rawLabel || "🔴 Visual Difference";
-
-          // Add floating diff badge
-          const badge = document.createElement("div");
-          badge.className = "vc-red-diff-badge";
-          badge.innerHTML = `<span class="vc-red-diff-dot"></span><span class="vc-red-diff-text">${labelText}</span>`;
-
-          // If element is at top of viewport, position badge below element so it doesn't clip
           const rect = el.getBoundingClientRect();
-          if (rect.top < 30) {
-            badge.style.top = "auto";
-            badge.style.bottom = "-24px";
-          }
-
-          el.appendChild(badge);
+          const labelText = (item.label && typeof item.label === "string") ? item.label.trim() : "";
 
           const style = window.getComputedStyle(el);
           const isSticky = style.position === 'sticky' || 
