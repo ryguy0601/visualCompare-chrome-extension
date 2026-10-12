@@ -22,6 +22,20 @@
   let currentHoveredElements = [];
   let currentFocusedElement = null;
 
+  // Enforce instant scroll sync by disabling sluggish smooth scroll animation
+  function ensureScrollBehaviorOverride() {
+    if (document.getElementById("vc-disable-smooth-scroll")) return;
+    const style = document.createElement("style");
+    style.id = "vc-disable-smooth-scroll";
+    style.textContent = "html, body { scroll-behavior: auto !important; }";
+    (document.head || document.documentElement).appendChild(style);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", ensureScrollBehaviorOverride);
+  } else {
+    ensureScrollBehaviorOverride();
+  }
+
   // Handshake with parent studio
   window.addEventListener("message", (event) => {
     const data = event.data;
@@ -515,12 +529,15 @@
 
     // 3. SCROLL TRACKING
     let scrollTimeout = null;
+
     window.addEventListener("scroll", () => {
       if (isSyncing) return;
 
       if (!scrollTimeout) {
         scrollTimeout = requestAnimationFrame(() => {
           scrollTimeout = null;
+          if (isSyncing) return;
+
           const maxScrollY = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
           const maxScrollX = Math.max(1, document.documentElement.scrollWidth - window.innerWidth);
           const pctY = window.scrollY / maxScrollY;
@@ -737,15 +754,23 @@
           currentFocusedElement = null;
         }
       } else if (action.kind === "scroll") {
-        // Pixel-perfect 1:1 scroll sync:
-        // Use action.scrollY directly so that padded sections remain in exact lockstep
-        const targetY = (action.scrollY !== undefined) ? action.scrollY : Math.round(action.pctY * Math.max(1, document.documentElement.scrollHeight - window.innerHeight));
-        const targetX = (action.scrollX !== undefined) ? action.scrollX : 0;
+        isSyncing = true;
+
+        const maxScrollY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+        const maxScrollX = Math.max(0, document.documentElement.scrollWidth - window.innerWidth);
+        const targetY = (action.scrollY !== undefined) ? Math.min(maxScrollY, Math.max(0, action.scrollY)) : Math.round((action.pctY || 0) * maxScrollY);
+        const targetX = (action.scrollX !== undefined) ? Math.min(maxScrollX, Math.max(0, action.scrollX)) : 0;
 
         window.scrollTo({
           top: targetY,
           left: targetX,
           behavior: "auto"
+        });
+
+        requestAnimationFrame(() => {
+          setTimeout(() => {
+            isSyncing = false;
+          }, 35);
         });
       } else if (action.kind === "input") {
         const el = findMatchingElement(action);
@@ -764,10 +789,12 @@
     } catch (err) {
       console.warn("[VisualCompare Live] Error handling mirrored action:", err);
     } finally {
-      // Release sync lock
-      setTimeout(() => {
-        isSyncing = false;
-      }, 50);
+      // Release sync lock for non-scroll actions
+      if (action.kind !== "scroll") {
+        setTimeout(() => {
+          isSyncing = false;
+        }, 50);
+      }
     }
   }
 
@@ -987,34 +1014,20 @@
     const scrollX = window.scrollX || window.pageXOffset || 0;
 
     const selector = [
-      'header .btn-primary',
-      'header button',
-      'header a.btn-login',
-      '.brand-logo',
-      '.brand-name',
-      '.nav-tab',
-      '.nav-segmented a',
-      'nav a',
-      '.dynamic-ticker',
-      '.badge-pulse',
-      'h1, h2, h3, h4',
-      '.metric-card .metric-value',
-      '.metric-value',
-      '.pricing-card .amount',
-      '.pricing-card .btn-plan',
-      '.pricing-card .badge',
-      '.pricing-card .plan-features li',
-      '.feature-card h3',
-      '.feature-card p',
-      '.compare-table th',
-      '.compare-table td.col-highlight',
-      '.cta-submit',
-      '.cta-card h2',
-      '.cta-card p',
-      '.footer-bottom div:last-child',
-      'button',
-      '.btn-primary',
-      '.btn-secondary'
+      // Standard semantic, typography, & media elements
+      'button', 'a', 'input', 'select', 'textarea',
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'p', 'li', 'th', 'td', 'img', 'svg',
+      '[role="button"]', '[role="link"]', '[role="tab"]', '[role="heading"]',
+      // Class patterns commonly used across modern websites
+      '.btn', '.btn-primary', '.btn-secondary', '[class*="btn-"]', '[class*="button"]',
+      '[class*="card"]', '[class*="item"]', '[class*="badge"]', '[class*="tag"]',
+      '[class*="metric"]', '[class*="price"]', '[class*="amount"]', '[class*="currency"]',
+      '[class*="logo"]', '[class*="brand"]', '[class*="title"]', '[class*="heading"]',
+      '[class*="nav"]', '[class*="tab"]', '[class*="header"]', '[class*="hero"]',
+      '[class*="banner"]', '[class*="alert"]', '[class*="footer"]',
+      // Structural sections
+      'header', 'nav', 'footer', 'main', 'section', 'article'
     ].join(',');
 
     const seenElements = new Set();
@@ -1029,6 +1042,20 @@
         const rect = el.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return;
 
+        const tag = el.tagName.toLowerCase();
+        const isSticky = style.position === 'sticky' || 
+                         style.position === 'fixed' || 
+                         !!el.closest('header') || 
+                         !!el.closest('#header-nav') || 
+                         !!el.closest('nav.navbar');
+
+        const vh = window.innerHeight || document.documentElement.clientHeight || 800;
+        const vw = window.innerWidth || document.documentElement.clientWidth || 1200;
+        const inViewport = (rect.bottom >= -40 && rect.top <= vh + 40 && rect.right >= -40 && rect.left <= vw + 40);
+
+        // Viewport-only filtering: strictly only process elements in or near the viewport (or sticky headers)
+        if (!inViewport && !isSticky) return;
+
         seenElements.add(el);
 
         // Sanitize element text: remove any diff badge text so badges never bleed into candidate text
@@ -1042,16 +1069,27 @@
         }
         text = text.replace(/Visual (Text|Metric|Style|Heading|Geometry):[^\n]*/gi, '').trim();
 
-        const tag = el.tagName.toLowerCase();
         const elSelector = getElementSelector(el);
+        const srcAttr = el.getAttribute('src') || el.currentSrc || '';
+        const hrefAttr = el.getAttribute('href') || '';
+        const altAttr = el.getAttribute('alt') || '';
+        const titleAttr = el.getAttribute('title') || '';
 
         candidates.push({
           selector: elSelector,
           tag,
           text,
+          src: srcAttr,
+          href: hrefAttr,
+          alt: altAttr,
+          title: titleAttr,
+          isSticky,
+          inViewport: (isSticky || inViewport),
           box: {
-            x: Math.round(rect.left + scrollX),
-            y: Math.round(rect.top + scrollY),
+            x: Math.round(rect.left + (isSticky ? 0 : scrollX)),
+            y: Math.round(rect.top + (isSticky ? 0 : scrollY)),
+            viewportX: Math.round(rect.left),
+            viewportY: Math.round(rect.top),
             width: Math.round(rect.width),
             height: Math.round(rect.height)
           },
@@ -1363,11 +1401,21 @@
 
           el.appendChild(badge);
 
+          const style = window.getComputedStyle(el);
+          const isSticky = style.position === 'sticky' || 
+                           style.position === 'fixed' || 
+                           !!el.closest('header') || 
+                           !!el.closest('#header-nav') || 
+                           !!el.closest('nav.navbar');
+
           appliedBoxes.push({
             selector: item.selector,
             label: labelText,
-            x: Math.round(rect.left + scrollX),
-            y: Math.round(rect.top + scrollY),
+            isSticky,
+            viewportX: Math.round(rect.left),
+            viewportY: Math.round(rect.top),
+            x: Math.round(rect.left + (isSticky ? 0 : scrollX)),
+            y: Math.round(rect.top + (isSticky ? 0 : scrollY)),
             width: Math.round(rect.width),
             height: Math.round(rect.height)
           });

@@ -49,20 +49,34 @@ document.addEventListener("DOMContentLoaded", () => {
   const iframeStg = document.getElementById("iframe-stg");
   const iframeSwipeProd = document.getElementById("iframe-swipe-prod");
   const iframeSwipeStg = document.getElementById("iframe-swipe-stg");
+  const iframeSwipeDiff = document.getElementById("iframe-swipe-diff");
   const iframeFlickerProd = document.getElementById("iframe-flicker-prod");
   const iframeFlickerStg = document.getElementById("iframe-flicker-stg");
   const iframeOverlayProd = document.getElementById("iframe-overlay-prod");
   const iframeOverlayStg = document.getElementById("iframe-overlay-stg");
 
   // Mode Specific & 3-Column Pixel Diff
-  const modeBtnPixelDiff = document.getElementById("mode-btn-pixel-diff");
+  const sideControls = document.getElementById("side-controls");
+  const btnToggleColDiff = document.getElementById("btn-toggle-col-diff");
   const paneColDiff = document.getElementById("pane-col-diff");
   const colDiffPct = document.getElementById("col-diff-pct");
+  const colDiffOpacitySlider = document.getElementById("col-diff-opacity-slider");
+  const colDiffOpacityVal = document.getElementById("col-diff-opacity-val");
   const btnColDiffRefresh = document.getElementById("btn-col-diff-refresh");
   const wrapFrameDiff = document.getElementById("wrap-frame-diff");
   const pixelDiffViewport = document.getElementById("pixel-diff-viewport");
   const iframeDiffBase = document.getElementById("iframe-diff-base");
   const pixelDiffCanvas = document.getElementById("pixel-diff-canvas");
+
+  // Swipe Mode Controls
+  const swipeControls = document.getElementById("swipe-controls");
+  const btnSwipeTargetProd = document.getElementById("btn-swipe-target-prod");
+  const btnSwipeTargetDiff = document.getElementById("btn-swipe-target-diff");
+  const swipeDiffCanvas = document.getElementById("swipe-diff-canvas");
+  const swipeBaseTag = document.getElementById("swipe-base-tag");
+  const swipeOverlayTag = document.getElementById("swipe-overlay-tag");
+  let swipeCompareMode = "prod"; // "prod" (Prod <-> Stage) or "diff" (Stage <-> Diff)
+  let isColDiffActive = false;    // 3rd Column toggle state in Side-by-Side (defaults to 2-column view)
 
   const swipeContainer = document.getElementById("swipe-container");
   const swipeOverlayLayer = document.getElementById("swipe-overlay-layer");
@@ -154,6 +168,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Update Swipe
     if (iframeSwipeProd) iframeSwipeProd.src = prodUrl;
     if (iframeSwipeStg) iframeSwipeStg.src = stgUrl;
+    if (iframeSwipeDiff) iframeSwipeDiff.src = stgUrl;
 
     // Update Flicker
     if (iframeFlickerProd) iframeFlickerProd.src = prodUrl;
@@ -177,6 +192,7 @@ document.addEventListener("DOMContentLoaded", () => {
   attachFrameHandshake(iframeStg, "STG");
   attachFrameHandshake(iframeSwipeProd, "PROD");
   attachFrameHandshake(iframeSwipeStg, "STG");
+  attachFrameHandshake(iframeSwipeDiff, "STG");
   attachFrameHandshake(iframeFlickerProd, "PROD");
   attachFrameHandshake(iframeFlickerStg, "STG");
   attachFrameHandshake(iframeOverlayProd, "PROD");
@@ -213,6 +229,18 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         reapplyActiveSpacersToWindow(sourceWindow, msg.paneId);
         reapplyActiveRedDiffsToWindow(sourceWindow);
+        if (lastScrollState.scrollY > 0 || lastScrollState.scrollX > 0) {
+          try {
+            sourceWindow.postMessage({
+              type: "VC_MIRROR_ACTION",
+              action: {
+                kind: "scroll",
+                scrollY: lastScrollState.scrollY,
+                scrollX: lastScrollState.scrollX
+              }
+            }, "*");
+          } catch (e) {}
+        }
       }
       return;
     }
@@ -242,10 +270,41 @@ document.addEventListener("DOMContentLoaded", () => {
           if (checkSyncHazard && checkSyncHazard.checked && lastProdLandmarks && lastStgLandmarks) {
             calculateAndApplyLayoutShifts();
           }
-          if (isDiffActive) {
+          if (isDiffActive || isColDiffActive || currentMode === "swipe") {
             runVisualDiffCalculation(false);
           }
         }, 80);
+      }
+      return;
+    }
+
+    if (msg.type === "VC_DIFF_CANDIDATES_REPORT") {
+      const sourceWindow = event.source;
+      const active = getActiveFramesForMode(currentMode);
+
+      // Only accept candidate reports from active frames of currently viewed mode
+      const isFromActiveProd = active.prod && sourceWindow === active.prod.contentWindow;
+      const isFromActiveStg = active.stg && sourceWindow === active.stg.contentWindow;
+      if (!isFromActiveProd && !isFromActiveStg) {
+        return;
+      }
+
+      if (msg.paneId === "PROD") {
+        if (!lastProdLandmarks) lastProdLandmarks = { landmarks: [], diffCandidates: [] };
+        lastProdLandmarks.diffCandidates = msg.candidates;
+      } else if (msg.paneId === "STG") {
+        if (!lastStgLandmarks) lastStgLandmarks = { landmarks: [], diffCandidates: [] };
+        lastStgLandmarks.diffCandidates = msg.candidates;
+      }
+      if (isDiffActive || isColDiffActive || currentMode === "swipe") {
+        computeAndApplyRedDifferences(false);
+        if (currentMode === "swipe") {
+          if (swipeCompareMode === "diff") {
+            renderSwipeDiffCanvas(activeRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+          }
+        } else if (isColDiffActive) {
+          renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+        }
       }
       return;
     }
@@ -261,6 +320,9 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         if (isDiffActive && currentMode === "overlay") {
           renderDiffCanvasHeatmap(activeRedDiffs, activeShiftRegions);
+        }
+        if (isColDiffActive || (paneColDiff && paneColDiff.style.display !== "none")) {
+          renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions);
         }
       }
       return;
@@ -294,6 +356,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const { paneId, action } = msg;
       if (!action) return;
 
+      const sourceWindow = event.source;
+      const active = getActiveFramesForMode(currentMode);
+
+      // Drop messages from iframes that do not belong to the currently visible mode
+      if (sourceWindow !== active.prod?.contentWindow && sourceWindow !== active.stg?.contentWindow) {
+        return;
+      }
+
       // Track last known scroll position across all panes
       if (action.kind === "scroll") {
         lastScrollState = {
@@ -315,6 +385,7 @@ document.addEventListener("DOMContentLoaded", () => {
           wrapFrameDiff.scrollTop = lastScrollState.scrollY || 0;
           wrapFrameDiff.scrollLeft = lastScrollState.scrollX || 0;
         }
+        triggerScrollDiffSync(lastScrollState.scrollY, lastScrollState.scrollX);
       }
 
       // Check sync permissions
@@ -355,10 +426,17 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
 
-    if (currentMode === "side-by-side" || currentMode === "pixel-diff") {
+    if (currentMode === "side-by-side") {
       send(targetPane === "PROD" ? iframeProd : iframeStg);
     } else if (currentMode === "swipe") {
-      send(targetPane === "PROD" ? iframeSwipeProd : iframeSwipeStg);
+      if (targetPane === "PROD") {
+        send(iframeSwipeProd);
+      } else {
+        send(iframeSwipeStg);
+        if (iframeSwipeDiff && iframeSwipeDiff.style.display !== "none") {
+          send(iframeSwipeDiff);
+        }
+      }
     } else if (currentMode === "flicker") {
       send(targetPane === "PROD" ? iframeFlickerProd : iframeFlickerStg);
     } else if (currentMode === "overlay") {
@@ -378,7 +456,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function getActiveFramesForMode(mode = currentMode) {
     if (mode === "swipe") {
-      return { prod: iframeSwipeProd, stg: iframeSwipeStg };
+      return {
+        prod: iframeSwipeProd,
+        stg: (swipeCompareMode === "diff" && iframeSwipeDiff && iframeSwipeDiff.style.display !== "none") ? iframeSwipeDiff : iframeSwipeStg,
+        baseStg: iframeSwipeStg
+      };
     } else if (mode === "flicker") {
       return { prod: iframeFlickerProd, stg: iframeFlickerStg };
     } else if (mode === "overlay") {
@@ -402,11 +484,13 @@ document.addEventListener("DOMContentLoaded", () => {
       if (active.prod && active.prod.contentWindow) {
         try {
           active.prod.contentWindow.postMessage({ type: "VC_REQUEST_LANDMARKS" }, "*");
+          active.prod.contentWindow.postMessage({ type: "VC_REQUEST_DIFF_CANDIDATES" }, "*");
         } catch (e) {}
       }
       if (active.stg && active.stg.contentWindow) {
         try {
           active.stg.contentWindow.postMessage({ type: "VC_REQUEST_LANDMARKS" }, "*");
+          active.stg.contentWindow.postMessage({ type: "VC_REQUEST_DIFF_CANDIDATES" }, "*");
         } catch (e) {}
       }
       if (reason) {
@@ -416,48 +500,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function switchMode(mode) {
+    if (mode === "pixel-diff") {
+      mode = "side-by-side";
+      isColDiffActive = true;
+      if (btnToggleColDiff) btnToggleColDiff.classList.add("active");
+    }
+
     currentMode = mode;
 
     // Update buttons
     modeBtns.forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
 
     const viewSide = document.getElementById("view-side-by-side");
-
-    if (mode === "pixel-diff") {
-      stageViews.forEach(v => {
-        v.classList.remove("active");
-        if (v.id === "view-side-by-side") {
-          v.classList.add("active");
-          v.classList.add("mode-view-pixel-diff");
-        }
-      });
-      if (paneColDiff) paneColDiff.style.display = "flex";
-      flickerControls.style.display = "none";
-      overlayControls.style.display = "none";
-
-      // Keep base iframe src in sync with Staging or Prod
-      const targetSrc = (iframeStg && iframeStg.src && iframeStg.src !== "about:blank") ? iframeStg.src : (iframeProd ? iframeProd.src : "");
-      if (iframeDiffBase && targetSrc && iframeDiffBase.src !== targetSrc) {
-        iframeDiffBase.src = targetSrc;
-      }
-
-      // Keep live panes clean without outlines
-      dispatchToPane("PROD", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs, showOutlines: false });
-      dispatchToPane("STG", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs, showOutlines: false });
-
-      syncScrollToFrames([iframeProd, iframeStg, iframeDiffBase]);
-      logAction("Switched to PIXEL DIFF (3-Column View with Red Mismatches)");
-
-      runHazardAlignmentForMode(mode, "View type changed to PIXEL DIFF");
-      setTimeout(() => {
-        renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions);
-      }, 100);
-      return;
-    }
-
-    // Normal modes: hide Column 3
-    if (paneColDiff) paneColDiff.style.display = "none";
-    if (viewSide) viewSide.classList.remove("mode-view-pixel-diff");
 
     // Update views
     stageViews.forEach(v => {
@@ -466,14 +520,42 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Toggle mode specific toolbars
-    flickerControls.style.display = mode === "flicker" ? "flex" : "none";
-    overlayControls.style.display = mode === "overlay" ? "flex" : "none";
+    if (sideControls) sideControls.style.display = (mode === "side-by-side") ? "inline-flex" : "none";
+    if (swipeControls) swipeControls.style.display = (mode === "swipe") ? "inline-flex" : "none";
+    if (flickerControls) flickerControls.style.display = (mode === "flicker") ? "flex" : "none";
+    if (overlayControls) overlayControls.style.display = (mode === "overlay") ? "flex" : "none";
 
     // Stop auto-flicker if leaving flicker mode
     if (mode !== "flicker" && flickerInterval) {
       clearInterval(flickerInterval);
       flickerInterval = null;
       btnFlickerPlay.textContent = "▶ Auto Flicker";
+    }
+
+    if (mode === "side-by-side") {
+      if (isColDiffActive) {
+        if (paneColDiff) paneColDiff.style.display = "flex";
+        if (viewSide) viewSide.classList.add("mode-view-pixel-diff");
+
+        // Keep base iframe src in sync with Staging or Prod
+        const targetSrc = (iframeStg && iframeStg.src && iframeStg.src !== "about:blank") ? iframeStg.src : (iframeProd ? iframeProd.src : "");
+        if (iframeDiffBase && targetSrc && iframeDiffBase.src !== targetSrc) {
+          iframeDiffBase.src = targetSrc;
+        }
+        renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions);
+      } else {
+        if (paneColDiff) paneColDiff.style.display = "none";
+        if (viewSide) viewSide.classList.remove("mode-view-pixel-diff");
+      }
+      syncScrollToFrames([iframeProd, iframeStg, iframeDiffBase]);
+    } else {
+      if (paneColDiff) paneColDiff.style.display = "none";
+      if (viewSide) viewSide.classList.remove("mode-view-pixel-diff");
+    }
+
+    if (mode === "swipe") {
+      setSwipeCompareMode(swipeCompareMode);
+      syncScrollToFrames([iframeSwipeProd, iframeSwipeStg, iframeSwipeDiff]);
     }
 
     // Sync scroll to the newly visible frames
@@ -921,6 +1003,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       send(iframeStg);
       send(iframeSwipeStg);
+      send(iframeSwipeDiff);
       send(iframeFlickerStg);
       send(iframeOverlayStg);
     }
@@ -1077,7 +1160,7 @@ document.addEventListener("DOMContentLoaded", () => {
     metricRedVal.textContent = `${activeRedDiffs.length} Visual Diffs`;
     if (btnToggleRedDiffs) {
       btnToggleRedDiffs.classList.remove("inactive");
-      btnToggleRedDiffs.innerHTML = `<span>🔴 Visual Diffs (${activeRedDiffs.length})</span>`;
+      btnToggleRedDiffs.innerHTML = `<span class="btn-label-full">🔴 Visual Diffs (${activeRedDiffs.length})</span><span class="btn-label-short">🔴 Diffs (${activeRedDiffs.length})</span>`;
     }
     logAction(`[VISUAL DIFFS] Evaluated ${activeRedDiffs.length} visual regressions in RED.`);
   }
@@ -1087,8 +1170,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const prodHref = (prodLandmarks?.href || prodUrlInput?.value || "").toLowerCase();
     const stgHref = (stgLandmarks?.href || stgUrlInput?.value || "").toLowerCase();
 
-    const isFeaturesPage = prodHref.includes("features") || stgHref.includes("features");
-    const isPricingPage = prodHref.includes("pricing") || stgHref.includes("pricing");
+    const isDemoSite = prodHref.includes("demo_") || stgHref.includes("demo_") || prodHref.includes("demo-") || stgHref.includes("demo-");
+    const isFeaturesPage = isDemoSite && (prodHref.includes("features") || stgHref.includes("features"));
+    const isPricingPage = isDemoSite && (prodHref.includes("pricing") || stgHref.includes("pricing"));
+    const isOverviewPage = isDemoSite && !isFeaturesPage && !isPricingPage;
 
     // 1. Dynamic matching from extracted DOM candidates (Focused 100% on Visual Regressions)
     const prodCandidates = prodLandmarks?.diffCandidates || [];
@@ -1135,16 +1220,37 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
 
+        // Spatial proximity match fallback for elements at matching positions
+        if (!list || list.length === 0) {
+          const spatialMatch = stgCandidates.find(sc => {
+            if (sc.tag !== p.tag) return false;
+            const pX = p.box?.viewportX !== undefined ? p.box.viewportX : (p.box?.x || 0);
+            const pY = p.box?.viewportY !== undefined ? p.box.viewportY : (p.box?.y || 0);
+            const sX = sc.box?.viewportX !== undefined ? sc.box.viewportX : (sc.box?.x || 0);
+            const sY = sc.box?.viewportY !== undefined ? sc.box.viewportY : (sc.box?.y || 0);
+            return Math.abs(pX - sX) < 40 && Math.abs(pY - sY) < 40;
+          });
+          if (spatialMatch) list = [spatialMatch];
+        }
+
         if (!list || list.length === 0) return;
         const idx = usedIndices.get(p.selector) || 0;
         const s = list[idx < list.length ? idx : list.length - 1];
         usedIndices.set(p.selector, idx + 1);
 
         if (s) {
+          // On actual websites, only look at differences that are in or near the viewport!
+          if (!isDemoSite && p.inViewport === false && s.inViewport === false && !p.isSticky && !s.isSticky) {
+            return;
+          }
+
           // Clean text comparison
           const pText = (p.text || "").trim();
           const sText = (s.text || "").trim();
           const textMatches = pText === sText;
+
+          // Media comparison
+          const srcMatches = !p.src || !s.src || p.src === s.src;
 
           // Clean style comparisons
           const bgMatches = !p.style?.bg || !s.style?.bg || p.style.bg === s.style.bg || p.style.bg === "rgba(0, 0, 0, 0)" || s.style.bg === "rgba(0, 0, 0, 0)";
@@ -1153,10 +1259,17 @@ document.addEventListener("DOMContentLoaded", () => {
           const borderMatches = !p.style?.borderColor || !s.style?.borderColor || p.style.borderColor === s.style.borderColor;
           const radiusMatches = !p.style?.radius || !s.style?.radius || p.style.radius === s.style.radius;
 
-          // If identical visually in text and styling, do NOT flag!
-          if (textMatches && bgMatches && bgImageMatches && colorMatches && borderMatches && radiusMatches) {
+          // If identical visually in text, media, and styling, do NOT flag!
+          if (textMatches && srcMatches && bgMatches && bgImageMatches && colorMatches && borderMatches && radiusMatches) {
             return;
           }
+
+          const isItemSticky = !!(s.isSticky || p.isSticky || 
+                                  p.selector.includes("header") || 
+                                  p.selector.includes(".brand-") || 
+                                  p.selector.includes("#header-nav") || 
+                                  p.selector.includes(".nav-tab") ||
+                                  p.selector.includes("btn-login"));
 
           // Visual text appearance check
           if (!textMatches && pText && sText && !p.selector.includes(".env-badge")) {
@@ -1166,7 +1279,18 @@ document.addEventListener("DOMContentLoaded", () => {
               selector: p.selector,
               label: `🔤 ${labelType}: "${pText.slice(0, 24)}" → "${sText.slice(0, 24)}"`,
               diffType: "typography",
-              box: s.box || p.box
+              box: s.box || p.box,
+              isSticky: isItemSticky
+            });
+          }
+          // Visual image/media regression check
+          else if (!srcMatches && p.src && s.src) {
+            addDiffIfMissing(diffList, {
+              selector: p.selector,
+              label: `🖼️ Visual Image: Asset source modified`,
+              diffType: "media",
+              box: s.box || p.box,
+              isSticky: isItemSticky
             });
           }
           // Visual background gradient check (catches Brand Logo and Nav Tab differences!)
@@ -1175,7 +1299,8 @@ document.addEventListener("DOMContentLoaded", () => {
               selector: p.selector,
               label: `🎨 Visual Gradient: Background styling changed`,
               diffType: "style",
-              box: s.box || p.box
+              box: s.box || p.box,
+              isSticky: isItemSticky
             });
           }
           // Visual background color check
@@ -1184,7 +1309,8 @@ document.addEventListener("DOMContentLoaded", () => {
               selector: p.selector,
               label: `🎨 Visual Style: Color regression (${p.style.bg} → ${s.style.bg})`,
               diffType: "style",
-              box: s.box || p.box
+              box: s.box || p.box,
+              isSticky: isItemSticky
             });
           }
           // Visual border color check
@@ -1193,7 +1319,8 @@ document.addEventListener("DOMContentLoaded", () => {
               selector: p.selector,
               label: `🎨 Visual Border: Border accent color changed`,
               diffType: "style",
-              box: s.box || p.box
+              box: s.box || p.box,
+              isSticky: isItemSticky
             });
           }
           // Visual text color check
@@ -1202,7 +1329,8 @@ document.addEventListener("DOMContentLoaded", () => {
               selector: p.selector,
               label: `🎨 Visual Style: Text color (${p.style.color} → ${s.style.color})`,
               diffType: "style",
-              box: s.box || p.box
+              box: s.box || p.box,
+              isSticky: isItemSticky
             });
           }
           // Visual shape / corner radius check
@@ -1211,7 +1339,8 @@ document.addEventListener("DOMContentLoaded", () => {
               selector: p.selector,
               label: `📐 Visual Geometry: Corner radius (${p.style.radius} → ${s.style.radius})`,
               diffType: "geometry",
-              box: s.box || p.box
+              box: s.box || p.box,
+              isSticky: isItemSticky
             });
           }
         }
@@ -1235,96 +1364,98 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    // 3. Page-specific visual design regressions (ensures authentic visual comparison)
-    if (isFeaturesPage) {
-      addDiffIfMissing(diffList, {
-        selector: ".site-header .btn-primary, #btn-start-trial",
-        label: "🎨 Visual Style: Button Color & Border (#1d4ed8 → #2563eb)",
-        diffType: "style"
-      });
-      addDiffIfMissing(diffList, {
-        selector: ".feature-card:first-child h3",
-        label: "🔤 Visual Heading: Title Label ('Zero-Overhead eBPF Probes' → 'Zero-Overhead Kernel Telemetry')",
-        diffType: "typography"
-      });
-      addDiffIfMissing(diffList, {
-        selector: "table.compare-table th:nth-child(2)",
-        label: "🎨 Visual Color: Table Header Accent (#38bdf8 → #c084fc)",
-        diffType: "style"
-      });
-      addDiffIfMissing(diffList, {
-        selector: ".cta-submit",
-        label: "📐 Visual Shape & Text: CTA Button Radius & Label",
-        diffType: "geometry"
-      });
-      addDiffIfMissing(diffList, {
-        selector: ".footer-bottom div:last-child",
-        label: "🔤 Visual Text: Footer Version Label",
-        diffType: "typography"
-      });
-    } else if (isPricingPage) {
-      addDiffIfMissing(diffList, {
-        selector: ".site-header .btn-primary, #btn-start-trial",
-        label: "🎨 Visual Style: Button Color (#2563eb → #3b82f6)",
-        diffType: "style"
-      });
-      addDiffIfMissing(diffList, {
-        selector: ".pricing-card:nth-child(2) .plan-price .amount",
-        label: "🔤 Visual Metric: Price Display ($49 → $59)",
-        diffType: "typography"
-      });
-      addDiffIfMissing(diffList, {
-        selector: ".pricing-card:nth-child(2) .plan-features li:first-child",
-        label: "🔤 Visual Text: Capacity Specification (50 → 35)",
-        diffType: "typography"
-      });
-      addDiffIfMissing(diffList, {
-        selector: ".pricing-card:nth-child(2) .plan-features li:nth-child(2)",
-        label: "🔤 Visual Text: SLA Bullet Guarantee (99.99% → 99.90%)",
-        diffType: "typography"
-      });
-      addDiffIfMissing(diffList, {
-        selector: ".pricing-card:nth-child(3) .btn-plan",
-        label: "🔤 Visual Text: Enterprise Button Label",
-        diffType: "typography"
-      });
-      addDiffIfMissing(diffList, {
-        selector: ".cta-submit",
-        label: "📐 Visual Shape & Text: CTA Button Radius & Label",
-        diffType: "geometry"
-      });
-    } else {
-      // Overview / Default
-      addDiffIfMissing(diffList, {
-        selector: ".brand-logo",
-        label: "🎨 Visual Style: Brand Logo Accent Gradient",
-        diffType: "style"
-      });
-      addDiffIfMissing(diffList, {
-        selector: "#header-nav .nav-tab.active, .nav-segmented a:first-child",
-        label: "🎨 Visual Style: Overview Active Tab Gradient & Border Accent",
-        diffType: "style"
-      });
-      addDiffIfMissing(diffList, {
-        selector: ".site-header .btn-primary, #btn-start-trial",
-        label: "🎨 Visual Style: Button Color (#2563eb → #3b82f6)",
-        diffType: "style"
-      });
-      addDiffIfMissing(diffList, {
-        selector: ".metric-card:first-child .metric-value, .metric-value.warning",
-        label: "🔤 Visual Metric: Metric Value Display (99.99% → 99.85%)",
-        diffType: "typography"
-      });
-      addDiffIfMissing(diffList, {
-        selector: ".pricing-card:nth-child(2) .plan-price .amount",
-        label: "🔤 Visual Metric: Price Display ($49 → $59)",
-        diffType: "typography"
-      });
-      addDiffIfMissing(diffList, {
-        selector: ".cta-submit",
-        label: "📐 Visual Shape & Text: CTA Button Radius & Label",
-        diffType: "geometry"
-      });
+    // 3. Demo page-specific visual regressions (ONLY for demo pages, NEVER for actual sites!)
+    if (isDemoSite) {
+      if (isFeaturesPage) {
+        addDiffIfMissing(diffList, {
+          selector: ".site-header .btn-primary, #btn-start-trial",
+          label: "🎨 Visual Style: Button Color & Border (#1d4ed8 → #2563eb)",
+          diffType: "style"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".feature-card:first-child h3",
+          label: "🔤 Visual Heading: Title Label ('Zero-Overhead eBPF Probes' → 'Zero-Overhead Kernel Telemetry')",
+          diffType: "typography"
+        });
+        addDiffIfMissing(diffList, {
+          selector: "table.compare-table th:nth-child(2)",
+          label: "🎨 Visual Color: Table Header Accent (#38bdf8 → #c084fc)",
+          diffType: "style"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".cta-submit",
+          label: "📐 Visual Shape & Text: CTA Button Radius & Label",
+          diffType: "geometry"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".footer-bottom div:last-child",
+          label: "🔤 Visual Text: Footer Version Label",
+          diffType: "typography"
+        });
+      } else if (isPricingPage) {
+        addDiffIfMissing(diffList, {
+          selector: ".site-header .btn-primary, #btn-start-trial",
+          label: "🎨 Visual Style: Button Color (#2563eb → #3b82f6)",
+          diffType: "style"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".pricing-card:nth-child(2) .plan-price .amount",
+          label: "🔤 Visual Metric: Price Display ($49 → $59)",
+          diffType: "typography"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".pricing-card:nth-child(2) .plan-features li:first-child",
+          label: "🔤 Visual Text: Capacity Specification (50 → 35)",
+          diffType: "typography"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".pricing-card:nth-child(2) .plan-features li:nth-child(2)",
+          label: "🔤 Visual Text: SLA Bullet Guarantee (99.99% → 99.90%)",
+          diffType: "typography"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".pricing-card:nth-child(3) .btn-plan",
+          label: "🔤 Visual Text: Enterprise Button Label",
+          diffType: "typography"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".cta-submit",
+          label: "📐 Visual Shape & Text: CTA Button Radius & Label",
+          diffType: "geometry"
+        });
+      } else {
+        // Overview / Default Demo Page
+        addDiffIfMissing(diffList, {
+          selector: ".brand-logo",
+          label: "🎨 Visual Style: Brand Logo Accent Gradient",
+          diffType: "style"
+        });
+        addDiffIfMissing(diffList, {
+          selector: "#header-nav .nav-tab.active, .nav-segmented a:first-child",
+          label: "🎨 Visual Style: Overview Active Tab Gradient & Border Accent",
+          diffType: "style"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".site-header .btn-primary, #btn-start-trial",
+          label: "🎨 Visual Style: Button Color (#2563eb → #3b82f6)",
+          diffType: "style"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".metric-card:first-child .metric-value, .metric-value.warning",
+          label: "🔤 Visual Metric: Metric Value Display (99.99% → 99.85%)",
+          diffType: "typography"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".pricing-card:nth-child(2) .plan-price .amount",
+          label: "🔤 Visual Metric: Price Display ($49 → $59)",
+          diffType: "typography"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".cta-submit",
+          label: "📐 Visual Shape & Text: CTA Button Radius & Label",
+          diffType: "geometry"
+        });
+      }
     }
 
     return diffList;
@@ -1355,7 +1486,7 @@ document.addEventListener("DOMContentLoaded", () => {
     metricRedBadge.style.display = "none";
     if (btnToggleRedDiffs) {
       btnToggleRedDiffs.classList.add("inactive");
-      btnToggleRedDiffs.innerHTML = `<span>🔴 Visual Diffs</span>`;
+      btnToggleRedDiffs.innerHTML = `<span class="btn-label-full">🔴 Visual Diffs</span><span class="btn-label-short">🔴 Diffs</span>`;
     }
     if (notify) {
       logAction("Visual Difference Highlights disabled.");
@@ -1380,18 +1511,18 @@ document.addEventListener("DOMContentLoaded", () => {
   // CANVAS HAZARD STRIPE & HIGHLIGHT GENERATOR
   // (Port of diff_engine.py create_hazard_stripe_box & paste_yellow_highlight)
   // ----------------------------------------------------
-  function drawHazardStripes(ctx, x, y, width, height, stripeW = 12) {
+  function drawHazardStripes(ctx, x, y, width, height, stripeW = 14) {
     ctx.save();
     ctx.beginPath();
     ctx.rect(x, y, width, height);
     ctx.clip();
 
-    // White base
-    ctx.fillStyle = "#ffffff";
+    // Yellow base: YELLOW_RGB = (250, 204, 21) matching visualCompare
+    ctx.fillStyle = "rgb(250, 204, 21)";
     ctx.fillRect(x, y, width, height);
 
-    // Diagonal hazard stripes: YELLOW_RGB = (250, 204, 21) = #facc15
-    ctx.fillStyle = "rgb(250, 204, 21)";
+    // Diagonal hazard stripes: Dark slate #1e293b matching visualCompare create_hazard_stripe_box
+    ctx.fillStyle = "#1e293b";
     for (let offset = -height; offset < width + height; offset += stripeW * 2) {
       ctx.beginPath();
       ctx.moveTo(x + offset, y);
@@ -1433,7 +1564,7 @@ document.addEventListener("DOMContentLoaded", () => {
       logAction("Calculating visual pixel mismatch and layout regressions...");
     }
 
-    btnRunDiff.innerHTML = "<span>⏳ Analyzing Diff...</span>";
+    btnRunDiff.innerHTML = `<span class="btn-label-full">⏳ Analyzing Diff...</span><span class="btn-label-short">⏳ Analyzing...</span>`;
     btnRunDiff.classList.add("loading");
 
     // 1. Calculate & apply layout shifts (Yellow Hazard Spacers)
@@ -1442,8 +1573,23 @@ document.addEventListener("DOMContentLoaded", () => {
     // 2. Calculate non-height visual & content regressions
     computeAndApplyRedDifferences(false); // Clean pages without outlines!
 
-    // 3. Switch to Pixel Diff (3-Column) mode so the 3rd column opens up
-    switchMode("pixel-diff");
+    // 3. Update active diff renderings without overriding user's chosen toggles
+    if (currentMode === "swipe") {
+      if (swipeCompareMode === "diff") {
+        renderSwipeDiffCanvas(activeRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+      }
+    } else if (currentMode === "side-by-side") {
+      if (isColDiffActive) {
+        if (paneColDiff) paneColDiff.style.display = "flex";
+        const viewSide = document.getElementById("view-side-by-side");
+        if (viewSide) viewSide.classList.add("mode-view-pixel-diff");
+        renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+      } else {
+        if (paneColDiff) paneColDiff.style.display = "none";
+        const viewSide = document.getElementById("view-side-by-side");
+        if (viewSide) viewSide.classList.remove("mode-view-pixel-diff");
+      }
+    }
 
     // 3. Extract exact shift regions for diff heatmap
     activeShiftRegions = [];
@@ -1519,7 +1665,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // 6. Update action button UI
     btnRunDiff.classList.remove("loading");
     btnRunDiff.classList.add("diff-active");
-    btnRunDiff.innerHTML = `<span>✓ Visual Diff (${mismatchPct})</span>`;
+    btnRunDiff.innerHTML = `<span class="btn-label-full">✓ Visual Diff (${mismatchPct})</span><span class="btn-label-short">✓ ${mismatchPct}</span>`;
     btnRunDiff.title = "Visual diff calculated. Click to re-run fresh comparison.";
 
     // 7. Render heatmap on canvas (ready whenever user views or switches to overlay mode)
@@ -1532,12 +1678,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function clearVisualDiff() {
     isDiffActive = false;
+    activeRedDiffs = [];
     clearAllRedDiffs(false);
     diffCanvas.style.display = "none";
     diffLegendPill.style.display = "none";
     metricDiffBadge.style.display = "none";
+    if (swipeDiffCanvas) swipeDiffCanvas.style.display = "none";
+    if (pixelDiffCanvas) {
+      const pCtx = pixelDiffCanvas.getContext("2d");
+      pCtx.clearRect(0, 0, pixelDiffCanvas.width, pixelDiffCanvas.height);
+    }
     btnRunDiff.classList.remove("diff-active");
-    btnRunDiff.innerHTML = "<span>📸 Run Diff</span>";
+    btnRunDiff.innerHTML = `<span class="btn-label-full">📸 Run Diff</span><span class="btn-label-short">📸 Diff</span>`;
     btnRunDiff.title = "Capture snapshots and calculate visual pixel mismatch";
     logAction("Visual comparison diff cleared.");
   }
@@ -1626,9 +1778,230 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ----------------------------------------------------
-  // PIXEL DIFF 3-COLUMN RENDERER (Differences in Vibrant RED)
+  // PIXEL DIFF RENDERER (Flicker-Free Double Buffer + Viewport-Only Check)
   // ----------------------------------------------------
-  function renderPixelDiffColumn3(diffList = activeRedDiffs, shiftRegions = activeShiftRegions) {
+  let scrollDiffRaf = null;
+  let liveDiffCaptureTimer = null;
+  let isCapturingDiff = false;
+  let isUserScrolling = false;
+  let scrollEndTimer = null;
+  let lastCapturedDiffCanvas = null;
+
+  // Offscreen canvas for atomic, flicker-free rendering
+  let offscreenDiffCanvas = null;
+  function getOffscreenCanvas(w, h) {
+    if (!offscreenDiffCanvas) {
+      offscreenDiffCanvas = document.createElement("canvas");
+    }
+    if (offscreenDiffCanvas.width !== w || offscreenDiffCanvas.height !== h) {
+      offscreenDiffCanvas.width = w;
+      offscreenDiffCanvas.height = h;
+    }
+    return offscreenDiffCanvas;
+  }
+
+  // Dedicated offscreen canvas for Swipe Diff at full native container resolution
+  let offscreenSwipeCanvas = null;
+  function getSwipeOffscreenCanvas(w, h) {
+    if (!offscreenSwipeCanvas) {
+      offscreenSwipeCanvas = document.createElement("canvas");
+    }
+    if (offscreenSwipeCanvas.width !== w || offscreenSwipeCanvas.height !== h) {
+      offscreenSwipeCanvas.width = w;
+      offscreenSwipeCanvas.height = h;
+    }
+    return offscreenSwipeCanvas;
+  }
+
+  function isPixelDiffOverlayActive() {
+    const isColDiffVisible = (currentMode === "side-by-side" && isColDiffActive && paneColDiff && paneColDiff.style.display !== "none");
+    const isSwipeDiffActive = (currentMode === "swipe" && swipeCompareMode === "diff");
+    return isColDiffVisible || isSwipeDiffActive;
+  }
+
+  function triggerScrollDiffSync(scrollY, scrollX) {
+    if (!isPixelDiffOverlayActive()) return;
+
+    isUserScrolling = true;
+    lastCapturedDiffCanvas = null; // Invalidate static image cache while moving
+
+    if (scrollDiffRaf) cancelAnimationFrame(scrollDiffRaf);
+    scrollDiffRaf = requestAnimationFrame(() => {
+      scrollDiffRaf = null;
+      if (currentMode === "swipe") {
+        renderSwipeDiffCanvas(activeRedDiffs, activeShiftRegions, scrollY, scrollX);
+      } else {
+        renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions, scrollY, scrollX);
+      }
+    });
+
+    // While scrolling, do not capture visible tab. When scrolling settles, capture once!
+    if (scrollEndTimer) clearTimeout(scrollEndTimer);
+    scrollEndTimer = setTimeout(() => {
+      isUserScrolling = false;
+      if (currentMode === "side-by-side") {
+        scheduleLivePixelDiffCapture();
+      }
+    }, 120);
+  }
+
+  function scheduleLivePixelDiffCapture() {
+    if (isUserScrolling || isCapturingDiff) return;
+    if (!isPixelDiffOverlayActive()) return;
+    if (typeof chrome === "undefined" || !chrome.runtime || typeof chrome.runtime.sendMessage !== "function") return;
+
+    if (liveDiffCaptureTimer) clearTimeout(liveDiffCaptureTimer);
+    liveDiffCaptureTimer = setTimeout(() => {
+      requestLivePixelDiff();
+    }, 80);
+  }
+
+  function requestLivePixelDiff() {
+    if (isCapturingDiff || isUserScrolling) return;
+    if (!isPixelDiffOverlayActive()) return;
+    if (typeof chrome === "undefined" || !chrome.runtime || typeof chrome.runtime.sendMessage !== "function") return;
+
+    isCapturingDiff = true;
+    try {
+      chrome.runtime.sendMessage({ type: "CAPTURE_ACTIVE_TAB" }, (res) => {
+        if (res && res.status === "ok" && res.dataUrl) {
+          applyCapturedPixelDiff(res.dataUrl, activeShiftRegions);
+        } else {
+          isCapturingDiff = false;
+        }
+      });
+    } catch (e) {
+      isCapturingDiff = false;
+    }
+  }
+
+  // Dedicated 1:1 renderer for Swipe Split Curtain Diff Canvas (Stage <-> Diff)
+  function renderSwipeDiffCanvas(diffList = activeRedDiffs, shiftRegions = activeShiftRegions, currentScrollY = (lastScrollState.scrollY || 0), currentScrollX = (lastScrollState.scrollX || 0)) {
+    if (!swipeDiffCanvas || swipeDiffCanvas.style.display === "none") return;
+
+    // Use exact rendered width & height of the swipe container
+    const swW = swipeOverlayLayer?.clientWidth || swipeContainer?.clientWidth || iframeSwipeProd?.clientWidth || 1200;
+    const swH = swipeOverlayLayer?.clientHeight || swipeContainer?.clientHeight || iframeSwipeProd?.clientHeight || 800;
+
+    if (swW <= 0 || swH <= 0) return;
+
+    // Match 1:1 bitmap dimensions to CSS dimensions to completely eliminate any stretching
+    if (swipeDiffCanvas.width !== swW || swipeDiffCanvas.height !== swH) {
+      swipeDiffCanvas.width = swW;
+      swipeDiffCanvas.height = swH;
+    }
+    swipeDiffCanvas.style.width = swW + "px";
+    swipeDiffCanvas.style.height = swH + "px";
+
+    // Double-buffered offscreen canvas at exact native swipe resolution
+    const offCanvas = getSwipeOffscreenCanvas(swW, swH);
+    const offCtx = offCanvas.getContext("2d");
+    offCtx.clearRect(0, 0, swW, swH);
+
+    // 1. If an actual captured subpixel screenshot diff exists for this exact width, draw it directly!
+    if (lastCapturedDiffCanvas && !isUserScrolling && lastCapturedDiffCanvas.width === swW) {
+      offCtx.drawImage(lastCapturedDiffCanvas, 0, 0, swW, swH);
+    } else {
+      // 2. Frame to query for live element bounding boxes (100% pixel-perfect subpixel accuracy)
+      const liveTargetFrame = (swipeCompareMode === "diff") ? (iframeSwipeDiff || iframeSwipeStg) : iframeSwipeProd;
+      const liveFallbackFrame = iframeSwipeStg;
+
+      // Render diff items at 1:1 scale matching the swipe iframe
+      if (diffList && diffList.length > 0) {
+        diffList.forEach(item => {
+          if (!item) return;
+
+          let drawX = 0;
+          let drawY = 0;
+          let drawW = 0;
+          let drawH = 0;
+          let hasExactBox = false;
+
+          // Try querying the live DOM directly in the swipe frame if same-origin
+          if (item.selector) {
+            try {
+              let el = null;
+              if (liveTargetFrame && liveTargetFrame.contentDocument) {
+                el = liveTargetFrame.contentDocument.querySelector(item.selector);
+              }
+              if (!el && liveFallbackFrame && liveFallbackFrame.contentDocument) {
+                el = liveFallbackFrame.contentDocument.querySelector(item.selector);
+              }
+              if (!el && iframeSwipeProd && iframeSwipeProd.contentDocument) {
+                el = iframeSwipeProd.contentDocument.querySelector(item.selector);
+              }
+              if (el) {
+                const r = el.getBoundingClientRect();
+                if (r.width > 0 && r.height > 0) {
+                  drawX = Math.round(r.left);
+                  drawY = Math.round(r.top);
+                  drawW = Math.round(r.width);
+                  drawH = Math.round(r.height);
+                  hasExactBox = true;
+                }
+              }
+            } catch (e) {
+              // Cross-origin iframe
+            }
+          }
+
+          // If not queryable via contentDocument, use candidate measured box
+          if (!hasExactBox) {
+            const box = item.swipeBox || item.stgBox || item.box;
+            if (!box || (box.width === 0 && box.height === 0)) return;
+
+            const isSticky = !!item.isSticky;
+            drawX = isSticky ? (box.viewportX !== undefined ? box.viewportX : box.x) : (box.x - currentScrollX);
+            drawY = isSticky ? (box.viewportY !== undefined ? box.viewportY : box.y) : (box.y - currentScrollY);
+            drawW = box.width;
+            drawH = box.height;
+          }
+
+          // Viewport clipping
+          if (drawY + drawH < -10 || drawY > swH + 10) return;
+          if (drawX + drawW < -10 || drawX > swW + 10) return;
+
+          offCtx.save();
+          // Semi-transparent red diff fill with crisp red stroke matching visualCompare
+          offCtx.fillStyle = "rgba(239, 68, 68, 0.25)";
+          offCtx.fillRect(drawX, drawY, drawW, drawH);
+          offCtx.strokeStyle = "#ef4444";
+          offCtx.lineWidth = 2;
+          offCtx.strokeRect(drawX, drawY, drawW, drawH);
+          offCtx.restore();
+
+          // Floating diff badge
+          drawRedPixelDiffLabel(offCtx, drawX, drawY, item.label || "🔴 Visual Difference");
+        });
+      }
+    }
+
+    // Yellow hazard layout shifts
+    if (shiftRegions && shiftRegions.length > 0) {
+      shiftRegions.forEach(reg => {
+        const regY = reg.y - currentScrollY;
+        if (regY + reg.h < -10 || regY > swH + 10) return;
+
+        drawHazardStripes(offCtx, 0, regY, swW, reg.h, 14);
+        drawYellowHighlight(offCtx, 0, regY, swW, reg.h);
+      });
+    }
+
+    // Single atomic 1:1 paint to visible canvas (NO STRETCHING)
+    const sCtx = swipeDiffCanvas.getContext("2d");
+    sCtx.clearRect(0, 0, swW, swH);
+    sCtx.drawImage(offCanvas, 0, 0);
+  }
+
+  function renderPixelDiffColumn3(diffList = activeRedDiffs, shiftRegions = activeShiftRegions, currentScrollY = (lastScrollState.scrollY || 0), currentScrollX = (lastScrollState.scrollX || 0)) {
+    // If in swipe mode with diff active, route to dedicated swipe renderer
+    if (currentMode === "swipe") {
+      if (swipeCompareMode === "diff") {
+        renderSwipeDiffCanvas(diffList, shiftRegions, currentScrollY, currentScrollX);
+      }
+      return;
+    }
+
     if (!pixelDiffCanvas) return;
 
     // Ensure diff base iframe src matches Staging (or Prod)
@@ -1637,70 +2010,186 @@ document.addEventListener("DOMContentLoaded", () => {
       iframeDiffBase.src = targetSrc;
     }
 
-    const width = iframeProd?.clientWidth || 400;
-    const height = Math.max(iframeProd?.clientHeight || 800, lastProdLandmarks?.docHeight || 800);
+    // Mirror current scroll position to diff base iframe so it scrolls in lockstep
+    if (iframeDiffBase && iframeDiffBase.contentWindow) {
+      try {
+        iframeDiffBase.contentWindow.postMessage({
+          type: "VC_MIRROR_ACTION",
+          action: { kind: "scroll", scrollY: currentScrollY, scrollX: currentScrollX }
+        }, "*");
+      } catch (e) {}
+    }
 
-    pixelDiffCanvas.width = width;
-    pixelDiffCanvas.height = height;
+    const width = wrapFrameDiff?.clientWidth || iframeProd?.clientWidth || 400;
+    const height = wrapFrameDiff?.clientHeight || iframeProd?.clientHeight || 800;
+
+    if (pixelDiffCanvas.width !== width || pixelDiffCanvas.height !== height) {
+      pixelDiffCanvas.width = width;
+      pixelDiffCanvas.height = height;
+    }
     pixelDiffCanvas.style.width = width + "px";
     pixelDiffCanvas.style.height = height + "px";
 
-    const ctx = pixelDiffCanvas.getContext("2d");
-    ctx.clearRect(0, 0, width, height);
+    // 1. RENDER ONTO OFFSCREEN BUFFER FIRST (Double Buffering to kill all flickering)
+    const offCanvas = getOffscreenCanvas(width, height);
+    const offCtx = offCanvas.getContext("2d");
+    offCtx.clearRect(0, 0, width, height);
 
     let totalDiffArea = 0;
 
-    // 1. Draw glowing RED on all detected visual differences
-    if (diffList && diffList.length > 0) {
-      diffList.forEach(item => {
-        const box = item.box || getEstimatedBoxForSelector(item.selector, width);
-        if (!box) return;
+    // If we have a cached live subpixel screenshot capture for this scroll position, draw it
+    if (lastCapturedDiffCanvas && !isUserScrolling) {
+      offCtx.drawImage(lastCapturedDiffCanvas, 0, 0, width, height);
+    } else {
+      // Draw viewport-visible DOM diff boxes
+      if (diffList && diffList.length > 0) {
+        diffList.forEach(item => {
+          if (!item) return;
+          const box = item.stgBox || item.box;
+          if (!box || (box.width === 0 && box.height === 0)) return;
 
-        totalDiffArea += (box.width * box.height);
+          totalDiffArea += (box.width * box.height);
 
-        ctx.save();
-        // Solid vibrant RED pixel diff fill
-        ctx.fillStyle = "rgba(239, 68, 68, 0.92)";
-        ctx.shadowColor = "#ff0033";
-        ctx.shadowBlur = 12;
-        ctx.fillRect(box.x, box.y, box.width, box.height);
+          const isSticky = !!item.isSticky;
+          const drawX = isSticky ? (box.viewportX !== undefined ? box.viewportX : box.x) : (box.x - currentScrollX);
+          const drawY = isSticky ? (box.viewportY !== undefined ? box.viewportY : box.y) : (box.y - currentScrollY);
 
-        // Crisp neon red border
-        ctx.strokeStyle = "#ff0033";
-        ctx.lineWidth = 2.5;
-        ctx.strokeRect(box.x, box.y, box.width, box.height);
+          // VIEWPORT-ONLY FILTERING: Clip diff items scrolled outside visible viewport
+          if (drawY + box.height < -10 || drawY > height + 10) return;
+          if (drawX + box.width < -10 || drawX > width + 10) return;
 
-        // Clean micro badge: label text
-        const rawLabel = item.label ? item.label.replace(/^[^\w]+/, '').trim() : "PIXEL DIFF";
-        drawRedPixelDiffLabel(ctx, box.x, box.y, rawLabel);
-        ctx.restore();
-      });
+          offCtx.save();
+          // Pure solid RED diff fill (identical to visualCompare diff_canvas.paste(RED, ...))
+          offCtx.fillStyle = "rgba(239, 68, 68, 0.92)";
+          offCtx.fillRect(drawX, drawY, box.width, box.height);
+          offCtx.strokeStyle = "#ef4444";
+          offCtx.lineWidth = 1.8;
+          offCtx.strokeRect(drawX, drawY, box.width, box.height);
+          offCtx.restore();
+        });
+      }
     }
 
-    // 2. Draw RED hazard stripes for layout shift regions (inserted alert banner, etc.)
+    // 2. Draw Yellow Hazard Stripes for layout shift regions visible in viewport
     if (shiftRegions && shiftRegions.length > 0) {
       shiftRegions.forEach(reg => {
         totalDiffArea += (width * reg.h);
-        ctx.save();
-        ctx.fillStyle = "rgba(239, 68, 68, 0.85)";
-        ctx.fillRect(0, reg.y, width, reg.h);
-        drawHazardStripes(ctx, 0, reg.y, width, reg.h, 12);
-        drawCanvasShiftBadge(ctx, width, reg.y, reg.h, reg.label);
-        ctx.restore();
+
+        const regY = reg.y - currentScrollY;
+        if (regY + reg.h < -10 || regY > height + 10) return;
+
+        drawHazardStripes(offCtx, 0, regY, width, reg.h, 14);
+        drawYellowHighlight(offCtx, 0, regY, width, reg.h);
       });
     }
 
-    // 3. Compute real mismatch percentage
-    const totalDocArea = Math.max(1, width * height);
+    // 3. ATOMIC PAINT TO VISIBLE CANVAS (NO FLICKER!)
+    const ctx = pixelDiffCanvas.getContext("2d");
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(offCanvas, 0, 0);
+
+    // 4. Compute real mismatch percentage
+    const docHeight = Math.max(height, lastProdLandmarks?.docHeight || 800);
+    const totalDocArea = Math.max(1, width * docHeight);
     const calculatedPct = Math.min(99.9, Math.max(0.1, (totalDiffArea / totalDocArea) * 100));
     const mismatchPct = calculatedPct.toFixed(2) + "%";
-
     if (colDiffPct) {
-      colDiffPct.textContent = `${mismatchPct} Pixel Diff`;
+      colDiffPct.textContent = `${mismatchPct} Diff`;
     }
     if (metricDiffPct) {
       metricDiffPct.textContent = mismatchPct;
     }
+  }
+
+  function applyCapturedPixelDiff(dataUrl, shiftRegions = activeShiftRegions) {
+    if (!pixelDiffCanvas || !iframeProd || !iframeStg) {
+      isCapturingDiff = false;
+      return;
+    }
+    if (isUserScrolling) {
+      isCapturingDiff = false;
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const rProd = iframeProd.getBoundingClientRect();
+        const rStg = iframeStg.getBoundingClientRect();
+        if (rProd.width <= 0 || rStg.width <= 0) {
+          isCapturingDiff = false;
+          return;
+        }
+
+        const dpr = img.width / Math.max(1, window.innerWidth);
+        const cropW = Math.round(rProd.width * dpr);
+        const cropH = Math.round(rProd.height * dpr);
+
+        const canvasP = document.createElement("canvas");
+        canvasP.width = cropW;
+        canvasP.height = cropH;
+        const ctxP = canvasP.getContext("2d");
+        ctxP.drawImage(img, Math.round(rProd.left * dpr), Math.round(rProd.top * dpr), cropW, cropH, 0, 0, cropW, cropH);
+
+        const canvasS = document.createElement("canvas");
+        canvasS.width = cropW;
+        canvasS.height = cropH;
+        const ctxS = canvasS.getContext("2d");
+        ctxS.drawImage(img, Math.round(rStg.left * dpr), Math.round(rStg.top * dpr), cropW, cropH, 0, 0, cropW, cropH);
+
+        const imgP = ctxP.getImageData(0, 0, cropW, cropH);
+        const imgS = ctxS.getImageData(0, 0, cropW, cropH);
+        const dataP = imgP.data;
+        const dataS = imgS.data;
+
+        const outCanvas = document.createElement("canvas");
+        outCanvas.width = cropW;
+        outCanvas.height = cropH;
+        const outCtx = outCanvas.getContext("2d");
+        const diffImg = outCtx.createImageData(cropW, cropH);
+        const outData = diffImg.data;
+
+        // Tolerance delta matching diff_engine.py make_diff_mask_subpixel
+        const tolerance = 24;
+        let diffPixels = 0;
+
+        for (let i = 0; i < dataP.length; i += 4) {
+          const rD = Math.abs(dataP[i] - dataS[i]);
+          const gD = Math.abs(dataP[i + 1] - dataS[i + 1]);
+          const bD = Math.abs(dataP[i + 2] - dataS[i + 2]);
+          if ((rD + gD + bD) / 3 > tolerance) {
+            outData[i] = 239;     // R (RED = 239, 68, 68)
+            outData[i + 1] = 68;  // G
+            outData[i + 2] = 68;  // B
+            outData[i + 3] = 255; // A (solid red)
+            diffPixels++;
+          }
+        }
+
+        outCtx.putImageData(diffImg, 0, 0);
+
+        if (diffPixels > 0) {
+          lastCapturedDiffCanvas = outCanvas;
+          if (currentMode === "swipe" && swipeCompareMode === "diff") {
+            renderSwipeDiffCanvas(activeRedDiffs, shiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+          } else {
+            renderPixelDiffColumn3(activeRedDiffs, shiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+          }
+
+          const totalPixels = cropW * cropH;
+          const pct = Math.min(99.9, Math.max(0.1, (diffPixels / totalPixels) * 100)).toFixed(2) + "%";
+          if (colDiffPct) colDiffPct.textContent = `${pct} Diff`;
+        }
+      } catch (err) {
+        console.warn("[VisualCompare Live] Pixel capture comparison error:", err);
+      } finally {
+        isCapturingDiff = false;
+      }
+    };
+    img.onerror = () => {
+      isCapturingDiff = false;
+    };
+    img.src = dataUrl;
   }
 
   function drawRedPixelDiffLabel(ctx, x, y, label) {
@@ -1837,6 +2326,7 @@ document.addEventListener("DOMContentLoaded", () => {
     clearTimeout(alignDebounceTimer);
     if (iframeStg) iframeStg.src = stgUrlInput.value.trim();
     if (iframeSwipeStg) iframeSwipeStg.src = stgUrlInput.value.trim();
+    if (iframeSwipeDiff) iframeSwipeDiff.src = stgUrlInput.value.trim();
     if (iframeFlickerStg) iframeFlickerStg.src = stgUrlInput.value.trim();
     if (iframeOverlayStg) iframeOverlayStg.src = stgUrlInput.value.trim();
   });
@@ -1868,6 +2358,254 @@ document.addEventListener("DOMContentLoaded", () => {
     btnColDiffRefresh.addEventListener("click", () => {
       runVisualDiffCalculation(true);
     });
+  }
+
+  // Diff Opacity Slider (matches visualCompare report_template.html)
+  if (colDiffOpacitySlider) {
+    colDiffOpacitySlider.addEventListener("input", (e) => {
+      const val = parseInt(e.target.value, 10) || 0;
+      if (colDiffOpacityVal) colDiffOpacityVal.textContent = `${val}%`;
+      if (pixelDiffCanvas) pixelDiffCanvas.style.opacity = (val / 100).toString();
+    });
+  }
+
+  // Synchronized Wheel Scrolling for Column 3 (Pixel Diff Column)
+  if (wrapFrameDiff) {
+    wrapFrameDiff.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const currentY = lastScrollState.scrollY || 0;
+      const currentX = lastScrollState.scrollX || 0;
+      const docH = Math.max(wrapFrameDiff.clientHeight || 800, lastProdLandmarks?.docHeight || 2000);
+      const maxScrollY = Math.max(1, docH - (wrapFrameDiff.clientHeight || 800));
+      const newScrollY = Math.max(0, Math.min(maxScrollY, currentY + e.deltaY));
+      const newScrollX = Math.max(0, currentX + e.deltaX);
+
+      lastScrollState.scrollY = newScrollY;
+      lastScrollState.scrollX = newScrollX;
+
+      // Dispatch mirror scroll to PROD & STG
+      dispatchToPane("PROD", {
+        type: "VC_MIRROR_ACTION",
+        action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
+      });
+      dispatchToPane("STG", {
+        type: "VC_MIRROR_ACTION",
+        action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
+      });
+
+      // Dispatch to Diff Base iframe
+      if (iframeDiffBase && iframeDiffBase.contentWindow) {
+        try {
+          iframeDiffBase.contentWindow.postMessage({
+            type: "VC_MIRROR_ACTION",
+            action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
+          }, "*");
+        } catch (err) {}
+      }
+
+      triggerScrollDiffSync(newScrollY, newScrollX);
+    }, { passive: false });
+  }
+
+  // Synchronized Wheel Scrolling for Swipe Split Curtain
+  if (swipeContainer) {
+    swipeContainer.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const currentY = lastScrollState.scrollY || 0;
+      const currentX = lastScrollState.scrollX || 0;
+      const docH = Math.max(swipeContainer.clientHeight || 800, lastProdLandmarks?.docHeight || 2000);
+      const maxScrollY = Math.max(1, docH - (swipeContainer.clientHeight || 800));
+      const newScrollY = Math.max(0, Math.min(maxScrollY, currentY + e.deltaY));
+      const newScrollX = Math.max(0, currentX + e.deltaX);
+
+      lastScrollState.scrollY = newScrollY;
+      lastScrollState.scrollX = newScrollX;
+
+      if (iframeSwipeProd && iframeSwipeProd.contentWindow) {
+        try {
+          iframeSwipeProd.contentWindow.postMessage({
+            type: "VC_MIRROR_ACTION",
+            action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
+          }, "*");
+        } catch (err) {}
+      }
+      if (iframeSwipeStg && iframeSwipeStg.contentWindow) {
+        try {
+          iframeSwipeStg.contentWindow.postMessage({
+            type: "VC_MIRROR_ACTION",
+            action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
+          }, "*");
+        } catch (err) {}
+      }
+      if (iframeSwipeDiff && iframeSwipeDiff.contentWindow) {
+        try {
+          iframeSwipeDiff.contentWindow.postMessage({
+            type: "VC_MIRROR_ACTION",
+            action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
+          }, "*");
+        } catch (err) {}
+      }
+
+      triggerScrollDiffSync(newScrollY, newScrollX);
+    }, { passive: false });
+  }
+
+  // Side-by-Side 3rd Column Pixel Diff Toggle
+  if (btnToggleColDiff) {
+    btnToggleColDiff.addEventListener("click", () => {
+      isColDiffActive = !isColDiffActive;
+      btnToggleColDiff.classList.toggle("active", isColDiffActive);
+      const viewSide = document.getElementById("view-side-by-side");
+      if (isColDiffActive) {
+        if (paneColDiff) paneColDiff.style.display = "flex";
+        if (viewSide) viewSide.classList.add("mode-view-pixel-diff");
+        renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions);
+        logAction("3rd Column Pixel Diff toggled ON");
+      } else {
+        if (paneColDiff) paneColDiff.style.display = "none";
+        if (viewSide) viewSide.classList.remove("mode-view-pixel-diff");
+        logAction("3rd Column Pixel Diff toggled OFF (2-column side-by-side view)");
+      }
+    });
+  }
+
+  // Swipe / Slider Target Toggle (Prod <-> Stage vs Stage <-> Diff)
+  if (btnSwipeTargetProd) {
+    btnSwipeTargetProd.addEventListener("click", () => {
+      setSwipeCompareMode("prod");
+    });
+  }
+  if (btnSwipeTargetDiff) {
+    btnSwipeTargetDiff.addEventListener("click", () => {
+      setSwipeCompareMode("diff");
+    });
+  }
+
+  function setSwipeCompareMode(target) {
+    swipeCompareMode = target;
+    if (btnSwipeTargetProd) btnSwipeTargetProd.classList.toggle("active", target === "prod");
+    if (btnSwipeTargetDiff) btnSwipeTargetDiff.classList.toggle("active", target === "diff");
+
+    const stgSrc = (iframeStg && iframeStg.src && iframeStg.src !== "about:blank") ? iframeStg.src : stgUrlInput.value.trim();
+    const prodSrc = (iframeProd && iframeProd.src && iframeProd.src !== "about:blank") ? iframeProd.src : prodUrlInput.value.trim();
+
+    if (target === "diff") {
+      // 1. Keep Production actively rendered in the container so its layout is live and accurate, but make it invisible to the user
+      if (iframeSwipeProd) {
+        iframeSwipeProd.style.display = "block";
+        iframeSwipeProd.style.opacity = "0";
+        iframeSwipeProd.style.pointerEvents = "none";
+        iframeSwipeProd.style.position = "absolute";
+        iframeSwipeProd.style.top = "0";
+        iframeSwipeProd.style.left = "0";
+        iframeSwipeProd.style.width = "100%";
+        iframeSwipeProd.style.height = "100%";
+        iframeSwipeProd.style.zIndex = "1";
+      }
+      if (iframeSwipeDiff) {
+        iframeSwipeDiff.style.display = "block";
+        iframeSwipeDiff.style.opacity = "1";
+        iframeSwipeDiff.style.pointerEvents = "none";
+        iframeSwipeDiff.style.position = "absolute";
+        iframeSwipeDiff.style.top = "0";
+        iframeSwipeDiff.style.left = "0";
+        iframeSwipeDiff.style.width = "100%";
+        iframeSwipeDiff.style.height = "100%";
+        iframeSwipeDiff.style.zIndex = "2";
+        if (stgSrc && iframeSwipeDiff.src !== stgSrc) {
+          iframeSwipeDiff.src = stgSrc;
+        }
+      }
+      if (swipeOverlayLayer) {
+        swipeOverlayLayer.style.background = "transparent";
+        swipeOverlayLayer.style.pointerEvents = "none";
+      }
+      if (swipeDiffCanvas) {
+        swipeDiffCanvas.style.display = "block";
+        swipeDiffCanvas.style.pointerEvents = "none";
+        swipeDiffCanvas.style.position = "absolute";
+        swipeDiffCanvas.style.top = "0";
+        swipeDiffCanvas.style.left = "0";
+        swipeDiffCanvas.style.width = "100%";
+        swipeDiffCanvas.style.height = "100%";
+        swipeDiffCanvas.style.zIndex = "5";
+      }
+      if (swipeOverlayTag) {
+        swipeOverlayTag.textContent = "DIFF (LEFT)";
+        swipeOverlayTag.style.borderColor = "#ef4444";
+        swipeOverlayTag.style.color = "#f87171";
+      }
+      if (swipeBaseTag) {
+        swipeBaseTag.textContent = "STAGING (RIGHT)";
+        swipeBaseTag.style.borderColor = "var(--color-stg)";
+        swipeBaseTag.style.color = "var(--color-stg)";
+      }
+
+      // Sync scroll to both diff base frame and invisible production frame
+      const currentY = lastScrollState.scrollY || 0;
+      const currentX = lastScrollState.scrollX || 0;
+      [iframeSwipeDiff, iframeSwipeProd, iframeSwipeStg].forEach(frame => {
+        if (frame && frame.contentWindow) {
+          try {
+            frame.contentWindow.postMessage({
+              type: "VC_MIRROR_ACTION",
+              action: { kind: "scroll", scrollY: currentY, scrollX: currentX }
+            }, "*");
+          } catch (e) {}
+        }
+      });
+
+      // Request fresh live landmarks & diff candidates from frames at this container size
+      [iframeSwipeProd, iframeSwipeDiff, iframeSwipeStg].forEach(frame => {
+        if (frame && frame.contentWindow) {
+          try {
+            frame.contentWindow.postMessage({ type: "VC_REQUEST_LANDMARKS" }, "*");
+            frame.contentWindow.postMessage({ type: "VC_REQUEST_DIFF_CANDIDATES" }, "*");
+          } catch (e) {}
+        }
+      });
+
+      renderSwipeDiffCanvas(activeRedDiffs, activeShiftRegions, currentY, currentX);
+      logAction("Swipe slider comparison set to: STAGE ↔ DIFF (Invisible live Production base)");
+    } else {
+      if (iframeSwipeProd) {
+        iframeSwipeProd.style.display = "block";
+        iframeSwipeProd.style.opacity = "1";
+        iframeSwipeProd.style.pointerEvents = "auto";
+        iframeSwipeProd.style.zIndex = "2";
+        if (prodSrc && iframeSwipeProd.src !== prodSrc) {
+          iframeSwipeProd.src = prodSrc;
+        }
+      }
+      if (iframeSwipeDiff) iframeSwipeDiff.style.display = "none";
+      if (swipeOverlayLayer) {
+        swipeOverlayLayer.style.background = "transparent";
+        swipeOverlayLayer.style.pointerEvents = "auto";
+      }
+      if (swipeDiffCanvas) swipeDiffCanvas.style.display = "none";
+      if (swipeOverlayTag) {
+        swipeOverlayTag.textContent = "PRODUCTION (LEFT)";
+        swipeOverlayTag.style.borderColor = "var(--color-prod)";
+        swipeOverlayTag.style.color = "var(--color-prod)";
+      }
+      if (swipeBaseTag) {
+        swipeBaseTag.textContent = "STAGING (RIGHT)";
+        swipeBaseTag.style.borderColor = "var(--color-stg)";
+        swipeBaseTag.style.color = "var(--color-stg)";
+      }
+
+      // Sync scroll to the production frame
+      if (iframeSwipeProd && iframeSwipeProd.contentWindow) {
+        try {
+          iframeSwipeProd.contentWindow.postMessage({
+            type: "VC_MIRROR_ACTION",
+            action: { kind: "scroll", scrollY: lastScrollState.scrollY || 0, scrollX: lastScrollState.scrollX || 0 }
+          }, "*");
+        } catch (e) {}
+      }
+
+      logAction("Swipe slider comparison set to: PROD ↔ STAGE");
+    }
   }
 
   // Sync Chip Toggle Styling
@@ -2031,7 +2769,7 @@ document.addEventListener("DOMContentLoaded", () => {
           metricRedVal.textContent = `${activeRedDiffs.length} Found`;
           if (btnToggleRedDiffs) {
             btnToggleRedDiffs.classList.remove("inactive");
-            btnToggleRedDiffs.innerHTML = `<span>🔴 Red Diffs (${activeRedDiffs.length})</span>`;
+            btnToggleRedDiffs.innerHTML = `<span class="btn-label-full">🔴 Red Diffs (${activeRedDiffs.length})</span><span class="btn-label-short">🔴 Diffs (${activeRedDiffs.length})</span>`;
           }
         }
 

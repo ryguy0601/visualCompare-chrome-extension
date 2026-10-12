@@ -48,7 +48,7 @@
     <!-- Controls Right -->
     <div class="header-right">
       <!-- Viewport Device Selector -->
-      <div class="control-group">
+      <div class="control-group device-group">
         <label for="viewport-select">Device:</label>
         <select id="viewport-select" class="studio-select">
           <option value="responsive" selected>Responsive (Fluid)</option>
@@ -60,7 +60,7 @@
       </div>
 
       <!-- Zoom Scaler -->
-      <div class="control-group">
+      <div class="control-group scale-group">
         <label for="zoom-select">Scale:</label>
         <select id="zoom-select" class="studio-select">
           <option value="1">100%</option>
@@ -72,22 +72,26 @@
 
       <!-- Visual Differences Button -->
       <button id="btn-toggle-red-diffs" class="btn-diff-action btn-red-diffs" title="Highlight all non-height visual regressions (colors, shapes, typography, borders) in RED on live pages">
-        <span>🔴 Visual Diffs</span>
+        <span class="btn-label-full">🔴 Visual Diffs</span>
+        <span class="btn-label-short">🔴 Diffs</span>
       </button>
 
       <!-- Live Diff Button -->
       <button id="btn-run-diff" class="btn-diff-action" title="Capture snapshots and calculate visual pixel mismatch">
-        <span>📸 Run Diff</span>
+        <span class="btn-label-full">📸 Run Diff</span>
+        <span class="btn-label-short">📸 Diff</span>
       </button>
 
       <!-- Export Comparison ZIP Package -->
       <button id="btn-export-zip" class="btn-diff-action btn-export-zip" title="Export comparison report, links, and PDFs of both pages with differences into a ZIP package">
-        <span>📦 Export ZIP</span>
+        <span class="btn-label-full">📦 Export ZIP</span>
+        <span class="btn-label-short">📦 ZIP</span>
       </button>
 
       <!-- Import Comparison ZIP Package -->
       <button id="btn-import-zip" class="btn-diff-action btn-import-zip" title="Import previously exported comparison ZIP package">
-        <span>📥 Import ZIP</span>
+        <span class="btn-label-full">📥 Import ZIP</span>
+        <span class="btn-label-short">📥 Open</span>
       </button>
       <input type="file" id="file-import-zip" accept=".zip" style="display: none;" />
     </div>
@@ -97,25 +101,46 @@
   <div class="secondary-toolbar">
     <!-- View Modes -->
     <div class="mode-toggles">
-      <button class="mode-btn active" data-mode="side-by-side" id="mode-btn-side">
-        <span class="mode-icon">◫</span> Side-by-Side (Sync)
+      <button class="mode-btn active" data-mode="side-by-side" id="mode-btn-side" title="Side-by-Side Dual Frame Synchronized View">
+        <span class="mode-icon">◫</span>
+        <span class="mode-label-full">Side-by-Side (Sync)</span>
+        <span class="mode-label-short">Side</span>
       </button>
-      <button class="mode-btn" data-mode="pixel-diff" id="mode-btn-pixel-diff">
-        <span class="mode-icon">▦</span> Pixel Diff (3-Col)
+      <button class="mode-btn" data-mode="swipe" id="mode-btn-swipe" title="Swipe Split Curtain Interactive Divider">
+        <span class="mode-icon">↔</span>
+        <span class="mode-label-full">Swipe Split Curtain</span>
+        <span class="mode-label-short">Swipe</span>
       </button>
-      <button class="mode-btn" data-mode="swipe" id="mode-btn-swipe">
-        <span class="mode-icon">↔</span> Swipe Split Curtain
+      <button class="mode-btn" data-mode="flicker" id="mode-btn-flicker" title="Flicker Rapid Toggle View">
+        <span class="mode-icon">⚡</span>
+        <span class="mode-label-full">Flicker Toggle</span>
+        <span class="mode-label-short">Flicker</span>
       </button>
-      <button class="mode-btn" data-mode="flicker" id="mode-btn-flicker">
-        <span class="mode-icon">⚡</span> Flicker Toggle
-      </button>
-      <button class="mode-btn" data-mode="overlay" id="mode-btn-overlay">
-        <span class="mode-icon">⧉</span> Diff Ghost Overlay
+      <button class="mode-btn" data-mode="overlay" id="mode-btn-overlay" title="Diff Ghost Heatmap Overlay">
+        <span class="mode-icon">⧉</span>
+        <span class="mode-label-full">Diff Ghost Overlay</span>
+        <span class="mode-label-short">Overlay</span>
       </button>
     </div>
 
     <!-- Mode Specific Controls (Dynamic) -->
     <div class="mode-controls-area">
+      <!-- Side-by-Side Controls: Toggle 3rd Column Pixel Diff -->
+      <div class="side-controls" id="side-controls">
+        <button id="btn-toggle-col-diff" class="sub-btn btn-diff-toggle" title="Toggle 3rd Column Pixel Diff on or off">
+          <span class="btn-label-full">▦ 3rd Col Diff</span>
+          <span class="btn-label-short">▦ 3rd Col</span>
+        </button>
+      </div>
+
+      <!-- Swipe / Slider Controls: Toggle Prod <-> Stage vs Stage <-> Diff -->
+      <div class="swipe-controls" id="swipe-controls" style="display: none;">
+        <div class="segmented-toggle">
+          <button id="btn-swipe-target-prod" class="sub-btn active" title="Swipe between Production and Staging">Prod ↔ Stage</button>
+          <button id="btn-swipe-target-diff" class="sub-btn" title="Swipe between Staging and Pixel Difference">Stage ↔ Diff</button>
+        </div>
+      </div>
+
       <!-- Flicker Controls (Hidden by default) -->
       <div class="flicker-controls" id="flicker-controls" style="display: none;">
         <button id="btn-flicker-play" class="sub-btn">▶ Auto Flicker</button>
@@ -162,27 +187,33 @@
     <div class="sync-toggles-bar">
       <label class="sync-chip active chip-hazard" id="chip-sync-hazard" title="DOM-Aware layout shift alignment using yellow hazard spacers (ports VisualCompare Python diff engine)">
         <input type="checkbox" id="check-sync-hazard" checked />
-        <span>⚠️ Yellow Hazard Spacers</span>
+        <span class="chip-label-full">⚠️ Yellow Hazard Spacers</span>
+        <span class="chip-label-short">⚠️ Hazard</span>
       </label>
       <label class="sync-chip active chip-red-diff" id="chip-sync-red-diff" title="Highlight non-height visual regressions (colors, shapes, typography, borders) in RED on live pages">
         <input type="checkbox" id="check-sync-red-diff" checked />
-        <span>🔴 Visual Diffs</span>
+        <span class="chip-label-full">🔴 Visual Diffs</span>
+        <span class="chip-label-short">🔴 Diffs</span>
       </label>
       <label class="sync-chip active" id="chip-sync-clicks">
         <input type="checkbox" id="check-sync-clicks" checked />
-        <span>Click Mirror</span>
+        <span class="chip-label-full">Click Mirror</span>
+        <span class="chip-label-short">Clicks</span>
       </label>
       <label class="sync-chip active" id="chip-sync-scroll">
         <input type="checkbox" id="check-sync-scroll" checked />
-        <span>Scroll Sync</span>
+        <span class="chip-label-full">Scroll Sync</span>
+        <span class="chip-label-short">Scroll</span>
       </label>
       <label class="sync-chip active" id="chip-sync-hover" title="Mirror mouse hover states and ghost cursor">
         <input type="checkbox" id="check-sync-hover" checked />
-        <span>Hover &amp; Pointer</span>
+        <span class="chip-label-full">Hover &amp; Pointer</span>
+        <span class="chip-label-short">Hover</span>
       </label>
       <label class="sync-chip active" id="chip-sync-inputs" title="Mirror typing and focus states">
         <input type="checkbox" id="check-sync-inputs" checked />
-        <span>Type &amp; Focus</span>
+        <span class="chip-label-full">Type &amp; Focus</span>
+        <span class="chip-label-short">Inputs</span>
       </label>
     </div>
   </div>
@@ -229,14 +260,19 @@
           </div>
         </div>
 
-        <!-- Frame 3: Pixel Diff (3rd Column - Differences in Red) -->
+        <!-- Frame 3: Pixel Diff Overlay (3rd Column matching visualCompare) -->
         <div class="pane-column pane-diff" id="pane-col-diff" style="display: none;">
           <div class="pane-header">
             <div class="pane-title">
               <span class="dot-indicator diff-dot"></span>
-              <strong>Pixel Diff</strong> (Differences in Red)
+              <strong>Pixel Diff Overlay</strong>
             </div>
             <div class="pane-actions">
+              <div class="diff-slider-wrap">
+                <label for="col-diff-opacity-slider">Diff:</label>
+                <input type="range" min="0" max="100" value="85" class="diff-opacity-slider" id="col-diff-opacity-slider">
+                <span class="diff-opacity-val" id="col-diff-opacity-val">85%</span>
+              </div>
               <span class="diff-mismatch-pill" id="col-diff-pct">0.00% Diff</span>
               <button class="pane-btn" id="btn-col-diff-refresh" title="Re-run Pixel Diff">🔄</button>
             </div>
@@ -258,13 +294,15 @@
           <!-- Background Base: Staging -->
           <div class="swipe-layer swipe-base" id="swipe-base-layer">
             <iframe id="iframe-swipe-stg" class="compare-iframe" src="about:blank"></iframe>
-            <div class="layer-tag tag-stg">STAGING (RIGHT)</div>
+            <div class="layer-tag tag-stg" id="swipe-base-tag">STAGING (RIGHT)</div>
           </div>
 
-          <!-- Foreground Overlay: Production (Clipped) -->
+          <!-- Foreground Overlay: Production / Diff (Clipped) -->
           <div class="swipe-layer swipe-overlay" id="swipe-overlay-layer">
             <iframe id="iframe-swipe-prod" class="compare-iframe" src="about:blank"></iframe>
-            <div class="layer-tag tag-prod">PRODUCTION (LEFT)</div>
+            <iframe id="iframe-swipe-diff" class="compare-iframe diff-base-iframe" src="about:blank" style="display: none;"></iframe>
+            <canvas id="swipe-diff-canvas" class="pixel-diff-canvas" style="display: none;"></canvas>
+            <div class="layer-tag tag-prod" id="swipe-overlay-tag">PRODUCTION (LEFT)</div>
           </div>
 
           <!-- Draggable Curtain Handle -->
