@@ -31,7 +31,7 @@ A real-time dual-site visual regression and interaction testing extension for Go
 4. Click **Load unpacked** in the top-left corner.
 5. Select this project directory:
    ```text
-   C:\Users\ryguy\OneDrive\Documents\code\visualCompare-chrome-extension
+   C:\YOUR_PATH\visualCompare-chrome-extension
    ```
 6. The **VisualCompare Live** extension icon will now appear in your browser toolbar! Pin it for quick access.
 
