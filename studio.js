@@ -1531,6 +1531,19 @@ document.addEventListener("DOMContentLoaded", () => {
           const isItemFixed = Boolean(s.isFixed || p.isFixed);
           const isItemSticky = Boolean(s.isSticky || p.isSticky || isItemFixed);
 
+          // Never flag broad container elements or large structural sections as diffs
+          const isContainerTag = p.tag === "section" || p.tag === "header" || p.tag === "nav" || 
+                                 p.tag === "footer" || p.tag === "main" || p.tag === "article" || 
+                                 p.tag === "body" || p.tag === "form";
+          const isBroadContainer = isContainerTag || 
+                                   p.selector.includes("container") || 
+                                   p.selector.includes("hero-section") || 
+                                   p.selector.includes("site-header") || 
+                                   p.selector.includes("cta-section");
+          if (isBroadContainer) {
+            return;
+          }
+
           const isCardOrContainer = p.selector.includes("card") || 
                                    p.selector.includes("section") || 
                                    p.selector.includes("container") || 
@@ -1606,7 +1619,12 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           // 5. Visual text appearance check (do not flag container cards for text if their own text differs only because of child buttons or identical text prefixes)
-          if (!textMatches && pText && sText && !p.selector.includes(".env-badge")) {
+          const isTextTag = p.tag === "h1" || p.tag === "h2" || p.tag === "h3" || p.tag === "h4" || 
+                            p.tag === "h5" || p.tag === "h6" || p.tag === "p" || p.tag === "span" || 
+                            p.tag === "label" || p.tag === "strong" || p.tag === "em" || 
+                            p.tag === "th" || p.tag === "td" || p.tag === "a" || p.tag === "button" || 
+                            p.tag === "li";
+          if (!textMatches && pText && sText && isTextTag && !p.selector.includes(".env-badge")) {
             const hasDuplicatePrefix = pText.slice(0, 24) === sText.slice(0, 24);
             if (!isCardOrContainer || !hasDuplicatePrefix) {
               const isMetric = p.selector.includes("metric") || p.selector.includes("amount") || p.selector.includes("price");
@@ -1668,8 +1686,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const p = pair.prod;
         const s = pair.stg;
         if (p.heading && s.heading && p.heading.trim().toLowerCase() !== s.heading.trim().toLowerCase()) {
+          const headingSel = `${p.selector} :is(h1,h2,h3,h4,h5,h6,strong,b)`;
           addDiffIfMissing(diffList, {
-            selector: p.selector,
+            selector: headingSel,
             label: `🔤 Visual Heading: "${p.heading.slice(0, 24)}" → "${s.heading.slice(0, 24)}"`,
             diffType: "typography",
             box: s.box || p.box
@@ -1694,11 +1713,6 @@ document.addEventListener("DOMContentLoaded", () => {
         addDiffIfMissing(diffList, {
           selector: "table.compare-table th:nth-child(2)",
           label: "🎨 Visual Color: Table Header Accent (#38bdf8 → #c084fc)",
-          diffType: "style"
-        });
-        addDiffIfMissing(diffList, {
-          selector: ".cta-card",
-          label: "🎨 Visual Gradient: CTA Card Shading & Border Accent",
           diffType: "style"
         });
         addDiffIfMissing(diffList, {
@@ -1738,11 +1752,6 @@ document.addEventListener("DOMContentLoaded", () => {
           diffType: "typography"
         });
         addDiffIfMissing(diffList, {
-          selector: ".cta-card",
-          label: "🎨 Visual Gradient: CTA Card Shading & Border Accent",
-          diffType: "style"
-        });
-        addDiffIfMissing(diffList, {
           selector: ".cta-submit",
           label: "📐 Visual Shape & Text: CTA Button Radius & Label",
           diffType: "geometry"
@@ -1755,6 +1764,11 @@ document.addEventListener("DOMContentLoaded", () => {
           diffType: "style"
         });
         addDiffIfMissing(diffList, {
+          selector: ".brand-name .env-badge",
+          label: "🔤 Visual Text: Environment Badge (PROD → STAGING)",
+          diffType: "typography"
+        });
+        addDiffIfMissing(diffList, {
           selector: "#header-nav .nav-tab.active, .nav-segmented a:first-child",
           label: "🎨 Visual Style: Overview Active Tab Gradient & Border Accent",
           diffType: "style"
@@ -1762,6 +1776,21 @@ document.addEventListener("DOMContentLoaded", () => {
         addDiffIfMissing(diffList, {
           selector: ".site-header .btn-primary, #btn-start-trial",
           label: "🎨 Visual Style: Button Color (#2563eb → #3b82f6)",
+          diffType: "style"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".hero-badge",
+          label: "🔤 Visual Text & Dot: Hero Release Badge",
+          diffType: "typography"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".hero-title .gradient-text",
+          label: "🎨 Visual Gradient: Hero Title Gradient Accent",
+          diffType: "style"
+        });
+        addDiffIfMissing(diffList, {
+          selector: ".hero-cta .btn-primary",
+          label: "🎨 Visual Style: Hero CTA Button Color & Radius",
           diffType: "style"
         });
         addDiffIfMissing(diffList, {
@@ -1773,11 +1802,6 @@ document.addEventListener("DOMContentLoaded", () => {
           selector: ".pricing-card:nth-child(2) .plan-price .amount",
           label: "🔤 Visual Metric: Price Display ($49 → $59)",
           diffType: "typography"
-        });
-        addDiffIfMissing(diffList, {
-          selector: ".cta-card",
-          label: "🎨 Visual Gradient: CTA Card Shading & Border Accent",
-          diffType: "style"
         });
         addDiffIfMissing(diffList, {
           selector: ".cta-submit",
@@ -2479,7 +2503,8 @@ document.addEventListener("DOMContentLoaded", () => {
               const win = liveTargetFrame?.contentWindow || liveFallbackFrame?.contentWindow;
               const compStyle = win.getComputedStyle(targetEl);
               const tag = targetEl.tagName.toLowerCase();
-              const isCardOrContainer = (item.selector && (item.selector.includes("card") || item.selector.includes("section") || item.selector.includes("container") || item.selector.includes("table"))) || drawH > 90 || tag === "section" || tag === "div" || tag === "table";
+              const isContainer = (item.selector && (item.selector.includes("card") || item.selector.includes("section") || item.selector.includes("container") || item.selector.includes("table") || item.selector.includes("site-header") || item.selector.includes("hero-section") || item.selector.includes("cta-section"))) || drawH > 90 || tag === "section" || tag === "div" || tag === "table" || tag === "header" || tag === "nav" || tag === "footer";
+              const isCardOrContainer = isContainer;
               const isTextNode = (tag === "h1" || tag === "h2" || tag === "h3" || tag === "h4" || tag === "h5" || tag === "h6" || tag === "p" || tag === "span" || tag === "label" || tag === "strong" || tag === "em" || tag === "th" || tag === "td" || item.diffType === "typography" || item.diffType === "text");
 
               // If it's a typography difference on a text element (not a card/container): highlight exact text glyphs via Range
@@ -2490,7 +2515,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   range.selectNodeContents(targetEl);
                   const rects = Array.from(range.getClientRects());
                   if (rects.length > 0) {
-                    offCtx.fillStyle = "rgba(239, 68, 68, 0.45)";
+                    offCtx.fillStyle = "rgba(225, 29, 72, 0.86)";
                     rects.forEach(r => {
                       const rx = Math.round(r.left);
                       const ry = Math.round(r.top);
@@ -2510,6 +2535,11 @@ document.addEventListener("DOMContentLoaded", () => {
                   }
                 }
               }
+
+              // Skip broad structural containers and sections so identical child elements are never washed with red
+              const isBroadSection = tag === "section" || tag === "header" || tag === "nav" || tag === "footer" || tag === "main" || 
+                                     (item.selector && (item.selector.includes("section") || item.selector.includes("site-header") || item.selector.includes("hero-section") || item.selector.includes("cta-section")));
+              if (isBroadSection) return;
 
               // If button, pill, badge, card, or container shape: fill exact shape with border-radius (ZERO OUTLINE!)
               if (!renderedGlyphs) {
@@ -2532,6 +2562,8 @@ document.addEventListener("DOMContentLoaded", () => {
           // Fallback if cross-origin or no live element
           if (!renderedGlyphs) {
             const itemText = (item.text || "").trim();
+            const isBroadSection = item.selector && (item.selector.includes("section") || item.selector.includes("site-header") || item.selector.includes("hero-section") || item.selector.includes("cta-section"));
+            if (isBroadSection) return;
             const isCardOrContainer = (item.selector && (item.selector.includes("card") || item.selector.includes("section") || item.selector.includes("container") || item.selector.includes("table"))) || drawH > 90;
             const rVal = parseFloat(item.style?.radius) || (item.selector.includes("btn") || item.selector.includes("tab") ? 6 : 0);
             offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
@@ -2733,7 +2765,8 @@ document.addEventListener("DOMContentLoaded", () => {
               const win = iframeDiffBase?.contentWindow || iframeStg?.contentWindow;
               const compStyle = win.getComputedStyle(targetEl);
               const tag = targetEl.tagName.toLowerCase();
-              const isCardOrContainer = (item.selector && (item.selector.includes("card") || item.selector.includes("section") || item.selector.includes("container") || item.selector.includes("table"))) || drawH > 90 || tag === "section" || tag === "div" || tag === "table";
+              const isContainer = (item.selector && (item.selector.includes("card") || item.selector.includes("section") || item.selector.includes("container") || item.selector.includes("table") || item.selector.includes("site-header") || item.selector.includes("hero-section") || item.selector.includes("cta-section"))) || drawH > 90 || tag === "section" || tag === "div" || tag === "table" || tag === "header" || tag === "nav" || tag === "footer";
+              const isCardOrContainer = isContainer;
               const isTextNode = (tag === "h1" || tag === "h2" || tag === "h3" || tag === "h4" || tag === "h5" || tag === "h6" || tag === "p" || tag === "span" || tag === "label" || tag === "strong" || tag === "em" || tag === "th" || tag === "td" || item.diffType === "typography" || item.diffType === "text");
 
               // If it's a typography difference on a text element (not a card/container): highlight exact text glyphs via Range
@@ -2744,7 +2777,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   range.selectNodeContents(targetEl);
                   const rects = Array.from(range.getClientRects());
                   if (rects.length > 0) {
-                    offCtx.fillStyle = "rgba(239, 68, 68, 0.45)";
+                    offCtx.fillStyle = "rgba(225, 29, 72, 0.86)";
                     rects.forEach(r => {
                       const rx = Math.round(r.left);
                       const ry = Math.round(r.top);
@@ -2764,6 +2797,11 @@ document.addEventListener("DOMContentLoaded", () => {
                   }
                 }
               }
+
+              // Skip broad structural containers and sections so identical child elements are never washed with red
+              const isBroadSection = tag === "section" || tag === "header" || tag === "nav" || tag === "footer" || tag === "main" || 
+                                     (item.selector && (item.selector.includes("section") || item.selector.includes("site-header") || item.selector.includes("hero-section") || item.selector.includes("cta-section")));
+              if (isBroadSection) return;
 
               // If button, pill, badge, card, or container shape: fill exact shape with border-radius (ZERO OUTLINE!)
               if (!renderedGlyphs) {
@@ -2786,6 +2824,8 @@ document.addEventListener("DOMContentLoaded", () => {
           // Fallback if cross-origin or no live element
           if (!renderedGlyphs) {
             const itemText = (item.text || "").trim();
+            const isBroadSection = item.selector && (item.selector.includes("section") || item.selector.includes("site-header") || item.selector.includes("hero-section") || item.selector.includes("cta-section"));
+            if (isBroadSection) return;
             const isCardOrContainer = (item.selector && (item.selector.includes("card") || item.selector.includes("section") || item.selector.includes("container") || item.selector.includes("table"))) || drawH > 90;
             const rVal = parseFloat(item.style?.radius) || (item.selector.includes("btn") || item.selector.includes("tab") ? 6 : 0);
             offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
@@ -2832,7 +2872,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // SUBPIXEL PIXEL-LEVEL DIFF ENGINE (Port of Python diff_engine.py make_diff_mask_subpixel)
   // Rejects 1px font anti-aliasing / subpixel smoothing noise and highlights exact differing pixels in RED (225, 29, 72, 220)
   // ----------------------------------------------------
-  function computeSubpixelPixelDiff(dataP, dataS, width, height, tolerance = 20) {
+  function computeSubpixelPixelDiff(dataP, dataS, width, height, tolerance = 20, shiftRegions = null) {
     const outData = new Uint8ClampedArray(width * height * 4);
     let diffPixels = 0;
 
@@ -2851,11 +2891,52 @@ document.addEventListener("DOMContentLoaded", () => {
       [-1, -1], [1, 1], [-1, 1], [1, -1]
     ];
 
+    // Cumulative layout shift tracking to align content below shifts
+    const shifts = (Array.isArray(shiftRegions) && shiftRegions.length > 0) ? shiftRegions : [];
+
     for (let y = 0; y < height; y++) {
+      let insideShiftBand = false;
+      let cumShift = 0;
+      for (const reg of shifts) {
+        if (!reg || !reg.h) continue;
+        if (y >= reg.y && y < reg.y + reg.h) {
+          insideShiftBand = true;
+          break;
+        }
+        if (y >= reg.y + reg.h) {
+          cumShift += reg.h;
+        }
+      }
+
+      // Layout shift discrepancy bands are handled via yellow hazard stripes, never red diffs!
+      if (insideShiftBand) continue;
+
       const rowOffset = y * width;
       for (let x = 0; x < width; x++) {
         const idx = rowOffset + x;
         let minDiff = baseDiff[idx];
+
+        // If above tolerance and layout shift occurred above this row:
+        // check alignment with shifted Prod row to prevent identical content below layout shifts from turning red!
+        if (minDiff > tolerance && cumShift > 0) {
+          const shiftedPy = y - cumShift;
+          if (shiftedPy >= 0 && shiftedPy < height) {
+            const pIdx = idx * 4;
+            const rS = dataS[pIdx];
+            const gS = dataS[pIdx + 1];
+            const bS = dataS[pIdx + 2];
+
+            const shiftPIdx = (shiftedPy * width + x) * 4;
+            const shiftDiff = Math.max(
+              Math.abs(dataP[shiftPIdx] - rS),
+              Math.abs(dataP[shiftPIdx + 1] - gS),
+              Math.abs(dataP[shiftPIdx + 2] - bS)
+            );
+            if (shiftDiff < minDiff) {
+              minDiff = shiftDiff;
+            }
+          }
+        }
 
         // If above tolerance, check 8 neighbor offsets to eliminate font subpixel anti-aliasing artifacts
         if (minDiff > tolerance) {
@@ -2951,7 +3032,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Sensitive delta matching diff_engine.py make_diff_mask_subpixel
         // Accurately flags subtle background shading gradients, radial fills, and border accents
-        const { outData, diffPixels } = computeSubpixelPixelDiff(dataP, dataS, cropW, cropH, 20);
+        const { outData, diffPixels } = computeSubpixelPixelDiff(dataP, dataS, cropW, cropH, 20, shiftRegions);
 
         const diffImg = new ImageData(outData, cropW, cropH);
         const tempCanvas = document.createElement("canvas");
@@ -3035,7 +3116,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const dataS = canvasS.getContext("2d").getImageData(0, 0, cropW, cropH).data;
 
         // Subpixel anti-aliasing checking matching Python diff_engine.py make_diff_mask_subpixel
-        const { outData, diffPixels } = computeSubpixelPixelDiff(dataP, dataS, cropW, cropH, 20);
+        const { outData, diffPixels } = computeSubpixelPixelDiff(dataP, dataS, cropW, cropH, 20, shiftRegions);
 
         const outCanvas = document.createElement("canvas");
         outCanvas.width = swW;

@@ -1228,10 +1228,8 @@
       '[class*="card"]', '[class*="item"]', '[class*="badge"]', '[class*="tag"]',
       '[class*="metric"]', '[class*="price"]', '[class*="amount"]', '[class*="currency"]',
       '[class*="logo"]', '[class*="brand"]', '[class*="title"]', '[class*="heading"]',
-      '[class*="nav"]', '[class*="tab"]', '[class*="header"]', '[class*="hero"]',
-      '[class*="banner"]', '[class*="alert"]', '[class*="footer"]',
-      // Structural sections
-      'header', 'nav', 'footer', 'main', 'section', 'article'
+      '[class*="nav"]', '[class*="tab"]',
+      '[class*="banner"]', '[class*="alert"]'
     ].join(',');
 
     const seenElements = new Set();
@@ -1247,6 +1245,19 @@
         if (rect.width === 0 || rect.height === 0) return;
 
         const tag = el.tagName.toLowerCase();
+        // Skip structural container elements and broad section wrappers so container backgrounds never turn red
+        const isContainerTag = tag === 'header' || tag === 'nav' || tag === 'footer' || 
+                               tag === 'main' || tag === 'section' || tag === 'article' || 
+                               tag === 'body' || tag === 'form';
+        const isContainerClass = el.classList.contains('container') || 
+                                 el.classList.contains('site-header') || 
+                                 el.classList.contains('hero-section') || 
+                                 el.classList.contains('cta-section');
+        const isBroadWrapper = el.children.length > 0 && (rect.width > 250 && rect.height > 80);
+        if (isContainerTag || isContainerClass || isBroadWrapper) {
+          return;
+        }
+
         const isFixed = isElementFixed(el);
         const isSticky = isElementSticky(el);
 
@@ -1550,6 +1561,22 @@
         elements.forEach(el => {
           if (el.classList.contains("vc-hazard-stripe-spacer")) return;
           if (processedElements.has(el)) return;
+
+          // Never apply red diff hug to structural container elements or wide wrappers!
+          const tag = el.tagName.toLowerCase();
+          const rect = el.getBoundingClientRect();
+          const isContainerTag = tag === 'header' || tag === 'nav' || tag === 'footer' || 
+                                 tag === 'main' || tag === 'section' || tag === 'article' || 
+                                 tag === 'body' || tag === 'form';
+          const isContainerClass = el.classList.contains('container') || 
+                                   el.classList.contains('site-header') || 
+                                   el.classList.contains('hero-section') || 
+                                   el.classList.contains('cta-section');
+          const isBroadWrapper = el.children.length > 0 && (rect.width > 250 && rect.height > 80);
+          if (isContainerTag || isContainerClass || isBroadWrapper) {
+            return;
+          }
+
           processedElements.add(el);
 
           // Pure red hug on differing tags hugging tag's exact shape with zero outlines
