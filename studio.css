@@ -56,7 +56,8 @@ iframe {
    1. GLOBAL HEADER
    ---------------------------------------------------- */
 header.studio-header {
-  min-height: 54px;
+  min-height: 52px;
+  height: auto;
   background-color: var(--bg-header);
   background: linear-gradient(180deg, #0e172a 0%, #090e1a 100%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -65,9 +66,10 @@ header.studio-header {
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
-  gap: 12px;
+  gap: 10px 14px;
   z-index: 100;
   flex-shrink: 0;
+  flex-wrap: wrap;
   transition: all 0.2s ease;
 }
 
@@ -159,8 +161,9 @@ header.studio-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1 1 540px;
+  flex: 1 1 400px;
   max-width: 780px;
+  min-width: 260px;
   transition: all 0.2s ease;
 }
 
@@ -307,7 +310,9 @@ header.studio-header {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
   flex-shrink: 0;
 }
 
@@ -343,7 +348,7 @@ header.studio-header {
   border: 1px solid #f43f5e;
   border-radius: 7px;
   color: #fff;
-  padding: 6px 12px;
+  padding: 5px 10px;
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
@@ -352,8 +357,9 @@ header.studio-header {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-diff-action:hover {
@@ -426,15 +432,17 @@ header.studio-header {
    ---------------------------------------------------- */
 .secondary-toolbar {
   min-height: 44px;
+  height: auto;
   background-color: var(--bg-toolbar);
   background: linear-gradient(180deg, #10182b 0%, #0c1222 100%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 16px;
-  gap: 12px;
+  padding: 6px 16px;
+  gap: 8px 14px;
   flex-shrink: 0;
+  flex-wrap: wrap;
   z-index: 90;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   transition: all 0.2s ease;
@@ -493,8 +501,9 @@ header.studio-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: 0 1 auto;
+  min-width: fit-content;
+  flex-wrap: wrap;
 }
 
 .flicker-controls, .overlay-controls {
@@ -688,6 +697,8 @@ header.studio-header {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
   flex-shrink: 0;
 }
 
@@ -752,6 +763,7 @@ header.studio-header {
    ---------------------------------------------------- */
 main.studio-stage {
   flex: 1;
+  min-height: 0;
   position: relative;
   overflow: auto;
   background-color: #03060c;
@@ -816,14 +828,25 @@ main.studio-stage {
 }
 
 .pane-header {
-  height: 32px;
+  min-height: 32px;
+  height: auto;
   background: #111b2f;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px;
+  padding: 4px 10px;
   font-size: 11px;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pane-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
 }
 
 .pane-title {
@@ -876,16 +899,16 @@ main.studio-stage {
 .diff-slider-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11px;
+  gap: 4px;
+  font-size: 10.5px;
   font-weight: 500;
   color: var(--text-secondary);
   user-select: none;
-  margin-right: 6px;
+  margin-right: 2px;
 }
 
 .diff-opacity-slider {
-  width: 65px;
+  width: 48px;
   height: 4px;
   cursor: pointer;
   accent-color: #ef4444;
@@ -1311,6 +1334,47 @@ footer.studio-footer {
 /* ----------------------------------------------------
    RESPONSIVE & MOBILE STUDIO STYLING (ALL FORMATS)
    ---------------------------------------------------- */
+
+/* Wide Desktop & Laptop Optimization (<= 1480px) */
+@media (max-width: 1480px) {
+  .mode-label-full,
+  .chip-label-full {
+    display: none;
+  }
+  .mode-label-short,
+  .chip-label-short {
+    display: inline;
+  }
+  .sync-chip {
+    padding: 3px 6px;
+    font-size: 10.5px;
+  }
+  .mode-btn {
+    padding: 5px 8px;
+    font-size: 10.5px;
+  }
+  .btn-diff-action {
+    padding: 5px 8px;
+    gap: 3px;
+  }
+}
+
+/* Compact Desktop Optimization (<= 1320px) */
+@media (max-width: 1320px) {
+  .btn-label-full {
+    display: none;
+  }
+  .btn-label-short {
+    display: inline;
+  }
+  .header-center {
+    flex: 1 1 300px;
+  }
+  .studio-select {
+    max-width: 125px;
+    padding: 4px 6px;
+  }
+}
 
 /* Desktop & Laptop Tier (<= 1200px) */
 @media (max-width: 1200px) {

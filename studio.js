@@ -165,6 +165,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Update Side-by-Side
     if (iframeProd) iframeProd.src = prodUrl;
     if (iframeStg) iframeStg.src = stgUrl;
+    if (iframeDiffBase) iframeDiffBase.src = stgUrl;
 
     // Update Swipe
     if (iframeSwipeProd) iframeSwipeProd.src = prodUrl;
@@ -191,6 +192,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   attachFrameHandshake(iframeProd, "PROD");
   attachFrameHandshake(iframeStg, "STG");
+  attachFrameHandshake(iframeDiffBase, "STG");
   attachFrameHandshake(iframeSwipeProd, "PROD");
   attachFrameHandshake(iframeSwipeStg, "STG");
   attachFrameHandshake(iframeSwipeDiff, "STG");
@@ -213,6 +215,19 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         sourceWindow.postMessage({ type: "VC_INIT_AGENT", paneId: targetPane }, "*");
       } catch (e) {}
+
+      // If active staging frame pings on navigation, immediately sync diff base frames
+      if (msg.href && sourceWindow === iframeStg?.contentWindow) {
+        if (stgUrlInput && document.activeElement !== stgUrlInput) {
+          stgUrlInput.value = msg.href;
+        }
+        if (iframeDiffBase && iframeDiffBase.src !== msg.href) {
+          iframeDiffBase.src = msg.href;
+        }
+        if (iframeSwipeDiff && iframeSwipeDiff.src !== msg.href) {
+          iframeSwipeDiff.src = msg.href;
+        }
+      }
       return;
     }
 
@@ -226,6 +241,33 @@ document.addEventListener("DOMContentLoaded", () => {
           }
           if (msg.paneId === "STG" && stgUrlInput && document.activeElement !== stgUrlInput) {
             stgUrlInput.value = msg.href;
+          }
+
+          if (msg.paneId === "STG") {
+            // Keep 3rd column pixel diff base iframe synchronized to the new Staging route
+            if (iframeDiffBase && sourceWindow !== iframeDiffBase.contentWindow) {
+              if (iframeDiffBase.src !== msg.href) {
+                iframeDiffBase.src = msg.href;
+              }
+            }
+            if (iframeSwipeDiff && sourceWindow !== iframeSwipeDiff.contentWindow) {
+              if (iframeSwipeDiff.src !== msg.href) {
+                iframeSwipeDiff.src = msg.href;
+              }
+            }
+            if (isColDiffActive && currentMode === "side-by-side") {
+              setTimeout(() => {
+                renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions);
+              }, 250);
+            }
+          }
+
+          if (msg.paneId === "PROD") {
+            if (isColDiffActive && currentMode === "side-by-side") {
+              setTimeout(() => {
+                renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions);
+              }, 250);
+            }
           }
         }
         reapplyActiveSpacersToWindow(sourceWindow, msg.paneId);
@@ -434,6 +476,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (currentMode === "side-by-side") {
       send(targetPane === "PROD" ? iframeProd : iframeStg);
+      if (targetPane === "STG" && iframeDiffBase) {
+        send(iframeDiffBase);
+      }
     } else if (currentMode === "swipe") {
       if (targetPane === "PROD") {
         send(iframeSwipeProd);
@@ -544,7 +589,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (viewSide) viewSide.classList.add("mode-view-pixel-diff");
 
         // Keep base iframe src in sync with Staging or Prod
-        const targetSrc = (iframeStg && iframeStg.src && iframeStg.src !== "about:blank") ? iframeStg.src : (iframeProd ? iframeProd.src : "");
+        const targetSrc = (stgUrlInput && stgUrlInput.value && stgUrlInput.value.trim() !== "about:blank")
+          ? stgUrlInput.value.trim()
+          : ((iframeStg && iframeStg.src && iframeStg.src !== "about:blank") ? iframeStg.src : (iframeProd ? iframeProd.src : ""));
         if (iframeDiffBase && targetSrc && iframeDiffBase.src !== targetSrc) {
           iframeDiffBase.src = targetSrc;
         }
@@ -2071,7 +2118,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!pixelDiffCanvas) return;
 
     // Ensure diff base iframe src matches Staging (or Prod)
-    const targetSrc = (iframeStg && iframeStg.src && iframeStg.src !== "about:blank") ? iframeStg.src : (iframeProd ? iframeProd.src : "");
+    const targetSrc = (stgUrlInput && stgUrlInput.value && stgUrlInput.value.trim() !== "about:blank")
+      ? stgUrlInput.value.trim()
+      : ((iframeStg && iframeStg.src && iframeStg.src !== "about:blank") ? iframeStg.src : (iframeProd ? iframeProd.src : ""));
     if (iframeDiffBase && targetSrc && iframeDiffBase.src !== targetSrc) {
       iframeDiffBase.src = targetSrc;
     }
@@ -2396,6 +2445,7 @@ document.addEventListener("DOMContentLoaded", () => {
     lastStgLandmarks = null;
     clearTimeout(alignDebounceTimer);
     if (iframeStg) iframeStg.src = stgUrlInput.value.trim();
+    if (iframeDiffBase) iframeDiffBase.src = stgUrlInput.value.trim();
     if (iframeSwipeStg) iframeSwipeStg.src = stgUrlInput.value.trim();
     if (iframeSwipeDiff) iframeSwipeDiff.src = stgUrlInput.value.trim();
     if (iframeFlickerStg) iframeFlickerStg.src = stgUrlInput.value.trim();
