@@ -125,6 +125,8 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   let activeRedDiffs = [];
   let lastScrollState = { scrollX: 0, scrollY: 0, pctX: 0, pctY: 0 };
+  let activeScrollLeader = null;
+  let scrollLeaderTimer = null;
   let lastCapturedScrollY = 0;
   let lastCapturedScrollX = 0;
   let lastAccuratePixelDiffPct = null;
@@ -320,19 +322,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (currentMode === "swipe") {
         if (msg.paneId === "PROD") {
-          swipeProdLandmarks = msg;
-          lastProdLandmarks = msg;
+          const prevCandidates = swipeProdLandmarks?.diffCandidates || lastProdLandmarks?.diffCandidates || [];
+          swipeProdLandmarks = { ...msg, diffCandidates: prevCandidates };
+          lastProdLandmarks = swipeProdLandmarks;
         } else if (msg.paneId === "STG") {
-          swipeStgLandmarks = msg;
-          lastStgLandmarks = msg;
+          const prevCandidates = swipeStgLandmarks?.diffCandidates || lastStgLandmarks?.diffCandidates || [];
+          swipeStgLandmarks = { ...msg, diffCandidates: prevCandidates };
+          lastStgLandmarks = swipeStgLandmarks;
         }
       } else {
         if (msg.paneId === "PROD") {
-          colProdLandmarks = msg;
-          lastProdLandmarks = msg;
+          const prevCandidates = colProdLandmarks?.diffCandidates || lastProdLandmarks?.diffCandidates || [];
+          colProdLandmarks = { ...msg, diffCandidates: prevCandidates };
+          lastProdLandmarks = colProdLandmarks;
         } else if (msg.paneId === "STG") {
-          colStgLandmarks = msg;
-          lastStgLandmarks = msg;
+          const prevCandidates = colStgLandmarks?.diffCandidates || lastStgLandmarks?.diffCandidates || [];
+          colStgLandmarks = { ...msg, diffCandidates: prevCandidates };
+          lastStgLandmarks = colStgLandmarks;
         }
       }
 
@@ -369,11 +375,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (currentMode === "swipe") {
         if (msg.paneId === "PROD") {
-          swipeProdLandmarks = { landmarks: [], diffCandidates: msg.candidates, measuredWidth: frameWidth, href: msg.href };
+          swipeProdLandmarks = {
+            ...swipeProdLandmarks,
+            landmarks: swipeProdLandmarks?.landmarks || lastProdLandmarks?.landmarks || [],
+            docHeight: swipeProdLandmarks?.docHeight || lastProdLandmarks?.docHeight || 0,
+            diffCandidates: msg.candidates,
+            measuredWidth: frameWidth,
+            href: msg.href
+          };
           lastProdLandmarks = swipeProdLandmarks;
         } else if (msg.paneId === "STG") {
-          swipeStgLandmarks = { landmarks: [], diffCandidates: msg.candidates, measuredWidth: frameWidth, href: msg.href };
+          swipeStgLandmarks = {
+            ...swipeStgLandmarks,
+            landmarks: swipeStgLandmarks?.landmarks || lastStgLandmarks?.landmarks || [],
+            docHeight: swipeStgLandmarks?.docHeight || lastStgLandmarks?.docHeight || 0,
+            diffCandidates: msg.candidates,
+            measuredWidth: frameWidth,
+            href: msg.href
+          };
           lastStgLandmarks = swipeStgLandmarks;
+        }
+        if (checkSyncHazard && checkSyncHazard.checked && lastProdLandmarks?.landmarks?.length > 0 && lastStgLandmarks?.landmarks?.length > 0) {
+          calculateAndApplyLayoutShifts();
         }
         if (checkSyncRedDiff && checkSyncRedDiff.checked) {
           if (swipeProdLandmarks && swipeStgLandmarks && Math.abs(swipeProdLandmarks.measuredWidth - swipeStgLandmarks.measuredWidth) < 120) {
@@ -385,11 +408,28 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       } else {
         if (msg.paneId === "PROD") {
-          colProdLandmarks = { landmarks: [], diffCandidates: msg.candidates, measuredWidth: frameWidth, href: msg.href };
+          colProdLandmarks = {
+            ...colProdLandmarks,
+            landmarks: colProdLandmarks?.landmarks || lastProdLandmarks?.landmarks || [],
+            docHeight: colProdLandmarks?.docHeight || lastProdLandmarks?.docHeight || 0,
+            diffCandidates: msg.candidates,
+            measuredWidth: frameWidth,
+            href: msg.href
+          };
           lastProdLandmarks = colProdLandmarks;
         } else if (msg.paneId === "STG") {
-          colStgLandmarks = { landmarks: [], diffCandidates: msg.candidates, measuredWidth: frameWidth, href: msg.href };
+          colStgLandmarks = {
+            ...colStgLandmarks,
+            landmarks: colStgLandmarks?.landmarks || lastStgLandmarks?.landmarks || [],
+            docHeight: colStgLandmarks?.docHeight || lastStgLandmarks?.docHeight || 0,
+            diffCandidates: msg.candidates,
+            measuredWidth: frameWidth,
+            href: msg.href
+          };
           lastStgLandmarks = colStgLandmarks;
+        }
+        if (checkSyncHazard && checkSyncHazard.checked && lastProdLandmarks?.landmarks?.length > 0 && lastStgLandmarks?.landmarks?.length > 0) {
+          calculateAndApplyLayoutShifts();
         }
         if (checkSyncRedDiff && checkSyncRedDiff.checked) {
           if (colProdLandmarks && colStgLandmarks && Math.abs(colProdLandmarks.measuredWidth - colStgLandmarks.measuredWidth) < 120) {
@@ -496,6 +536,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (msg.type === "VC_WHEEL_SCROLL") {
       if (!checkSyncScroll || !checkSyncScroll.checked) return;
+      activeScrollLeader = "WHEEL";
+      clearTimeout(scrollLeaderTimer);
+      scrollLeaderTimer = setTimeout(() => { activeScrollLeader = null; }, 120);
+
       if (currentMode === "side-by-side") {
         handleSideBySideWheel({ deltaY: msg.deltaY, deltaX: msg.deltaX });
       } else if (currentMode === "swipe") {
@@ -514,12 +558,24 @@ document.addEventListener("DOMContentLoaded", () => {
       // Drop messages from iframes that do not belong to the currently visible mode
       if (sourceWindow !== active.prod?.contentWindow &&
           sourceWindow !== active.stg?.contentWindow &&
+          (!active.diff || sourceWindow !== active.diff.contentWindow) &&
           (!active.baseStg || sourceWindow !== active.baseStg.contentWindow)) {
         return;
       }
 
       // Track last known scroll position across all panes
       if (action.kind === "scroll") {
+        const scrollSender = (active.diff && sourceWindow === active.diff.contentWindow) ? "DIFF" : paneId;
+        // Prevent echo loop fighting between leader and follower pane
+        if (activeScrollLeader && activeScrollLeader !== scrollSender) {
+          return;
+        }
+        activeScrollLeader = scrollSender;
+        clearTimeout(scrollLeaderTimer);
+        scrollLeaderTimer = setTimeout(() => {
+          activeScrollLeader = null;
+        }, 120);
+
         lastScrollState = {
           scrollX: action.scrollX || 0,
           scrollY: action.scrollY || 0,
@@ -530,21 +586,25 @@ document.addEventListener("DOMContentLoaded", () => {
         };
         // Keep 3rd column scroll in sync
         if (iframeDiffBase && iframeDiffBase.contentWindow) {
-          try {
-            iframeDiffBase.contentWindow.postMessage({
-              type: "VC_MIRROR_ACTION",
-              action: { kind: "scroll", scrollY: lastScrollState.scrollY, scrollX: lastScrollState.scrollX, maxScrollY: action.maxScrollY, maxScrollX: action.maxScrollX, pctY: lastScrollState.pctY, pctX: lastScrollState.pctX }
-            }, "*");
-          } catch (e) {}
+          if (sourceWindow !== iframeDiffBase.contentWindow) {
+            try {
+              iframeDiffBase.contentWindow.postMessage({
+                type: "VC_MIRROR_ACTION",
+                action: { kind: "scroll", scrollY: lastScrollState.scrollY, scrollX: lastScrollState.scrollX, maxScrollY: action.maxScrollY, maxScrollX: action.maxScrollX, pctY: lastScrollState.pctY, pctX: lastScrollState.pctX }
+              }, "*");
+            } catch (e) {}
+          }
         }
         // Keep swipe diff base frame in sync
         if (iframeSwipeDiff && iframeSwipeDiff.contentWindow) {
-          try {
-            iframeSwipeDiff.contentWindow.postMessage({
-              type: "VC_MIRROR_ACTION",
-              action: { kind: "scroll", scrollY: lastScrollState.scrollY, scrollX: lastScrollState.scrollX, maxScrollY: action.maxScrollY, maxScrollX: action.maxScrollX, pctY: lastScrollState.pctY, pctX: lastScrollState.pctX }
-            }, "*");
-          } catch (e) {}
+          if (sourceWindow !== iframeSwipeDiff.contentWindow) {
+            try {
+              iframeSwipeDiff.contentWindow.postMessage({
+                type: "VC_MIRROR_ACTION",
+                action: { kind: "scroll", scrollY: lastScrollState.scrollY, scrollX: lastScrollState.scrollX, maxScrollY: action.maxScrollY, maxScrollX: action.maxScrollX, pctY: lastScrollState.pctY, pctX: lastScrollState.pctX }
+              }, "*");
+            } catch (e) {}
+          }
         }
         if (wrapFrameDiff) {
           wrapFrameDiff.scrollTop = lastScrollState.scrollY || 0;
@@ -578,16 +638,16 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // Forward action to target iframes based on active mode
-      forwardActionToPane(targetPane, action);
+      forwardActionToPane(targetPane, action, sourceWindow);
     }
   });
 
-  function forwardActionToPane(targetPane, action) {
+  function forwardActionToPane(targetPane, action, originWindow = null) {
     const message = { type: "VC_MIRROR_ACTION", action };
 
     // Function to safely dispatch to an iframe contentWindow
     const send = (iframe) => {
-      if (iframe && iframe.contentWindow) {
+      if (iframe && iframe.contentWindow && (!originWindow || iframe.contentWindow !== originWindow)) {
         try {
           iframe.contentWindow.postMessage(message, "*");
         } catch (e) {}
@@ -599,6 +659,12 @@ document.addEventListener("DOMContentLoaded", () => {
       if (targetPane === "STG" && iframeDiffBase) {
         send(iframeDiffBase);
       }
+      if (originWindow && iframeDiffBase && originWindow === iframeDiffBase.contentWindow) {
+        send(iframeStg);
+      }
+      if (originWindow && iframeStg && originWindow === iframeStg.contentWindow && iframeDiffBase) {
+        send(iframeDiffBase);
+      }
     } else if (currentMode === "swipe") {
       if (targetPane === "PROD") {
         send(iframeSwipeProd);
@@ -606,6 +672,9 @@ document.addEventListener("DOMContentLoaded", () => {
         send(iframeSwipeStg);
       }
       send(iframeSwipeDiff);
+      if (originWindow && iframeSwipeDiff && originWindow === iframeSwipeDiff.contentWindow) {
+        send(iframeSwipeStg);
+      }
     } else if (currentMode === "flicker") {
       send(targetPane === "PROD" ? iframeFlickerProd : iframeFlickerStg);
     } else if (currentMode === "overlay") {
@@ -636,7 +705,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (mode === "overlay") {
       return { prod: iframeOverlayProd, stg: iframeOverlayStg };
     } else {
-      return { prod: iframeProd, stg: iframeStg, diff: iframeDiffBase };
+      return { prod: iframeProd, stg: iframeStg, diff: iframeDiffBase, baseStg: iframeStg };
     }
   }
 
@@ -1229,7 +1298,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const pairs = matchLandmarks(lastProdLandmarks.landmarks, lastStgLandmarks.landmarks);
     if (!pairs || pairs.length === 0) return;
 
+    if (activeHazardSpacers.PROD.length > 0 || activeHazardSpacers.STG.length > 0) {
+      dispatchToPane("PROD", { type: "VC_REMOVE_HAZARD_SPACERS" });
+      dispatchToPane("STG", { type: "VC_REMOVE_HAZARD_SPACERS" });
+    }
+
     activeHazardSpacers = { PROD: [], STG: [] };
+    activeShiftRegions = [];
 
     let totalShiftDelta = 0;
     let shiftCount = 0;
@@ -1249,6 +1324,8 @@ document.addEventListener("DOMContentLoaded", () => {
         totalShiftDelta += gapDiff;
         shiftCount++;
         const gapSpacerId = `vc-spacer-gap-${idx}`;
+        const y = Math.min(pSec.box.y, sSec.box.y);
+        activeShiftRegions.push({ y, h: gapDiff, label: `+${gapDiff}px (inserted space)` });
 
         if (pGap < sGap) {
           // Extra space / section inserted in Staging before this section!
@@ -1292,6 +1369,9 @@ document.addEventListener("DOMContentLoaded", () => {
         totalShiftDelta += secDiff;
         shiftCount++;
         const secSpacerId = `vc-spacer-sec-${idx}`;
+        const overlapH = Math.min(pH, sH);
+        const y = Math.min(pSec.box.y, sSec.box.y) + overlapH;
+        activeShiftRegions.push({ y, h: secDiff, label: `+${secDiff}px ("${pSec.heading || pSec.tag || sSec.heading || sSec.tag}" is larger)` });
 
         if (pH < sH) {
           // Staging's section is larger by secDiff!
@@ -1341,13 +1421,25 @@ document.addEventListener("DOMContentLoaded", () => {
     if (checkSyncRedDiff && checkSyncRedDiff.checked) {
       computeAndApplyRedDifferences();
     }
+
+    if (currentMode === "swipe" && swipeCompareMode === "diff") {
+      renderSwipeDiffCanvas(swipeRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+    } else if (currentMode === "side-by-side" && isColDiffActive) {
+      renderPixelDiffColumn3(colRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+    }
   }
 
   function clearAllHazardSpacers(notify = true) {
     activeHazardSpacers = { PROD: [], STG: [] };
+    activeShiftRegions = [];
     dispatchToPane("PROD", { type: "VC_REMOVE_HAZARD_SPACERS" });
     dispatchToPane("STG", { type: "VC_REMOVE_HAZARD_SPACERS" });
     metricShiftBadge.style.display = "none";
+    if (currentMode === "swipe" && swipeCompareMode === "diff") {
+      renderSwipeDiffCanvas(swipeRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+    } else if (currentMode === "side-by-side" && isColDiffActive) {
+      renderPixelDiffColumn3(colRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+    }
     if (notify) {
       logAction("Yellow Hazard Spacers removed. Viewports in raw unshifted alignment.");
     }
@@ -3359,6 +3451,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e && typeof e.preventDefault === "function") {
       e.preventDefault();
     }
+    activeScrollLeader = "WHEEL";
+    clearTimeout(scrollLeaderTimer);
+    scrollLeaderTimer = setTimeout(() => {
+      activeScrollLeader = null;
+    }, 120);
+
     const deltaY = e.deltaY || 0;
     const deltaX = e.deltaX || 0;
     const currentY = lastScrollState.scrollY || 0;
@@ -3377,6 +3475,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     lastScrollState.scrollY = newScrollY;
     lastScrollState.scrollX = newScrollX;
+
+    if (wrapFrameDiff) {
+      wrapFrameDiff.scrollTop = newScrollY;
+      wrapFrameDiff.scrollLeft = newScrollX;
+    }
 
     const mirrorAction = {
       type: "VC_MIRROR_ACTION",
@@ -3401,6 +3504,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e && typeof e.preventDefault === "function") {
       e.preventDefault();
     }
+    activeScrollLeader = "WHEEL";
+    clearTimeout(scrollLeaderTimer);
+    scrollLeaderTimer = setTimeout(() => {
+      activeScrollLeader = null;
+    }, 120);
+
     const deltaY = e.deltaY || 0;
     const deltaX = e.deltaX || 0;
     const currentY = lastScrollState.scrollY || 0;
