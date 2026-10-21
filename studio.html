@@ -8,49 +8,50 @@
 </head>
 <body>
 
-  <!-- Top Global Navigation & Controls -->
+  <!-- Top Global Navigation & Controls (Redesigned Unified Control Center) -->
   <header class="studio-header">
     <div class="header-left">
-      <div class="studio-logo">
+      <div class="studio-logo" title="VisualCompare Live Studio">
         <span class="logo-box">VC</span>
         <span class="logo-text">VisualCompare <span class="badge-live">LIVE</span></span>
       </div>
 
       <!-- Sync Status Badge -->
-      <div class="sync-status-indicator" id="sync-status">
+      <div class="sync-status-indicator" id="sync-status" title="Mirror status between Production and Staging frames">
         <span class="pulse-dot"></span>
         <span id="sync-status-label">Mirror Active</span>
       </div>
     </div>
 
-    <!-- URL Bar Center -->
+    <!-- Omni-URL Command Center -->
     <div class="header-center">
-      <!-- Prod URL -->
+      <!-- Prod URL Field -->
       <div class="url-input-wrap prod-wrap">
         <span class="url-label prod-tag">PROD</span>
-        <input type="text" id="studio-prod-url" placeholder="Production URL..." />
+        <input type="text" id="studio-prod-url" placeholder="Production URL..." autocomplete="off" spellcheck="false" />
         <button id="btn-reload-prod" class="btn-icon" title="Reload Production">↻</button>
       </div>
 
       <!-- Swap URLs Button -->
       <button id="btn-swap-urls" class="btn-swap" title="Swap Production & Staging URLs">⇄</button>
 
-      <!-- Staging URL -->
+      <!-- Staging URL Field -->
       <div class="url-input-wrap stg-wrap">
         <span class="url-label stg-tag">STG</span>
-        <input type="text" id="studio-stg-url" placeholder="Staging URL..." />
+        <input type="text" id="studio-stg-url" placeholder="Staging URL..." autocomplete="off" spellcheck="false" />
         <button id="btn-reload-stg" class="btn-icon" title="Reload Staging">↻</button>
       </div>
 
       <button id="btn-navigate-all" class="btn-nav" title="Navigate both frames to entered URLs">Go</button>
     </div>
 
-    <!-- Controls Right -->
+    <!-- Header Actions Right: Viewport, Differences & Package Tools -->
     <div class="header-right">
-      <!-- Viewport Device Selector -->
+      <!-- Viewport Device Preset -->
       <div class="control-group device-group">
-        <label for="viewport-select">Device:</label>
-        <select id="viewport-select" class="studio-select">
+        <span class="control-prefix-icon" title="Device Viewport">🖥️</span>
+        <label for="viewport-select" class="control-label">Device:</label>
+        <select id="viewport-select" class="studio-select" title="Preset Device Viewport">
           <option value="responsive" selected>Responsive (Fluid)</option>
           <option value="1920x1080">Desktop (1920 × 1080)</option>
           <option value="1366x768">Laptop (1366 × 768)</option>
@@ -59,10 +60,11 @@
         </select>
       </div>
 
-      <!-- Zoom Scaler -->
+      <!-- Zoom Scale Preset -->
       <div class="control-group scale-group">
-        <label for="zoom-select">Scale:</label>
-        <select id="zoom-select" class="studio-select">
+        <span class="control-prefix-icon" title="Viewport Scale">🔍</span>
+        <label for="zoom-select" class="control-label">Scale:</label>
+        <select id="zoom-select" class="studio-select" title="Viewport Zoom Scale">
           <option value="1">100%</option>
           <option value="0.85">85%</option>
           <option value="0.75">75%</option>
@@ -70,45 +72,46 @@
         </select>
       </div>
 
-      <!-- Visual Differences Button (Single Unified Differences Action) -->
-      <button id="btn-toggle-red-diffs" class="btn-diff-action btn-red-diffs inactive" title="Toggle visual differences on or off">
+      <!-- The Single Unified Differences Action Button -->
+      <button id="btn-toggle-red-diffs" class="btn-diff-action btn-red-diffs inactive" title="Toggle visual pixel differences on or off">
         <span class="btn-label-full">🔴 Differences</span>
         <span class="btn-label-short">🔴 Diffs</span>
       </button>
 
-      <!-- Live Diff Button (Consolidated into Differences toggle; preserved for API compatibility) -->
+      <!-- Consolidated hidden diff action for test/API compatibility -->
       <button id="btn-run-diff" class="btn-diff-action" title="Capture snapshots and calculate visual pixel mismatch" style="display: none !important;">
         <span class="btn-label-full">📸 Run Diff</span>
         <span class="btn-label-short">📸 Diff</span>
       </button>
 
-      <!-- Export Comparison ZIP Package -->
-      <button id="btn-export-zip" class="btn-diff-action btn-export-zip" title="Export comparison report, links, and PDFs of both pages with differences into a ZIP package">
-        <span class="btn-label-full">📦 Export ZIP</span>
-        <span class="btn-label-short">📦 ZIP</span>
-      </button>
+      <!-- Archive / Package Tools -->
+      <div class="header-tools-group">
+        <button id="btn-export-zip" class="btn-diff-action btn-export-zip" title="Export comparison report, links, and PDFs of both pages with differences into a ZIP package">
+          <span class="btn-label-full">📦 Export ZIP</span>
+          <span class="btn-label-short">📦 ZIP</span>
+        </button>
 
-      <!-- Import Comparison ZIP Package -->
-      <button id="btn-import-zip" class="btn-diff-action btn-import-zip" title="Import previously exported comparison ZIP package">
-        <span class="btn-label-full">📥 Import ZIP</span>
-        <span class="btn-label-short">📥 Open</span>
-      </button>
-      <input type="file" id="file-import-zip" accept=".zip" style="display: none;" />
+        <button id="btn-import-zip" class="btn-diff-action btn-import-zip" title="Import previously exported comparison ZIP package">
+          <span class="btn-label-full">📥 Import ZIP</span>
+          <span class="btn-label-short">📥 Open</span>
+        </button>
+        <input type="file" id="file-import-zip" accept=".zip" style="display: none;" />
+      </div>
     </div>
   </header>
 
-  <!-- Secondary Toolbar: Modes & Sync Toggles -->
+  <!-- Secondary Toolbar: View Modes, Dynamic Status, & Mirror Sync Ribbon -->
   <div class="secondary-toolbar">
-    <!-- View Modes -->
+    <!-- View Modes Segmented Control -->
     <div class="mode-toggles">
       <button class="mode-btn active" data-mode="side-by-side" id="mode-btn-side" title="Side-by-Side Dual Frame Synchronized View">
         <span class="mode-icon">◫</span>
-        <span class="mode-label-full">Side-by-Side (Sync)</span>
+        <span class="mode-label-full">Side-by-Side</span>
         <span class="mode-label-short">Side</span>
       </button>
       <button class="mode-btn" data-mode="swipe" id="mode-btn-swipe" title="Swipe Split Curtain Interactive Divider">
         <span class="mode-icon">↔</span>
-        <span class="mode-label-full">Swipe Split Curtain</span>
+        <span class="mode-label-full">Swipe Curtain</span>
         <span class="mode-label-short">Swipe</span>
       </button>
       <button class="mode-btn" data-mode="flicker" id="mode-btn-flicker" title="Flicker Rapid Toggle View">
@@ -123,9 +126,9 @@
       </button>
     </div>
 
-    <!-- Mode Specific Controls (Dynamic) -->
+    <!-- Mode Specific Controls & Live Metrics (Dynamic) -->
     <div class="mode-controls-area">
-      <!-- Side-by-Side Controls: Toggle 3rd Column Pixel Diff -->
+      <!-- Hidden legacy sub-toggles (consolidated into primary Differences button) -->
       <div class="side-controls" id="side-controls" style="display: none !important;">
         <button id="btn-toggle-col-diff" class="sub-btn btn-diff-toggle" title="Toggle 3rd Column Pixel Diff on or off">
           <span class="btn-label-full">▦ 3rd Col Diff</span>
@@ -133,7 +136,6 @@
         </button>
       </div>
 
-      <!-- Swipe / Slider Controls: Toggle Prod <-> Stage vs Stage <-> Diff -->
       <div class="swipe-controls" id="swipe-controls" style="display: none;">
         <div class="segmented-toggle" style="display: none !important;">
           <button id="btn-swipe-target-prod" class="sub-btn active" title="Swipe between Production and Staging">Prod ↔ Stage</button>
@@ -142,7 +144,7 @@
         <span class="diff-mismatch-pill" id="swipe-diff-pct" style="display: none;">0.00% Diff</span>
       </div>
 
-      <!-- Flicker Controls (Hidden by default) -->
+      <!-- Flicker Controls (Visible only in flicker mode) -->
       <div class="flicker-controls" id="flicker-controls" style="display: none;">
         <button id="btn-flicker-play" class="sub-btn">▶ Auto Flicker</button>
         <label>Speed:</label>
@@ -154,7 +156,7 @@
         <span class="shortcut-tip">(or press <kbd>Space</kbd> to toggle)</span>
       </div>
 
-      <!-- Opacity Slider (For Overlay Mode) -->
+      <!-- Opacity Slider (Visible only in overlay mode) -->
       <div class="overlay-controls" id="overlay-controls" style="display: none;">
         <label for="slider-overlay-opacity">Diff Opacity:</label>
         <input type="range" id="slider-overlay-opacity" min="0" max="100" value="80" class="studio-slider" />
@@ -165,53 +167,51 @@
         </select>
       </div>
 
-      <!-- Metric Diff Badge -->
-      <div class="metric-badge" id="metric-diff-badge" style="display: none;" title="Visual pixel & layout mismatch percentage (click to clear diff)">
+      <!-- Live Metric Badges -->
+      <div class="metric-badge" id="metric-diff-badge" style="display: none;" title="Visual pixel mismatch percentage">
         <span class="badge-label">Mismatch:</span>
         <span class="badge-value" id="metric-diff-pct">0.00%</span>
       </div>
 
-      <!-- Layout Shift Hazard Spacer Badge -->
       <div class="metric-badge metric-shift-badge" id="metric-shift-badge" style="display: none;" title="Total layout shift height compensated by yellow hazard spacers">
         <span class="badge-label">⚠️ Shift Pad:</span>
         <span class="badge-value" id="metric-shift-val">+0px</span>
       </div>
 
-      <!-- Visual Differences Badge (hidden: count removed) -->
-      <div class="metric-badge metric-red-badge" id="metric-red-badge" style="display: none !important;" title="Visual regressions highlighted in red">
+      <div class="metric-badge metric-red-badge" id="metric-red-badge" style="display: none !important;">
         <span class="badge-label">🔴 Visual Diffs:</span>
         <span class="badge-value" id="metric-red-val">0</span>
       </div>
     </div>
 
-    <!-- Active Sync Features -->
+    <!-- Active Sync Mirror Toggles -->
     <div class="sync-toggles-bar">
-      <label class="sync-chip active chip-hazard" id="chip-sync-hazard" title="DOM-Aware layout shift alignment using yellow hazard spacers (ports VisualCompare Python diff engine)">
+      <label class="sync-chip active chip-hazard" id="chip-sync-hazard" title="DOM-Aware layout shift alignment using yellow hazard spacers">
         <input type="checkbox" id="check-sync-hazard" checked />
         <span class="chip-label-full">⚠️ Yellow Hazard Spacers</span>
         <span class="chip-label-short">⚠️ Hazard</span>
       </label>
-      <label class="sync-chip chip-red-diff" id="chip-sync-red-diff" style="display: none !important;" title="Highlight non-height visual regressions (colors, shapes, typography, borders) in RED on live pages">
+      <label class="sync-chip chip-red-diff" id="chip-sync-red-diff" style="display: none !important;">
         <input type="checkbox" id="check-sync-red-diff" />
         <span class="chip-label-full">🔴 Visual Diffs</span>
         <span class="chip-label-short">🔴 Diffs</span>
       </label>
-      <label class="sync-chip active" id="chip-sync-clicks">
+      <label class="sync-chip active" id="chip-sync-clicks" title="Mirror clicks and pointer interactions between frames">
         <input type="checkbox" id="check-sync-clicks" checked />
         <span class="chip-label-full">Click Mirror</span>
         <span class="chip-label-short">Clicks</span>
       </label>
-      <label class="sync-chip active" id="chip-sync-scroll">
+      <label class="sync-chip active" id="chip-sync-scroll" title="Synchronize vertical and horizontal scroll position in lockstep">
         <input type="checkbox" id="check-sync-scroll" checked />
         <span class="chip-label-full">Scroll Sync</span>
         <span class="chip-label-short">Scroll</span>
       </label>
-      <label class="sync-chip active" id="chip-sync-hover" title="Mirror mouse hover states and ghost cursor">
+      <label class="sync-chip active" id="chip-sync-hover" title="Mirror hover states and ghost cursor">
         <input type="checkbox" id="check-sync-hover" checked />
         <span class="chip-label-full">Hover &amp; Pointer</span>
         <span class="chip-label-short">Hover</span>
       </label>
-      <label class="sync-chip active" id="chip-sync-inputs" title="Mirror typing and focus states">
+      <label class="sync-chip active" id="chip-sync-inputs" title="Mirror typing and form inputs in lockstep">
         <input type="checkbox" id="check-sync-inputs" checked />
         <span class="chip-label-full">Type &amp; Focus</span>
         <span class="chip-label-short">Inputs</span>

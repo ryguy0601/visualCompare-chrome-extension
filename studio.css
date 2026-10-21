@@ -306,18 +306,18 @@ header.studio-header {
   transform: scale(0.94);
 }
 
-/* Header Right */
+/* Header Right - Redesigned Actions & Tools */
 .header-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
   margin-left: auto;
   flex-shrink: 0;
 }
 
 .control-group {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 5px;
   font-size: 11px;
@@ -326,29 +326,43 @@ header.studio-header {
   white-space: nowrap;
 }
 
+.control-prefix-icon {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.control-label {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
 .studio-select {
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(15, 23, 42, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 6px;
   color: #f1f5f9;
   padding: 5px 8px;
   font-size: 11px;
+  font-weight: 500;
   outline: none;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.15s ease;
 }
 
 .studio-select:focus,
 .studio-select:hover {
   border-color: var(--accent-cyan);
+  background: rgba(15, 23, 42, 1);
 }
 
+/* Primary Hero Differences Button */
 .btn-diff-action {
   background: linear-gradient(135deg, #e11d48, #9333ea);
   border: 1px solid #f43f5e;
   border-radius: 7px;
   color: #fff;
-  padding: 5px 10px;
+  padding: 5px 12px;
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
@@ -357,7 +371,7 @@ header.studio-header {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 5px;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -371,60 +385,65 @@ header.studio-header {
   transform: scale(0.95);
 }
 
-.btn-diff-action.diff-active {
-  background: linear-gradient(135deg, #059669, #0d9488);
-  border-color: #10b981;
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.45);
-}
-
-.btn-diff-action.diff-active:hover {
-  filter: brightness(1.2);
-  box-shadow: 0 0 16px rgba(16, 185, 129, 0.7);
-}
-
-.btn-diff-action.loading {
-  opacity: 0.85;
-  cursor: wait;
-}
-
 .btn-diff-action.btn-red-diffs {
   background: linear-gradient(135deg, #b91c1c, #dc2626);
   border: 1px solid #ef4444;
-  box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.5);
+  color: #ffffff;
 }
 
 .btn-diff-action.btn-red-diffs:hover {
   filter: brightness(1.2);
-  box-shadow: 0 0 14px rgba(239, 68, 68, 0.7);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.75);
 }
 
 .btn-diff-action.btn-red-diffs.inactive {
-  background: rgba(30, 41, 59, 0.6);
-  border: 1px solid rgba(71, 85, 105, 0.5);
+  background: rgba(30, 41, 59, 0.65);
+  border: 1px solid rgba(71, 85, 105, 0.45);
   color: #94a3b8;
   box-shadow: none;
 }
 
+.btn-diff-action.btn-red-diffs.inactive:hover {
+  background: rgba(51, 65, 85, 0.8);
+  border-color: rgba(148, 163, 184, 0.5);
+  color: #f1f5f9;
+}
+
+.header-tools-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .btn-diff-action.btn-export-zip {
-  background: linear-gradient(135deg, #059669, #0d9488);
-  border: 1px solid #10b981;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #34d399;
+  box-shadow: none;
+  padding: 5px 9px;
 }
 
 .btn-diff-action.btn-export-zip:hover {
-  filter: brightness(1.2);
-  box-shadow: 0 0 14px rgba(16, 185, 129, 0.6);
+  background: rgba(16, 185, 129, 0.25);
+  border-color: #10b981;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
 }
 
 .btn-diff-action.btn-import-zip {
-  background: linear-gradient(135deg, #4f46e5, #3b82f6);
-  border: 1px solid #6366f1;
-  box-shadow: 0 0 10px rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: #818cf8;
+  box-shadow: none;
+  padding: 5px 9px;
 }
 
 .btn-diff-action.btn-import-zip:hover {
-  filter: brightness(1.2);
-  box-shadow: 0 0 14px rgba(99, 102, 241, 0.6);
+  background: rgba(99, 102, 241, 0.25);
+  border-color: #6366f1;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.35);
 }
 
 /* ----------------------------------------------------

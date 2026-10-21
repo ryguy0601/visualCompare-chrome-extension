@@ -1373,7 +1373,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (metricRedBadge) metricRedBadge.style.display = "none";
     if (btnToggleRedDiffs) {
       btnToggleRedDiffs.classList.remove("inactive");
-      btnToggleRedDiffs.innerHTML = `<span class="btn-label-full">🔴 Visual Diffs</span><span class="btn-label-short">🔴 Diffs</span>`;
+      btnToggleRedDiffs.innerHTML = `<span class="btn-label-full">🔴 Differences</span><span class="btn-label-short">🔴 Diffs</span>`;
     }
     logAction(`[VISUAL DIFFS] Evaluated ${activeRedDiffs.length} visual regressions in RED for ${currentMode.toUpperCase()} mode.`);
   }
@@ -1792,7 +1792,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (btnToggleRedDiffs) {
       btnToggleRedDiffs.classList.add("inactive");
-      btnToggleRedDiffs.innerHTML = `<span class="btn-label-full">🔴 Visual Diffs</span><span class="btn-label-short">🔴 Diffs</span>`;
+      btnToggleRedDiffs.innerHTML = `<span class="btn-label-full">🔴 Differences</span><span class="btn-label-short">🔴 Diffs</span>`;
     }
     if (notify) {
       logAction("Visual Difference Highlights disabled.");
@@ -3470,7 +3470,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (metricRedBadge) metricRedBadge.style.display = "none";
           if (btnToggleRedDiffs) {
             btnToggleRedDiffs.classList.remove("inactive");
-            btnToggleRedDiffs.innerHTML = `<span class="btn-label-full">🔴 Visual Diffs</span><span class="btn-label-short">🔴 Diffs</span>`;
+            btnToggleRedDiffs.innerHTML = `<span class="btn-label-full">🔴 Differences</span><span class="btn-label-short">🔴 Diffs</span>`;
           }
         }
 
