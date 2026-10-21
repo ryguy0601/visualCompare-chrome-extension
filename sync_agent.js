@@ -1265,7 +1265,8 @@
             viewportX: Math.round(rect.left),
             viewportY: Math.round(rect.top),
             width: Math.round(rect.width),
-            height: Math.round(rect.height)
+            height: Math.round(rect.height),
+            measuredWidth: vw
           },
           style: {
             bg: style.backgroundColor,
@@ -1527,7 +1528,8 @@
             x: Math.round(rect.left + (isSticky ? 0 : scrollX)),
             y: Math.round(rect.top + (isSticky ? 0 : scrollY)),
             width: Math.round(rect.width),
-            height: Math.round(rect.height)
+            height: Math.round(rect.height),
+            measuredWidth: (window.innerWidth || document.documentElement.clientWidth || 1200)
           });
         });
       } catch (err) {

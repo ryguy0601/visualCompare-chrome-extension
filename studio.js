@@ -301,7 +301,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Only accept landmark reports from the active frames of the currently viewed mode
       const isFromActiveProd = active.prod && sourceWindow === active.prod.contentWindow;
-      const isFromActiveStg = active.stg && sourceWindow === active.stg.contentWindow;
+      const isFromActiveStg = (active.stg && sourceWindow === active.stg.contentWindow) || (active.baseStg && sourceWindow === active.baseStg.contentWindow);
       if (!isFromActiveProd && !isFromActiveStg) {
         return;
       }
@@ -333,7 +333,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Only accept candidate reports from active frames of currently viewed mode
       const isFromActiveProd = active.prod && sourceWindow === active.prod.contentWindow;
-      const isFromActiveStg = active.stg && sourceWindow === active.stg.contentWindow;
+      const isFromActiveStg = (active.stg && sourceWindow === active.stg.contentWindow) || (active.baseStg && sourceWindow === active.baseStg.contentWindow);
       if (!isFromActiveProd && !isFromActiveStg) {
         return;
       }
@@ -364,7 +364,15 @@ document.addEventListener("DOMContentLoaded", () => {
         msg.boxes.forEach(box => {
           const match = activeRedDiffs.find(d => d.selector === box.selector);
           if (match) {
-            match.box = { x: box.x, y: box.y, width: box.width, height: box.height };
+            match.box = {
+              x: box.x,
+              y: box.y,
+              width: box.width,
+              height: box.height,
+              viewportX: box.viewportX,
+              viewportY: box.viewportY,
+              measuredWidth: box.measuredWidth
+            };
           }
         });
         if (isDiffActive && currentMode === "overlay") {
@@ -586,6 +594,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     currentMode = mode;
+    lastCapturedDiffCanvas = null;
+    lastAccuratePixelDiffPct = null;
 
     // Update buttons
     modeBtns.forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
@@ -637,6 +647,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (mode === "swipe") {
       setSwipeCompareMode(swipeCompareMode);
       syncScrollToFrames([iframeSwipeProd, iframeSwipeStg, iframeSwipeDiff]);
+      // Request fresh landmarks and candidates from all swipe frames at their 1:1 wide desktop aspect ratio
+      setTimeout(() => {
+        [iframeSwipeProd, iframeSwipeDiff, iframeSwipeStg].forEach(frame => {
+          if (frame && frame.contentWindow) {
+            try {
+              frame.contentWindow.postMessage({ type: "VC_REQUEST_LANDMARKS" }, "*");
+              frame.contentWindow.postMessage({ type: "VC_REQUEST_DIFF_CANDIDATES" }, "*");
+            } catch (e) {}
+          }
+        });
+      }, 50);
     }
 
     if (mode === "overlay") {
@@ -1992,6 +2013,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (isUserScrolling || isCapturingDiff) return;
     if (!isPixelDiffOverlayActive()) return;
     if (typeof chrome === "undefined" || !chrome.runtime || typeof chrome.runtime.sendMessage !== "function") return;
+    // In swipe mode, iframes are stacked in the same container, so a single visibleTab screenshot
+    // captures the foreground curtain rather than two separate side-by-side frames.
+    if (currentMode === "swipe") return;
 
     if (liveDiffCaptureTimer) clearTimeout(liveDiffCaptureTimer);
     liveDiffCaptureTimer = setTimeout(() => {
@@ -2048,10 +2072,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let totalDiffArea = 0;
 
-    // 1. If an actual captured subpixel screenshot diff exists, draw it directly!
+    // 1. If an actual captured subpixel screenshot diff exists matching this exact resolution & aspect ratio, draw it directly!
+    let drawnCapturedDiff = false;
     if (lastCapturedDiffCanvas && !isUserScrolling) {
-      offCtx.drawImage(lastCapturedDiffCanvas, 0, 0, swW, swH);
-    } else {
+      if (Math.abs(lastCapturedDiffCanvas.width - swW) < 5) {
+        offCtx.drawImage(lastCapturedDiffCanvas, 0, 0, swW, swH);
+        drawnCapturedDiff = true;
+      } else {
+        // Mismatched aspect ratio or width (e.g. from 3-column view) - drop stale canvas so it never warps!
+        lastCapturedDiffCanvas = null;
+      }
+    }
+    if (!drawnCapturedDiff) {
       // Frame to query for live element bounding boxes (100% pixel-perfect subpixel accuracy)
       const liveTargetFrame = (swipeCompareMode === "diff") ? (iframeSwipeDiff || iframeSwipeStg) : iframeSwipeProd;
       const liveFallbackFrame = iframeSwipeStg;
@@ -2098,7 +2130,8 @@ document.addEventListener("DOMContentLoaded", () => {
           // If not queryable via contentDocument, use candidate measured box or estimated box
           if (!hasExactBox) {
             const box = item.swipeBox || item.stgBox || item.box;
-            if (!box || (box.width === 0 && box.height === 0)) {
+            const isBoxFromNarrow = box && box.measuredWidth && box.measuredWidth < 600 && swW > 800;
+            if (!box || (box.width === 0 && box.height === 0) || isBoxFromNarrow) {
               const est = getEstimatedBoxForSelector(item.selector, swW);
               if (est) {
                 drawX = est.x;
@@ -2248,10 +2281,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let totalDiffArea = 0;
 
-    // If an actual captured subpixel screenshot diff exists, draw it
+    // If an actual captured subpixel screenshot diff exists matching this exact column width, draw it
+    let drawnCapturedDiff = false;
     if (lastCapturedDiffCanvas && !isUserScrolling) {
-      offCtx.drawImage(lastCapturedDiffCanvas, 0, 0, width, height);
-    } else {
+      if (Math.abs(lastCapturedDiffCanvas.width - width) < 5) {
+        offCtx.drawImage(lastCapturedDiffCanvas, 0, 0, width, height);
+        drawnCapturedDiff = true;
+      } else {
+        lastCapturedDiffCanvas = null;
+      }
+    }
+    if (!drawnCapturedDiff) {
       // Draw viewport-visible DOM diff boxes
       const effectiveDiffs = (diffList && diffList.length > 0) ? diffList : activeRedDiffs;
       if (effectiveDiffs && effectiveDiffs.length > 0) {
@@ -2289,7 +2329,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
           if (!hasExactBox) {
             const box = item.stgBox || item.box;
-            if (!box || (box.width === 0 && box.height === 0)) {
+            const isBoxFromWide = box && box.measuredWidth && box.measuredWidth > 800 && width <= 600;
+            if (!box || (box.width === 0 && box.height === 0) || isBoxFromWide) {
               const est = getEstimatedBoxForSelector(item.selector, width);
               if (est) {
                 drawX = est.x;
@@ -2792,6 +2833,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function setSwipeCompareMode(target) {
     swipeCompareMode = target;
+    lastCapturedDiffCanvas = null;
     if (btnSwipeTargetProd) btnSwipeTargetProd.classList.toggle("active", target === "prod");
     if (btnSwipeTargetDiff) btnSwipeTargetDiff.classList.toggle("active", target === "diff");
 
