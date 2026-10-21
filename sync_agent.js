@@ -1222,14 +1222,17 @@
       'button', 'a', 'input', 'select', 'textarea',
       'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
       'p', 'li', 'th', 'td', 'img', 'svg',
+      'span', 'label', 'b', 'strong', 'em', 'i', 'small', 'code', 'mark',
       '[role="button"]', '[role="link"]', '[role="tab"]', '[role="heading"]',
       // Class patterns commonly used across modern websites
       '.btn', '.btn-primary', '.btn-secondary', '[class*="btn-"]', '[class*="button"]',
       '[class*="card"]', '[class*="item"]', '[class*="badge"]', '[class*="tag"]',
+      '[class*="chip"]', '[class*="pill"]', '[class*="status"]', '[class*="color"]',
       '[class*="metric"]', '[class*="price"]', '[class*="amount"]', '[class*="currency"]',
       '[class*="logo"]', '[class*="brand"]', '[class*="title"]', '[class*="heading"]',
       '[class*="nav"]', '[class*="tab"]',
-      '[class*="banner"]', '[class*="alert"]'
+      '[class*="banner"]', '[class*="alert"]',
+      '[class*="bg-"]', '[class*="text-"]', '[class*="border"]'
     ].join(',');
 
     const seenElements = new Set();
@@ -1319,13 +1322,21 @@
             radius: style.borderRadius,
             border: style.borderColor,
             borderColor: style.borderColor,
+            borderTopColor: style.borderTopColor,
+            borderBottomColor: style.borderBottomColor,
+            borderLeftColor: style.borderLeftColor,
+            borderRightColor: style.borderRightColor,
             borderWidth: style.borderWidth,
             boxShadow: style.boxShadow,
             padding: style.padding,
+            paddingLeft: style.paddingLeft,
+            paddingTop: style.paddingTop,
             opacity: style.opacity,
             fontSize: style.fontSize,
             fontWeight: style.fontWeight,
-            fontFamily: style.fontFamily
+            fontFamily: style.fontFamily,
+            fontStyle: style.fontStyle,
+            textAlign: style.textAlign
           }
         });
       });
@@ -1580,16 +1591,26 @@
           processedElements.add(el);
 
           // Pure red hug on differing tags hugging tag's exact shape with zero outlines
+          const isTextTag = tag === 'h1' || tag === 'h2' || tag === 'h3' || tag === 'h4' || 
+                            tag === 'h5' || tag === 'h6' || tag === 'p' || tag === 'span' || 
+                            tag === 'label' || tag === 'strong' || tag === 'em' || 
+                            tag === 'th' || tag === 'td' || tag === 'li';
+          const isTextDiff = item.diffType === "typography" || item.diffType === "text";
+
           const style = window.getComputedStyle(el);
-          const pos = style.position;
-          if (pos === "static") {
-            el.style.position = "relative";
-            el.dataset.vcOriginalStatic = "true";
+          // USER REQUIREMENT: When text in a tag changes, NEVER highlight the whole tag background red!
+          // Strictly highlight differing pixels only via the diff canvas overlay.
+          if (!isTextDiff && (!isTextTag || item.diffType?.includes("background"))) {
+            const pos = style.position;
+            if (pos === "static") {
+              el.style.position = "relative";
+              el.dataset.vcOriginalStatic = "true";
+            }
+            if (el.dataset.vcOriginalBg === undefined) {
+              el.dataset.vcOriginalBg = style.backgroundColor;
+            }
+            el.classList.add("vc-red-diff-hug");
           }
-          if (el.dataset.vcOriginalBg === undefined) {
-            el.dataset.vcOriginalBg = style.backgroundColor;
-          }
-          el.classList.add("vc-red-diff-hug");
 
           // Remove any text description badges so differences have no text clutter
           el.querySelectorAll(".vc-red-diff-badge").forEach(b => b.remove());

@@ -54,6 +54,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const iframeFlickerStg = document.getElementById("iframe-flicker-stg");
   const iframeOverlayProd = document.getElementById("iframe-overlay-prod");
   const iframeOverlayStg = document.getElementById("iframe-overlay-stg");
+  const viewFlicker = document.getElementById("view-flicker");
+  const flickerContainer = document.getElementById("flicker-container");
+  const viewOverlay = document.getElementById("view-overlay");
+  const overlayContainer = document.getElementById("overlay-container");
 
   // Mode Specific & 3-Column Pixel Diff
   const sideControls = document.getElementById("side-controls");
@@ -550,6 +554,10 @@ document.addEventListener("DOMContentLoaded", () => {
         handleSideBySideWheel({ deltaY: msg.deltaY, deltaX: msg.deltaX });
       } else if (currentMode === "swipe") {
         handleSwipeWheel({ deltaY: msg.deltaY, deltaX: msg.deltaX });
+      } else if (currentMode === "flicker") {
+        handleFlickerWheel({ deltaY: msg.deltaY, deltaX: msg.deltaX });
+      } else if (currentMode === "overlay") {
+        handleOverlayWheel({ deltaY: msg.deltaY, deltaX: msg.deltaX });
       }
       return;
     }
@@ -1527,7 +1535,124 @@ document.addEventListener("DOMContentLoaded", () => {
     logAction(`[VISUAL DIFFS] Evaluated ${activeRedDiffs.length} visual regressions in RED for ${currentMode.toUpperCase()} mode.`);
   }
 
+  function parseCssColor(str) {
+    if (!str || typeof str !== "string") return null;
+    const s = str.trim().toLowerCase();
+    if (s === "transparent" || s === "rgba(0, 0, 0, 0)" || s === "rgba(0,0,0,0)") {
+      return { r: 0, g: 0, b: 0, a: 0 };
+    }
+    const hexMatch = s.match(/^#([0-9a-f]{3,8})$/);
+    if (hexMatch) {
+      const h = hexMatch[1];
+      if (h.length === 3 || h.length === 4) {
+        const r = parseInt(h[0] + h[0], 16);
+        const g = parseInt(h[1] + h[1], 16);
+        const b = parseInt(h[2] + h[2], 16);
+        const a = h.length === 4 ? parseInt(h[3] + h[3], 16) / 255 : 1;
+        return { r, g, b, a };
+      }
+      if (h.length === 6 || h.length === 8) {
+        const r = parseInt(h.slice(0, 2), 16);
+        const g = parseInt(h.slice(2, 4), 16);
+        const b = parseInt(h.slice(4, 6), 16);
+        const a = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
+        return { r, g, b, a };
+      }
+    }
+    const rgbMatch = s.match(/^rgba?\(\s*([0-9.]+)\s*[, ]\s*([0-9.]+)\s*[, ]\s*([0-9.]+)(?:\s*[,/]\s*([0-9.]+))?\s*\)$/);
+    if (rgbMatch) {
+      return {
+        r: parseFloat(rgbMatch[1]),
+        g: parseFloat(rgbMatch[2]),
+        b: parseFloat(rgbMatch[3]),
+        a: rgbMatch[4] !== undefined ? parseFloat(rgbMatch[4]) : 1
+      };
+    }
+    return null;
+  }
+
+  function areColorsDifferent(str1, str2, threshold = 12) {
+    if (!str1 && !str2) return false;
+    if (!str1 || !str2) return true;
+    if (str1.trim().toLowerCase() === str2.trim().toLowerCase()) return false;
+
+    const c1 = parseCssColor(str1);
+    const c2 = parseCssColor(str2);
+    if (!c1 || !c2) {
+      return str1.trim().toLowerCase() !== str2.trim().toLowerCase();
+    }
+
+    const alphaDiff = Math.abs(c1.a - c2.a);
+    if (alphaDiff > 0.08) return true;
+    if (c1.a < 0.05 && c2.a < 0.05) return false;
+
+    const dr = c1.r - c2.r;
+    const dg = c1.g - c2.g;
+    const db = c1.b - c2.b;
+    const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+
+    return dist > threshold;
+  }
+
   function detectPageDifferences(prodLandmarks, stgLandmarks) {
+    function parseCssColor(str) {
+      if (!str || typeof str !== "string") return null;
+      const s = str.trim().toLowerCase();
+      if (s === "transparent" || s === "rgba(0, 0, 0, 0)" || s === "rgba(0,0,0,0)") {
+        return { r: 0, g: 0, b: 0, a: 0 };
+      }
+      const hexMatch = s.match(/^#([0-9a-f]{3,8})$/);
+      if (hexMatch) {
+        const h = hexMatch[1];
+        if (h.length === 3 || h.length === 4) {
+          const r = parseInt(h[0] + h[0], 16);
+          const g = parseInt(h[1] + h[1], 16);
+          const b = parseInt(h[2] + h[2], 16);
+          const a = h.length === 4 ? parseInt(h[3] + h[3], 16) / 255 : 1;
+          return { r, g, b, a };
+        }
+        if (h.length === 6 || h.length === 8) {
+          const r = parseInt(h.slice(0, 2), 16);
+          const g = parseInt(h.slice(2, 4), 16);
+          const b = parseInt(h.slice(4, 6), 16);
+          const a = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
+          return { r, g, b, a };
+        }
+      }
+      const rgbMatch = s.match(/^rgba?\(\s*([0-9.]+)\s*[, ]\s*([0-9.]+)\s*[, ]\s*([0-9.]+)(?:\s*[,/]\s*([0-9.]+))?\s*\)$/);
+      if (rgbMatch) {
+        return {
+          r: parseFloat(rgbMatch[1]),
+          g: parseFloat(rgbMatch[2]),
+          b: parseFloat(rgbMatch[3]),
+          a: rgbMatch[4] !== undefined ? parseFloat(rgbMatch[4]) : 1
+        };
+      }
+      return null;
+    }
+
+    function areColorsDifferent(str1, str2, threshold = 12) {
+      if (!str1 && !str2) return false;
+      if (!str1 || !str2) return true;
+      if (str1.trim().toLowerCase() === str2.trim().toLowerCase()) return false;
+
+      const c1 = parseCssColor(str1);
+      const c2 = parseCssColor(str2);
+      if (!c1 || !c2) {
+        return str1.trim().toLowerCase() !== str2.trim().toLowerCase();
+      }
+
+      const alphaDiff = Math.abs(c1.a - c2.a);
+      if (alphaDiff > 0.08) return true;
+      if (c1.a < 0.05 && c2.a < 0.05) return false;
+
+      const dr = c1.r - c2.r;
+      const dg = c1.g - c2.g;
+      const db = c1.b - c2.b;
+      const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+
+      return dist > threshold;
+    }
     const diffList = [];
     const prodHref = (prodLandmarks?.href || prodUrlInput?.value || "").toLowerCase();
     const stgHref = (stgLandmarks?.href || stgUrlInput?.value || "").toLowerCase();
@@ -1614,15 +1739,21 @@ document.addEventListener("DOMContentLoaded", () => {
           // Media comparison
           const srcMatches = !p.src || !s.src || p.src === s.src;
 
-          // Clean style comparisons
-          const bgMatches = !p.style?.bg || !s.style?.bg || p.style.bg === s.style.bg || p.style.bg === "rgba(0, 0, 0, 0)" || s.style.bg === "rgba(0, 0, 0, 0)";
+          // Clean style comparisons with subpixel color accuracy
+          const bgDifferent = areColorsDifferent(p.style?.bg, s.style?.bg, 12);
+          const bgMatches = !bgDifferent;
           const bgImageMatches = !p.style?.bgImage || !s.style?.bgImage || p.style.bgImage === s.style.bgImage || (p.style.bgImage === "none" && s.style.bgImage === "none");
-          const colorMatches = !p.style?.color || !s.style?.color || p.style.color === s.style.color;
-          const borderMatches = !p.style?.borderColor || !s.style?.borderColor || p.style.borderColor === s.style.borderColor;
+          const colorDifferent = areColorsDifferent(p.style?.color, s.style?.color, 12);
+          const colorMatches = !colorDifferent;
+          const borderDifferent = areColorsDifferent(p.style?.borderColor, s.style?.borderColor, 12) ||
+                                 areColorsDifferent(p.style?.borderTopColor, s.style?.borderTopColor, 12) ||
+                                 areColorsDifferent(p.style?.borderBottomColor, s.style?.borderBottomColor, 12);
+          const borderMatches = !borderDifferent;
           const radiusMatches = !p.style?.radius || !s.style?.radius || p.style.radius === s.style.radius;
+          const shadowMatches = (p.style?.boxShadow || "none") === (s.style?.boxShadow || "none");
 
           // If identical visually in text, media, and styling, do NOT flag!
-          if (textMatches && srcMatches && bgMatches && bgImageMatches && colorMatches && borderMatches && radiusMatches) {
+          if (textMatches && srcMatches && bgMatches && bgImageMatches && colorMatches && borderMatches && radiusMatches && shadowMatches) {
             return;
           }
 
@@ -1661,6 +1792,10 @@ document.addEventListener("DOMContentLoaded", () => {
               box: s.box || p.box,
               stgBox: s.box,
               prodBox: p.box,
+              prodText: pText,
+              stgText: sText,
+              prodStyle: p.style,
+              stgStyle: s.style,
               text: diffText,
               style: diffStyle,
               isFixed: isItemFixed,
@@ -1669,7 +1804,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           // 2. Visual border color / accent check
-          if (!borderMatches && p.style?.borderColor && s.style?.borderColor && p.style.borderColor !== "rgba(0, 0, 0, 0)") {
+          if (!borderMatches && p.style?.borderColor && s.style?.borderColor) {
             addDiffIfMissing(diffList, {
               selector: p.selector,
               label: "🎨 Visual Border: Border accent color changed",
@@ -1677,6 +1812,10 @@ document.addEventListener("DOMContentLoaded", () => {
               box: s.box || p.box,
               stgBox: s.box,
               prodBox: p.box,
+              prodText: pText,
+              stgText: sText,
+              prodStyle: p.style,
+              stgStyle: s.style,
               text: diffText,
               style: diffStyle,
               isFixed: isItemFixed,
@@ -1693,6 +1832,10 @@ document.addEventListener("DOMContentLoaded", () => {
               box: s.box || p.box,
               stgBox: s.box,
               prodBox: p.box,
+              prodText: pText,
+              stgText: sText,
+              prodStyle: p.style,
+              stgStyle: s.style,
               text: diffText,
               style: diffStyle,
               isFixed: isItemFixed,
@@ -1701,7 +1844,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           // 4. Visual background color check
-          if (!bgMatches && p.style?.bg && s.style?.bg && p.style.bg !== "rgba(0, 0, 0, 0)" && s.style.bg !== "rgba(0, 0, 0, 0)") {
+          if (!bgMatches && p.style?.bg && s.style?.bg) {
             addDiffIfMissing(diffList, {
               selector: p.selector,
               label: `🎨 Visual Style: Color regression (${p.style.bg} → ${s.style.bg})`,
@@ -1709,6 +1852,10 @@ document.addEventListener("DOMContentLoaded", () => {
               box: s.box || p.box,
               stgBox: s.box,
               prodBox: p.box,
+              prodText: pText,
+              stgText: sText,
+              prodStyle: p.style,
+              stgStyle: s.style,
               text: diffText,
               style: diffStyle,
               isFixed: isItemFixed,
@@ -1734,6 +1881,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 box: s.box || p.box,
                 stgBox: s.box,
                 prodBox: p.box,
+                prodText: pText,
+                stgText: sText,
+                prodStyle: p.style,
+                stgStyle: s.style,
                 text: sText || pText,
                 style: diffStyle,
                 isFixed: isItemFixed,
@@ -1751,6 +1902,10 @@ document.addEventListener("DOMContentLoaded", () => {
               box: s.box || p.box,
               stgBox: s.box,
               prodBox: p.box,
+              prodText: pText,
+              stgText: sText,
+              prodStyle: p.style,
+              stgStyle: s.style,
               text: diffText,
               style: diffStyle,
               isFixed: isItemFixed,
@@ -2213,15 +2368,28 @@ document.addEventListener("DOMContentLoaded", () => {
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, width, height);
 
-    // 1. Draw Red pixel differences on altered elements
+    // 1. Draw Red pixel differences on altered elements (PURE DIFFERING PIXELS ONLY!)
     if (diffList && diffList.length > 0) {
       diffList.forEach(item => {
         const box = item.box || getEstimatedBoxForSelector(item.selector, width);
         if (!box) return;
 
-        // Glowing semi-transparent red fill (no outline)
-        ctx.fillStyle = "rgba(225, 29, 72, 0.4)";
-        ctx.fillRect(box.x, box.y, box.width, box.height);
+        const drawX = box.x || 0;
+        const drawY = box.y || 0;
+        const drawW = box.width || 100;
+        const drawH = box.height || 30;
+        const rendered = renderElementSubpixelDiff(ctx, item, drawX, drawY, drawW, drawH, iframeOverlayStg, iframeOverlayProd);
+        if (!rendered && !item.diffType?.includes("typography") && !item.diffType?.includes("text")) {
+          ctx.fillStyle = "rgba(225, 29, 72, 0.4)";
+          const r = parseFloat(item.style?.radius) || 0;
+          if (r > 0 && typeof ctx.roundRect === "function") {
+            ctx.beginPath();
+            ctx.roundRect(drawX, drawY, drawW, drawH, r);
+            ctx.fill();
+          } else {
+            ctx.fillRect(drawX, drawY, drawW, drawH);
+          }
+        }
 
         // Text descriptions disabled per user instruction: pure pixel difference without text descriptions
       });
@@ -2408,6 +2576,167 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // ----------------------------------------------------
+  // DYNAMIC ELEMENT-LEVEL SUBPIXEL PIXEL DIFF ENGINE
+  // (Highlights strictly DIFFERENT PIXELS ONLY in RED, matching Python visualCompare diff_engine.py)
+  // ----------------------------------------------------
+  let scratchCanvasP = null;
+  let scratchCanvasS = null;
+  let scratchCanvasDiff = null;
+
+  function getScratchP(w, h) {
+    if (!scratchCanvasP) scratchCanvasP = document.createElement("canvas");
+    if (scratchCanvasP.width !== w || scratchCanvasP.height !== h) {
+      scratchCanvasP.width = w;
+      scratchCanvasP.height = h;
+    }
+    return scratchCanvasP;
+  }
+  function getScratchS(w, h) {
+    if (!scratchCanvasS) scratchCanvasS = document.createElement("canvas");
+    if (scratchCanvasS.width !== w || scratchCanvasS.height !== h) {
+      scratchCanvasS.width = w;
+      scratchCanvasS.height = h;
+    }
+    return scratchCanvasS;
+  }
+  function getScratchDiff(w, h) {
+    if (!scratchCanvasDiff) scratchCanvasDiff = document.createElement("canvas");
+    if (scratchCanvasDiff.width !== w || scratchCanvasDiff.height !== h) {
+      scratchCanvasDiff.width = w;
+      scratchCanvasDiff.height = h;
+    }
+    return scratchCanvasDiff;
+  }
+
+  function renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame = null, liveFallbackFrame = null) {
+    if (!item) return false;
+    const elW = Math.max(4, Math.min(Math.round(drawW), 2400));
+    const elH = Math.max(4, Math.min(Math.round(drawH), 1200));
+
+    const pCanvas = getScratchP(elW, elH);
+    const sCanvas = getScratchS(elW, elH);
+    const ctxP = pCanvas.getContext("2d");
+    const ctxS = sCanvas.getContext("2d");
+
+    ctxP.clearRect(0, 0, elW, elH);
+    ctxS.clearRect(0, 0, elW, elH);
+
+    let compStyle = null;
+    let fallbackStyle = null;
+    let targetEl = null;
+    let fallbackEl = null;
+
+    if (item.selector) {
+      try {
+        if (liveTargetFrame && liveTargetFrame.contentDocument) {
+          targetEl = liveTargetFrame.contentDocument.querySelector(item.selector);
+          if (targetEl && liveTargetFrame.contentWindow) {
+            compStyle = liveTargetFrame.contentWindow.getComputedStyle(targetEl);
+          }
+        }
+        if (liveFallbackFrame && liveFallbackFrame.contentDocument) {
+          fallbackEl = liveFallbackFrame.contentDocument.querySelector(item.selector);
+          if (fallbackEl && liveFallbackFrame.contentWindow) {
+            fallbackStyle = liveFallbackFrame.contentWindow.getComputedStyle(fallbackEl);
+          }
+        }
+      } catch (e) {}
+    }
+
+    const pStyle = item.prodStyle || fallbackStyle || item.style || {};
+    const sStyle = item.stgStyle || compStyle || item.style || {};
+
+    let pText = (item.prodText !== undefined ? item.prodText : (fallbackEl?.innerText || item.text || "")).trim();
+    let sText = (item.stgText !== undefined ? item.stgText : (targetEl?.innerText || item.text || "")).trim();
+
+    // Font metrics calculation
+    const fontSize = compStyle?.fontSize || sStyle.fontSize || pStyle.fontSize || "16px";
+    const fontFamily = compStyle?.fontFamily || sStyle.fontFamily || pStyle.fontFamily || "sans-serif";
+    const fontWeight = compStyle?.fontWeight || sStyle.fontWeight || pStyle.fontWeight || "normal";
+    const fontStyle = compStyle?.fontStyle || sStyle.fontStyle || pStyle.fontStyle || "normal";
+    const fontStr = `${fontStyle} ${fontWeight} ${fontSize} ${fontFamily}`;
+
+    const pColor = pStyle.color || "#000000";
+    const sColor = sStyle.color || compStyle?.color || "#000000";
+
+    const pBg = pStyle.bg;
+    const sBg = sStyle.bg;
+
+    const isTextDiff = (item.diffType === "typography" || item.diffType === "text" || (pText && sText && pText !== sText));
+
+    // 1. Draw Prod on ctxP
+    if (!isTextDiff && pBg && pBg !== "rgba(0, 0, 0, 0)" && pBg !== "transparent") {
+      ctxP.fillStyle = pBg;
+      const rVal = parseFloat(pStyle.radius) || 0;
+      if (rVal > 0 && typeof ctxP.roundRect === "function") {
+        ctxP.beginPath();
+        ctxP.roundRect(0, 0, elW, elH, rVal);
+        ctxP.fill();
+      } else {
+        ctxP.fillRect(0, 0, elW, elH);
+      }
+    }
+    if (!isTextDiff && pStyle.borderColor && pStyle.borderColor !== "rgba(0, 0, 0, 0)" && parseFloat(pStyle.borderWidth) > 0) {
+      ctxP.fillStyle = pStyle.borderColor;
+      const bW = parseFloat(pStyle.borderWidth) || 1;
+      ctxP.fillRect(0, 0, elW, bW);
+      ctxP.fillRect(0, elH - bW, elW, bW);
+      ctxP.fillRect(0, 0, bW, elH);
+      ctxP.fillRect(elW - bW, 0, bW, elH);
+    }
+    if (pText) {
+      ctxP.font = fontStr;
+      ctxP.fillStyle = pColor;
+      ctxP.textBaseline = "middle";
+      const padL = parseFloat(compStyle?.paddingLeft || pStyle.paddingLeft || pStyle.padding) || 4;
+      ctxP.fillText(pText, padL, elH / 2);
+    }
+
+    // 2. Draw Staging on ctxS
+    if (!isTextDiff && sBg && sBg !== "rgba(0, 0, 0, 0)" && sBg !== "transparent") {
+      ctxS.fillStyle = sBg;
+      const rVal = parseFloat(sStyle.radius) || 0;
+      if (rVal > 0 && typeof ctxS.roundRect === "function") {
+        ctxS.beginPath();
+        ctxS.roundRect(0, 0, elW, elH, rVal);
+        ctxS.fill();
+      } else {
+        ctxS.fillRect(0, 0, elW, elH);
+      }
+    }
+    if (!isTextDiff && sStyle.borderColor && sStyle.borderColor !== "rgba(0, 0, 0, 0)" && parseFloat(sStyle.borderWidth) > 0) {
+      ctxS.fillStyle = sStyle.borderColor;
+      const bW = parseFloat(sStyle.borderWidth) || 1;
+      ctxS.fillRect(0, 0, elW, bW);
+      ctxS.fillRect(0, elH - bW, elW, bW);
+      ctxS.fillRect(0, 0, bW, elH);
+      ctxS.fillRect(elW - bW, 0, bW, elH);
+    }
+    if (sText) {
+      ctxS.font = fontStr;
+      ctxS.fillStyle = sColor;
+      ctxS.textBaseline = "middle";
+      const padL = parseFloat(compStyle?.paddingLeft || sStyle.paddingLeft || sStyle.padding) || 4;
+      ctxS.fillText(sText, padL, elH / 2);
+    }
+
+    // 3. Compute subpixel pixel difference
+    const dataP = ctxP.getImageData(0, 0, elW, elH).data;
+    const dataS = ctxS.getImageData(0, 0, elW, elH).data;
+
+    const { outData, diffPixels } = computeSubpixelPixelDiff(dataP, dataS, elW, elH, 14);
+
+    if (diffPixels > 0) {
+      const diffImg = new ImageData(outData, elW, elH);
+      const diffCanvasEl = getScratchDiff(elW, elH);
+      diffCanvasEl.getContext("2d").putImageData(diffImg, 0, 0);
+      offCtx.drawImage(diffCanvasEl, drawX, drawY);
+      return true;
+    }
+    return false;
+  }
+
   // Dedicated 1:1 renderer for Swipe Split Curtain Diff Canvas (Prod on Left <-> Staging+Diff on Right)
   // Pure pixel-level difference display - ZERO OUTLINES ON ANYTHING
   function renderSwipeDiffCanvas(diffList = activeRedDiffs, shiftRegions = activeShiftRegions, currentScrollY = (lastScrollState.scrollY || 0), currentScrollX = (lastScrollState.scrollX || 0)) {
@@ -2573,23 +2902,26 @@ document.addEventListener("DOMContentLoaded", () => {
                   range.selectNodeContents(targetEl);
                   const rects = Array.from(range.getClientRects());
                   if (rects.length > 0) {
-                    offCtx.fillStyle = "rgba(225, 29, 72, 0.86)";
-                    rects.forEach(r => {
-                      const rx = Math.round(r.left);
-                      const ry = Math.round(r.top);
-                      const rw = Math.round(r.width);
-                      const rh = Math.round(r.height);
-                      if (rw > 0 && rh > 0) {
-                        offCtx.beginPath();
-                        if (typeof offCtx.roundRect === "function") {
-                          offCtx.roundRect(rx - 2, ry - 1, rw + 4, rh + 2, 4);
-                        } else {
-                          offCtx.rect(rx - 2, ry - 1, rw + 4, rh + 2);
+                    renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame, liveFallbackFrame);
+                    if (!renderedGlyphs) {
+                      offCtx.fillStyle = "rgba(225, 29, 72, 0.86)";
+                      rects.forEach(r => {
+                        const rx = Math.round(r.left);
+                        const ry = Math.round(r.top);
+                        const rw = Math.round(r.width);
+                        const rh = Math.round(r.height);
+                        if (rw > 0 && rh > 0) {
+                          offCtx.beginPath();
+                          if (typeof offCtx.roundRect === "function") {
+                            offCtx.roundRect(rx - 2, ry - 1, rw + 4, rh + 2, 4);
+                          } else {
+                            offCtx.rect(rx - 2, ry - 1, rw + 4, rh + 2);
+                          }
+                          offCtx.fill();
                         }
-                        offCtx.fill();
-                      }
-                    });
-                    renderedGlyphs = true;
+                      });
+                      renderedGlyphs = true;
+                    }
                   }
                 }
               }
@@ -2603,16 +2935,17 @@ document.addEventListener("DOMContentLoaded", () => {
               if (!renderedGlyphs) {
                 const rVal = parseFloat(compStyle.borderRadius) || (parseFloat(item.style?.radius) || 0);
                 offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
-                offCtx.beginPath();
-                if (rVal > 0 && typeof offCtx.roundRect === "function") {
-                  offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
-                } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("button") || item.selector.includes("tab") || item.selector.includes("badge"))) {
-                  offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
-                } else {
-                  offCtx.rect(drawX, drawY, drawW, drawH);
+                renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame, liveFallbackFrame);
+                if (!renderedGlyphs && !isTextNode) {
+                  offCtx.beginPath();
+                  if (rVal > 0 && typeof offCtx.roundRect === "function") {
+                    offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
+                  } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("button") || item.selector.includes("tab") || item.selector.includes("badge"))) {
+                    offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
+                  }
+                  offCtx.fill();
+                  renderedGlyphs = true;
                 }
-                offCtx.fill();
-                renderedGlyphs = true;
               }
             }
           } catch (e) {}
@@ -2625,15 +2958,16 @@ document.addEventListener("DOMContentLoaded", () => {
             const isCardOrContainer = (item.selector && (item.selector.includes("card") || item.selector.includes("section") || item.selector.includes("container") || item.selector.includes("table"))) || drawH > 90;
             const rVal = parseFloat(item.style?.radius) || (item.selector.includes("btn") || item.selector.includes("tab") ? 6 : 0);
             offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
-            offCtx.beginPath();
-            if (rVal > 0 && typeof offCtx.roundRect === "function") {
-              offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
-            } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("tab"))) {
-              offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
-            } else {
-              offCtx.rect(drawX, drawY, drawW, drawH);
+            renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, null, null);
+            if (!renderedGlyphs && !isTextNode) {
+              offCtx.beginPath();
+              if (rVal > 0 && typeof offCtx.roundRect === "function") {
+                offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
+              } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("tab"))) {
+                offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
+              }
+              offCtx.fill();
             }
-            offCtx.fill();
           }
           offCtx.restore();
         });
@@ -2835,23 +3169,26 @@ document.addEventListener("DOMContentLoaded", () => {
                   range.selectNodeContents(targetEl);
                   const rects = Array.from(range.getClientRects());
                   if (rects.length > 0) {
-                    offCtx.fillStyle = "rgba(225, 29, 72, 0.86)";
-                    rects.forEach(r => {
-                      const rx = Math.round(r.left);
-                      const ry = Math.round(r.top);
-                      const rw = Math.round(r.width);
-                      const rh = Math.round(r.height);
-                      if (rw > 0 && rh > 0) {
-                        offCtx.beginPath();
-                        if (typeof offCtx.roundRect === "function") {
-                          offCtx.roundRect(rx - 2, ry - 1, rw + 4, rh + 2, 4);
-                        } else {
-                          offCtx.rect(rx - 2, ry - 1, rw + 4, rh + 2);
+                    renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame, liveFallbackFrame);
+                    if (!renderedGlyphs) {
+                      offCtx.fillStyle = "rgba(225, 29, 72, 0.86)";
+                      rects.forEach(r => {
+                        const rx = Math.round(r.left);
+                        const ry = Math.round(r.top);
+                        const rw = Math.round(r.width);
+                        const rh = Math.round(r.height);
+                        if (rw > 0 && rh > 0) {
+                          offCtx.beginPath();
+                          if (typeof offCtx.roundRect === "function") {
+                            offCtx.roundRect(rx - 2, ry - 1, rw + 4, rh + 2, 4);
+                          } else {
+                            offCtx.rect(rx - 2, ry - 1, rw + 4, rh + 2);
+                          }
+                          offCtx.fill();
                         }
-                        offCtx.fill();
-                      }
-                    });
-                    renderedGlyphs = true;
+                      });
+                      renderedGlyphs = true;
+                    }
                   }
                 }
               }
@@ -2865,16 +3202,17 @@ document.addEventListener("DOMContentLoaded", () => {
               if (!renderedGlyphs) {
                 const rVal = parseFloat(compStyle.borderRadius) || (parseFloat(item.style?.radius) || 0);
                 offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
-                offCtx.beginPath();
-                if (rVal > 0 && typeof offCtx.roundRect === "function") {
-                  offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
-                } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("button") || item.selector.includes("tab") || item.selector.includes("badge"))) {
-                  offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
-                } else {
-                  offCtx.rect(drawX, drawY, drawW, drawH);
+                renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame, liveFallbackFrame);
+                if (!renderedGlyphs && !isTextNode) {
+                  offCtx.beginPath();
+                  if (rVal > 0 && typeof offCtx.roundRect === "function") {
+                    offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
+                  } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("button") || item.selector.includes("tab") || item.selector.includes("badge"))) {
+                    offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
+                  }
+                  offCtx.fill();
+                  renderedGlyphs = true;
                 }
-                offCtx.fill();
-                renderedGlyphs = true;
               }
             }
           } catch (e) {}
@@ -2887,15 +3225,16 @@ document.addEventListener("DOMContentLoaded", () => {
             const isCardOrContainer = (item.selector && (item.selector.includes("card") || item.selector.includes("section") || item.selector.includes("container") || item.selector.includes("table"))) || drawH > 90;
             const rVal = parseFloat(item.style?.radius) || (item.selector.includes("btn") || item.selector.includes("tab") ? 6 : 0);
             offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
-            offCtx.beginPath();
-            if (rVal > 0 && typeof offCtx.roundRect === "function") {
-              offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
-            } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("tab"))) {
-              offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
-            } else {
-              offCtx.rect(drawX, drawY, drawW, drawH);
+            renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, null, null);
+            if (!renderedGlyphs && !isTextNode) {
+              offCtx.beginPath();
+              if (rVal > 0 && typeof offCtx.roundRect === "function") {
+                offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
+              } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("tab"))) {
+                offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
+              }
+              offCtx.fill();
             }
-            offCtx.fill();
           }
           offCtx.restore();
         });
@@ -2940,7 +3279,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const rD = Math.abs(dataP[pIdx] - dataS[pIdx]);
       const gD = Math.abs(dataP[pIdx + 1] - dataS[pIdx + 1]);
       const bD = Math.abs(dataP[pIdx + 2] - dataS[pIdx + 2]);
-      baseDiff[idx] = Math.max(rD, gD, bD);
+      const aD = Math.abs(dataP[pIdx + 3] - dataS[pIdx + 3]);
+      const dist = Math.round(Math.sqrt(rD * rD + gD * gD + bD * bD) * 0.7);
+      baseDiff[idx] = Math.max(rD, gD, bD, aD, dist);
     }
 
     // 8-neighbor offsets matching diff_engine.py make_diff_mask_subpixel
@@ -3002,17 +3343,19 @@ document.addEventListener("DOMContentLoaded", () => {
           const rS = dataS[pIdx];
           const gS = dataS[pIdx + 1];
           const bS = dataS[pIdx + 2];
+          const aS = dataS[pIdx + 3];
 
           for (let n = 0; n < 8; n++) {
             const nx = x + neighbors[n][0];
             const ny = y + neighbors[n][1];
             if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
               const nPIdx = (ny * width + nx) * 4;
-              const curDiff = Math.max(
-                Math.abs(dataP[nPIdx] - rS),
-                Math.abs(dataP[nPIdx + 1] - gS),
-                Math.abs(dataP[nPIdx + 2] - bS)
-              );
+              const curRD = Math.abs(dataP[nPIdx] - rS);
+              const curGD = Math.abs(dataP[nPIdx + 1] - gS);
+              const curBD = Math.abs(dataP[nPIdx + 2] - bS);
+              const curAD = Math.abs(dataP[nPIdx + 3] - aS);
+              const curDist = Math.round(Math.sqrt(curRD * curRD + curGD * curGD + curBD * curBD) * 0.7);
+              const curDiff = Math.max(curRD, curGD, curBD, curAD, curDist);
               if (curDiff < minDiff) {
                 minDiff = curDiff;
                 if (minDiff <= tolerance) break;
@@ -3540,6 +3883,100 @@ document.addEventListener("DOMContentLoaded", () => {
     triggerScrollDiffSync(newScrollY, newScrollX);
   }
 
+  function handleFlickerWheel(e) {
+    if (!checkSyncScroll || !checkSyncScroll.checked) return;
+    if (e && typeof e.preventDefault === "function") {
+      e.preventDefault();
+    }
+    activeScrollLeader = "WHEEL";
+    clearTimeout(scrollLeaderTimer);
+    scrollLeaderTimer = setTimeout(() => {
+      activeScrollLeader = null;
+    }, 120);
+
+    const deltaY = e.deltaY || 0;
+    const deltaX = e.deltaX || 0;
+    const currentY = lastScrollState.scrollY || 0;
+    const currentX = lastScrollState.scrollX || 0;
+    const viewH = iframeFlickerProd?.clientHeight || 800;
+    const docH = Math.max(
+      viewH,
+      lastProdLandmarks?.docHeight || 0,
+      lastStgLandmarks?.docHeight || 0,
+      lastScrollState?.maxScrollY ? (lastScrollState.maxScrollY + viewH) : 0,
+      50000
+    );
+    const maxScrollY = Math.max(1, docH - viewH);
+    const newScrollY = Math.max(0, Math.min(maxScrollY, currentY + deltaY));
+    const newScrollX = Math.max(0, currentX + deltaX);
+
+    lastScrollState.scrollY = newScrollY;
+    lastScrollState.scrollX = newScrollX;
+
+    const mirrorAction = {
+      type: "VC_MIRROR_ACTION",
+      action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
+    };
+
+    if (iframeFlickerProd && iframeFlickerProd.contentWindow) {
+      try { iframeFlickerProd.contentWindow.postMessage(mirrorAction, "*"); } catch (err) {}
+    }
+    if (iframeFlickerStg && iframeFlickerStg.contentWindow) {
+      try { iframeFlickerStg.contentWindow.postMessage(mirrorAction, "*"); } catch (err) {}
+    }
+
+    triggerScrollDiffSync(newScrollY, newScrollX);
+  }
+
+  function handleOverlayWheel(e) {
+    if (!checkSyncScroll || !checkSyncScroll.checked) return;
+    if (e && typeof e.preventDefault === "function") {
+      e.preventDefault();
+    }
+    activeScrollLeader = "WHEEL";
+    clearTimeout(scrollLeaderTimer);
+    scrollLeaderTimer = setTimeout(() => {
+      activeScrollLeader = null;
+    }, 120);
+
+    const deltaY = e.deltaY || 0;
+    const deltaX = e.deltaX || 0;
+    const currentY = lastScrollState.scrollY || 0;
+    const currentX = lastScrollState.scrollX || 0;
+    const viewH = iframeOverlayProd?.clientHeight || 800;
+    const docH = Math.max(
+      viewH,
+      lastProdLandmarks?.docHeight || 0,
+      lastStgLandmarks?.docHeight || 0,
+      lastScrollState?.maxScrollY ? (lastScrollState.maxScrollY + viewH) : 0,
+      50000
+    );
+    const maxScrollY = Math.max(1, docH - viewH);
+    const newScrollY = Math.max(0, Math.min(maxScrollY, currentY + deltaY));
+    const newScrollX = Math.max(0, currentX + deltaX);
+
+    lastScrollState.scrollY = newScrollY;
+    lastScrollState.scrollX = newScrollX;
+
+    const mirrorAction = {
+      type: "VC_MIRROR_ACTION",
+      action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
+    };
+
+    if (iframeOverlayProd && iframeOverlayProd.contentWindow) {
+      try { iframeOverlayProd.contentWindow.postMessage(mirrorAction, "*"); } catch (err) {}
+    }
+    if (iframeOverlayStg && iframeOverlayStg.contentWindow) {
+      try { iframeOverlayStg.contentWindow.postMessage(mirrorAction, "*"); } catch (err) {}
+    }
+
+    if (diffCanvas && diffCanvas.style.display !== "none") {
+      renderDiffCanvasHeatmap(activeRedDiffs, activeShiftRegions);
+    }
+
+    triggerScrollDiffSync(newScrollY, newScrollX);
+  }
+
   // Attach synchronized wheel scrolling to all Side-by-Side elements (exact same smooth motion as swipe!)
   const sideBySideViewEl = document.getElementById("view-side-by-side");
   [sideBySideViewEl, wrapFrameProd, wrapFrameStg, wrapFrameDiff].forEach(el => {
@@ -3551,6 +3988,22 @@ document.addEventListener("DOMContentLoaded", () => {
   if (swipeContainer) {
     swipeContainer.addEventListener("wheel", handleSwipeWheel, { passive: false });
   }
+
+  // Attach synchronized wheel scrolling to Flicker view
+  const flickerViewEl = document.getElementById("view-flicker");
+  [flickerViewEl, flickerContainer].forEach(el => {
+    if (el) {
+      el.addEventListener("wheel", handleFlickerWheel, { passive: false });
+    }
+  });
+
+  // Attach synchronized wheel scrolling to Overlay view
+  const overlayViewEl = document.getElementById("view-overlay");
+  [overlayViewEl, overlayContainer].forEach(el => {
+    if (el) {
+      el.addEventListener("wheel", handleOverlayWheel, { passive: false });
+    }
+  });
 
   // Side-by-Side 3rd Column Pixel Diff Toggle
   if (btnToggleColDiff) {
