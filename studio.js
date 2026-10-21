@@ -2252,9 +2252,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (isUserScrolling || isCapturingDiff) return;
     if (!isPixelDiffOverlayActive()) return;
     if (typeof chrome === "undefined" || !chrome.runtime || typeof chrome.runtime.sendMessage !== "function") return;
-    // In swipe mode, iframes are stacked in the same container, so a single visibleTab screenshot
-    // captures the foreground curtain rather than two separate side-by-side frames.
-    if (currentMode === "swipe") return;
 
     if (liveDiffCaptureTimer) clearTimeout(liveDiffCaptureTimer);
     liveDiffCaptureTimer = setTimeout(() => {
@@ -2268,6 +2265,48 @@ document.addEventListener("DOMContentLoaded", () => {
     if (typeof chrome === "undefined" || !chrome.runtime || typeof chrome.runtime.sendMessage !== "function") return;
 
     isCapturingDiff = true;
+
+    if (currentMode === "swipe") {
+      // In swipe mode: capture Prod and Staging viewports sequentially without UI disruption
+      if (!iframeSwipeProd || !iframeSwipeStg) {
+        isCapturingDiff = false;
+        return;
+      }
+      const origProdOpacity = iframeSwipeProd.style.opacity;
+      const origDiffOpacity = iframeSwipeDiff ? iframeSwipeDiff.style.opacity : "1";
+      iframeSwipeProd.style.opacity = "1";
+      if (iframeSwipeDiff) iframeSwipeDiff.style.opacity = "0";
+
+      try {
+        chrome.runtime.sendMessage({ type: "CAPTURE_ACTIVE_TAB" }, (resProd) => {
+          if (!resProd || resProd.status !== "ok" || !resProd.dataUrl) {
+            iframeSwipeProd.style.opacity = origProdOpacity;
+            if (iframeSwipeDiff) iframeSwipeDiff.style.opacity = origDiffOpacity;
+            isCapturingDiff = false;
+            return;
+          }
+
+          iframeSwipeProd.style.opacity = "0";
+
+          chrome.runtime.sendMessage({ type: "CAPTURE_ACTIVE_TAB" }, (resStg) => {
+            iframeSwipeProd.style.opacity = origProdOpacity;
+            if (iframeSwipeDiff) iframeSwipeDiff.style.opacity = origDiffOpacity;
+
+            if (resStg && resStg.status === "ok" && resStg.dataUrl) {
+              applyCapturedSwipePixelDiff(resProd.dataUrl, resStg.dataUrl, activeShiftRegions);
+            } else {
+              isCapturingDiff = false;
+            }
+          });
+        });
+      } catch (err) {
+        iframeSwipeProd.style.opacity = origProdOpacity;
+        if (iframeSwipeDiff) iframeSwipeDiff.style.opacity = origDiffOpacity;
+        isCapturingDiff = false;
+      }
+      return;
+    }
+
     try {
       chrome.runtime.sendMessage({ type: "CAPTURE_ACTIVE_TAB" }, (res) => {
         if (res && res.status === "ok" && res.dataUrl) {
@@ -2789,6 +2828,75 @@ document.addEventListener("DOMContentLoaded", () => {
     updateAllDiffPercentDisplays(mismatchPct);
   }
 
+  // ----------------------------------------------------
+  // SUBPIXEL PIXEL-LEVEL DIFF ENGINE (Port of Python diff_engine.py make_diff_mask_subpixel)
+  // Rejects 1px font anti-aliasing / subpixel smoothing noise and highlights exact differing pixels in RED (225, 29, 72, 220)
+  // ----------------------------------------------------
+  function computeSubpixelPixelDiff(dataP, dataS, width, height, tolerance = 20) {
+    const outData = new Uint8ClampedArray(width * height * 4);
+    let diffPixels = 0;
+
+    const totalPixels = width * height;
+    const baseDiff = new Uint8Array(totalPixels);
+    for (let idx = 0, pIdx = 0; idx < totalPixels; idx++, pIdx += 4) {
+      const rD = Math.abs(dataP[pIdx] - dataS[pIdx]);
+      const gD = Math.abs(dataP[pIdx + 1] - dataS[pIdx + 1]);
+      const bD = Math.abs(dataP[pIdx + 2] - dataS[pIdx + 2]);
+      baseDiff[idx] = Math.max(rD, gD, bD);
+    }
+
+    // 8-neighbor offsets matching diff_engine.py make_diff_mask_subpixel
+    const neighbors = [
+      [-1, 0], [1, 0], [0, -1], [0, 1],
+      [-1, -1], [1, 1], [-1, 1], [1, -1]
+    ];
+
+    for (let y = 0; y < height; y++) {
+      const rowOffset = y * width;
+      for (let x = 0; x < width; x++) {
+        const idx = rowOffset + x;
+        let minDiff = baseDiff[idx];
+
+        // If above tolerance, check 8 neighbor offsets to eliminate font subpixel anti-aliasing artifacts
+        if (minDiff > tolerance) {
+          const pIdx = idx * 4;
+          const rS = dataS[pIdx];
+          const gS = dataS[pIdx + 1];
+          const bS = dataS[pIdx + 2];
+
+          for (let n = 0; n < 8; n++) {
+            const nx = x + neighbors[n][0];
+            const ny = y + neighbors[n][1];
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+              const nPIdx = (ny * width + nx) * 4;
+              const curDiff = Math.max(
+                Math.abs(dataP[nPIdx] - rS),
+                Math.abs(dataP[nPIdx + 1] - gS),
+                Math.abs(dataP[nPIdx + 2] - bS)
+              );
+              if (curDiff < minDiff) {
+                minDiff = curDiff;
+                if (minDiff <= tolerance) break;
+              }
+            }
+          }
+        }
+
+        if (minDiff > tolerance) {
+          // RED = (225, 29, 72, 220) matching Python diff_engine.py (#e11d48)
+          const pIdx = idx * 4;
+          outData[pIdx] = 225;     // R
+          outData[pIdx + 1] = 29;  // G
+          outData[pIdx + 2] = 72;  // B
+          outData[pIdx + 3] = 220; // A (0.86 alpha matching diff_engine.py)
+          diffPixels++;
+        }
+      }
+    }
+
+    return { outData, diffPixels };
+  }
+
   function applyCapturedPixelDiff(dataUrl, shiftRegions = activeShiftRegions) {
     if (!pixelDiffCanvas) {
       isCapturingDiff = false;
@@ -2833,47 +2941,40 @@ document.addEventListener("DOMContentLoaded", () => {
         const ctxS = canvasS.getContext("2d");
         ctxS.drawImage(img, Math.round(rStg.left * dpr), Math.round(rStg.top * dpr), cropW, cropH, 0, 0, cropW, cropH);
 
-        const imgP = ctxP.getImageData(0, 0, cropW, cropH);
-        const imgS = ctxS.getImageData(0, 0, cropW, cropH);
-        const dataP = imgP.data;
-        const dataS = imgS.data;
+        const dataP = ctxP.getImageData(0, 0, cropW, cropH).data;
+        const dataS = ctxS.getImageData(0, 0, cropW, cropH).data;
 
         const outCanvas = document.createElement("canvas");
-        outCanvas.width = cropW;
-        outCanvas.height = cropH;
+        outCanvas.width = Math.round(rProd.width);
+        outCanvas.height = Math.round(rProd.height);
         const outCtx = outCanvas.getContext("2d");
-        const diffImg = outCtx.createImageData(cropW, cropH);
-        const outData = diffImg.data;
 
         // Sensitive delta matching diff_engine.py make_diff_mask_subpixel
         // Accurately flags subtle background shading gradients, radial fills, and border accents
-        let diffPixels = 0;
+        const { outData, diffPixels } = computeSubpixelPixelDiff(dataP, dataS, cropW, cropH, 20);
 
-        for (let i = 0; i < dataP.length; i += 4) {
-          const rD = Math.abs(dataP[i] - dataS[i]);
-          const gD = Math.abs(dataP[i + 1] - dataS[i + 1]);
-          const bD = Math.abs(dataP[i + 2] - dataS[i + 2]);
-          const maxD = Math.max(rD, gD, bD);
-          const avgD = (rD + gD + bD) / 3;
+        const diffImg = new ImageData(outData, cropW, cropH);
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = cropW;
+        tempCanvas.height = cropH;
+        tempCanvas.getContext("2d").putImageData(diffImg, 0, 0);
 
-          // Sensitive detection for subtle radial shading, dark-mode gradients, and border accents
-          if (maxD > 10 || avgD > 6) {
-            outData[i] = 239;     // R (RED = 239, 68, 68)
-            outData[i + 1] = 68;  // G
-            outData[i + 2] = 68;  // B
-            outData[i + 3] = 255; // A (solid red)
-            diffPixels++;
-          }
+        outCtx.drawImage(tempCanvas, 0, 0, outCanvas.width, outCanvas.height);
+
+        // Include layout shift areas in total mismatch area
+        let shiftArea = 0;
+        if (shiftRegions && shiftRegions.length > 0) {
+          shiftRegions.forEach(reg => {
+            shiftArea += (outCanvas.width * reg.h);
+          });
         }
-
-        outCtx.putImageData(diffImg, 0, 0);
 
         const totalPixels = Math.max(1, cropW * cropH);
         const accuratePctNum = (diffPixels / totalPixels) * 100;
         const pct = accuratePctNum.toFixed(2) + "%";
         lastAccuratePixelDiffPct = pct;
 
-        if (diffPixels > 0) {
+        if (diffPixels > 0 || shiftArea > 0) {
           lastCapturedDiffCanvas = outCanvas;
           lastCapturedScrollY = (lastScrollState.scrollY || 0);
           lastCapturedScrollX = (lastScrollState.scrollX || 0);
@@ -2881,9 +2982,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         updateAllDiffPercentDisplays(pct);
 
-        if (currentMode === "swipe" && swipeCompareMode === "diff") {
-          renderSwipeDiffCanvas(activeRedDiffs, shiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
-        } else if (isColDiffActive) {
+        if (isColDiffActive) {
           renderPixelDiffColumn3(activeRedDiffs, shiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
         }
       } catch (err) {
@@ -2896,6 +2995,94 @@ document.addEventListener("DOMContentLoaded", () => {
       isCapturingDiff = false;
     };
     img.src = dataUrl;
+  }
+
+  function applyCapturedSwipePixelDiff(dataUrlProd, dataUrlStg, shiftRegions = activeShiftRegions) {
+    if (!swipeDiffCanvas || swipeCompareMode !== "diff") {
+      isCapturingDiff = false;
+      return;
+    }
+
+    let loadedCount = 0;
+    const imgP = new Image();
+    const imgS = new Image();
+
+    const onBothLoaded = () => {
+      try {
+        const swW = swipeOverlayLayer?.clientWidth || swipeContainer?.clientWidth || 1200;
+        const swH = swipeOverlayLayer?.clientHeight || swipeContainer?.clientHeight || 800;
+        const rSwipe = swipeContainer?.getBoundingClientRect();
+        if (!rSwipe || swW <= 0 || swH <= 0) {
+          isCapturingDiff = false;
+          return;
+        }
+
+        const dpr = imgP.width / Math.max(1, window.innerWidth);
+        const cropW = Math.round(swW * dpr);
+        const cropH = Math.round(swH * dpr);
+
+        const canvasP = document.createElement("canvas");
+        canvasP.width = cropW;
+        canvasP.height = cropH;
+        canvasP.getContext("2d").drawImage(imgP, Math.round(rSwipe.left * dpr), Math.round(rSwipe.top * dpr), cropW, cropH, 0, 0, cropW, cropH);
+
+        const canvasS = document.createElement("canvas");
+        canvasS.width = cropW;
+        canvasS.height = cropH;
+        canvasS.getContext("2d").drawImage(imgS, Math.round(rSwipe.left * dpr), Math.round(rSwipe.top * dpr), cropW, cropH, 0, 0, cropW, cropH);
+
+        const dataP = canvasP.getContext("2d").getImageData(0, 0, cropW, cropH).data;
+        const dataS = canvasS.getContext("2d").getImageData(0, 0, cropW, cropH).data;
+
+        // Subpixel anti-aliasing checking matching Python diff_engine.py make_diff_mask_subpixel
+        const { outData, diffPixels } = computeSubpixelPixelDiff(dataP, dataS, cropW, cropH, 20);
+
+        const outCanvas = document.createElement("canvas");
+        outCanvas.width = swW;
+        outCanvas.height = swH;
+        const outCtx = outCanvas.getContext("2d");
+
+        const diffImg = new ImageData(outData, cropW, cropH);
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = cropW;
+        tempCanvas.height = cropH;
+        tempCanvas.getContext("2d").putImageData(diffImg, 0, 0);
+
+        outCtx.drawImage(tempCanvas, 0, 0, swW, swH);
+
+        let shiftArea = 0;
+        if (shiftRegions && shiftRegions.length > 0) {
+          shiftRegions.forEach(reg => {
+            shiftArea += (swW * reg.h);
+          });
+        }
+
+        const totalPixels = Math.max(1, cropW * cropH);
+        const accuratePctNum = (diffPixels / totalPixels) * 100;
+        const pct = accuratePctNum.toFixed(2) + "%";
+        lastAccuratePixelDiffPct = pct;
+
+        if (diffPixels > 0 || shiftArea > 0) {
+          lastCapturedDiffCanvas = outCanvas;
+          lastCapturedScrollY = (lastScrollState.scrollY || 0);
+          lastCapturedScrollX = (lastScrollState.scrollX || 0);
+        }
+
+        updateAllDiffPercentDisplays(pct);
+        renderSwipeDiffCanvas(activeRedDiffs, shiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+      } catch (err) {
+        console.warn("[VisualCompare Live] Swipe pixel capture comparison error:", err);
+      } finally {
+        isCapturingDiff = false;
+      }
+    };
+
+    imgP.onload = () => { if (++loadedCount === 2) onBothLoaded(); };
+    imgS.onload = () => { if (++loadedCount === 2) onBothLoaded(); };
+    imgP.onerror = () => { isCapturingDiff = false; };
+    imgS.onerror = () => { isCapturingDiff = false; };
+    imgP.src = dataUrlProd;
+    imgS.src = dataUrlStg;
   }
 
   function drawRedPixelDiffLabel(ctx, x, y, label) {
