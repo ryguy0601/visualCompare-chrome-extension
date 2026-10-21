@@ -1190,6 +1190,17 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (e) {}
       }
     };
+    if (message && message.type === "VC_APPLY_RED_DIFFS") {
+      // Prod and Staging reference frames must NEVER receive red diff highlights!
+      // In side-by-side mode, differences only go to the last column (iframeDiffBase).
+      // In swipe mode, differences only go to the diff curtain (iframeSwipeDiff).
+      if (currentMode === "swipe") {
+        send(iframeSwipeDiff);
+      } else if (currentMode === "side-by-side") {
+        send(iframeDiffBase);
+      }
+      return;
+    }
     if (currentMode === "swipe") {
       if (targetPane === "PROD") {
         send(iframeSwipeProd);
@@ -1367,8 +1378,48 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    dispatchToPane("PROD", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs, showOutlines });
-    dispatchToPane("STG", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs, showOutlines });
+    // USER REQUIREMENT: For the 3-column view, ONLY the last column (Column 3) shows differences!
+    // Column 1 (Prod) and Column 2 (Staging) must NEVER have red diff highlights applied to them.
+    // In Swipe view, Staging (clean base) must NEVER have red highlights applied to it.
+    const removeMsg = { type: "VC_REMOVE_RED_DIFFS" };
+    const applyMsg = { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs, showOutlines };
+
+    if (currentMode === "side-by-side") {
+      // Column 1 (Prod) & Column 2 (Staging) stay 100% clean and pristine live pages!
+      if (iframeProd && iframeProd.contentWindow) {
+        try { iframeProd.contentWindow.postMessage(removeMsg, "*"); } catch (e) {}
+      }
+      if (iframeStg && iframeStg.contentWindow) {
+        try { iframeStg.contentWindow.postMessage(removeMsg, "*"); } catch (e) {}
+      }
+      // ONLY the last column (Column 3: paneColDiff / iframeDiffBase) shows differences!
+      if (iframeDiffBase && iframeDiffBase.contentWindow) {
+        try { iframeDiffBase.contentWindow.postMessage(applyMsg, "*"); } catch (e) {}
+      }
+    } else if (currentMode === "swipe") {
+      if (iframeSwipeProd && iframeSwipeProd.contentWindow) {
+        try { iframeSwipeProd.contentWindow.postMessage(removeMsg, "*"); } catch (e) {}
+      }
+      if (iframeSwipeStg && iframeSwipeStg.contentWindow) {
+        try { iframeSwipeStg.contentWindow.postMessage(removeMsg, "*"); } catch (e) {}
+      }
+      if (swipeCompareMode === "diff" && iframeSwipeDiff && iframeSwipeDiff.contentWindow) {
+        try { iframeSwipeDiff.contentWindow.postMessage(applyMsg, "*"); } catch (e) {}
+      }
+    } else {
+      if (iframeFlickerProd && iframeFlickerProd.contentWindow) {
+        try { iframeFlickerProd.contentWindow.postMessage(removeMsg, "*"); } catch (e) {}
+      }
+      if (iframeFlickerStg && iframeFlickerStg.contentWindow) {
+        try { iframeFlickerStg.contentWindow.postMessage(removeMsg, "*"); } catch (e) {}
+      }
+      if (iframeOverlayProd && iframeOverlayProd.contentWindow) {
+        try { iframeOverlayProd.contentWindow.postMessage(removeMsg, "*"); } catch (e) {}
+      }
+      if (iframeOverlayStg && iframeOverlayStg.contentWindow) {
+        try { iframeOverlayStg.contentWindow.postMessage(removeMsg, "*"); } catch (e) {}
+      }
+    }
 
     if (metricRedBadge) metricRedBadge.style.display = "none";
     if (btnToggleRedDiffs) {
@@ -1800,7 +1851,22 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function reapplyActiveRedDiffsToWindow(win) {
-    if (!win || !checkSyncRedDiff || !checkSyncRedDiff.checked) return;
+    if (!win) return;
+    // Prod (Col 1) and Staging (Col 2) must ALWAYS remain 100% clean with zero red diff highlights
+    const isDiffWin = (iframeDiffBase && win === iframeDiffBase.contentWindow) ||
+                     (iframeSwipeDiff && win === iframeSwipeDiff.contentWindow);
+    if (!isDiffWin) {
+      try {
+        win.postMessage({ type: "VC_REMOVE_RED_DIFFS" }, "*");
+      } catch (e) {}
+      return;
+    }
+    if (!checkSyncRedDiff || !checkSyncRedDiff.checked) {
+      try {
+        win.postMessage({ type: "VC_REMOVE_RED_DIFFS" }, "*");
+      } catch (e) {}
+      return;
+    }
     if (activeRedDiffs && activeRedDiffs.length > 0) {
       try {
         win.postMessage({ type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs, showOutlines: true }, "*");
@@ -3465,8 +3531,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (meta.redDiffs && meta.redDiffs.length > 0) {
           activeRedDiffs = meta.redDiffs;
-          dispatchToPane("PROD", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs });
-          dispatchToPane("STG", { type: "VC_APPLY_RED_DIFFS", diffs: activeRedDiffs });
+          computeAndApplyRedDifferences(true);
           if (metricRedBadge) metricRedBadge.style.display = "none";
           if (btnToggleRedDiffs) {
             btnToggleRedDiffs.classList.remove("inactive");
