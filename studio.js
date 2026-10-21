@@ -426,7 +426,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
           const match = activeDiffsList.find(d => d.selector === box.selector);
           if (match) {
-            match.box = {
+            const boxObj = {
               x: box.x,
               y: box.y,
               width: box.width,
@@ -435,6 +435,19 @@ document.addEventListener("DOMContentLoaded", () => {
               viewportY: box.viewportY,
               measuredWidth: box.measuredWidth
             };
+            if (msg.paneId === "STG" || isFromActiveStg) {
+              match.stgBox = boxObj;
+              match.box = boxObj;
+            } else if (msg.paneId === "PROD" || isFromActiveProd) {
+              match.prodBox = boxObj;
+              if (!match.stgBox) {
+                match.box = boxObj;
+              }
+            } else {
+              match.box = boxObj;
+            }
+            if (box.isFixed !== undefined) match.isFixed = box.isFixed;
+            if (box.isSticky !== undefined) match.isSticky = box.isSticky;
             if (box.text) match.text = box.text;
             if (box.style) match.style = Object.assign(match.style || {}, box.style);
           }
@@ -1457,12 +1470,8 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
           }
 
-          const isItemSticky = !!(s.isSticky || p.isSticky || 
-                                  p.selector.includes("header") || 
-                                  p.selector.includes(".brand-") || 
-                                  p.selector.includes("#header-nav") || 
-                                  p.selector.includes(".nav-tab") ||
-                                  p.selector.includes("btn-login"));
+          const isItemFixed = Boolean(s.isFixed || p.isFixed);
+          const isItemSticky = Boolean(s.isSticky || p.isSticky || isItemFixed);
 
           const isCardOrContainer = p.selector.includes("card") || 
                                    p.selector.includes("section") || 
@@ -1485,6 +1494,7 @@ document.addEventListener("DOMContentLoaded", () => {
               prodBox: p.box,
               text: diffText,
               style: diffStyle,
+              isFixed: isItemFixed,
               isSticky: isItemSticky
             });
           }
@@ -1500,6 +1510,7 @@ document.addEventListener("DOMContentLoaded", () => {
               prodBox: p.box,
               text: diffText,
               style: diffStyle,
+              isFixed: isItemFixed,
               isSticky: isItemSticky
             });
           }
@@ -1515,6 +1526,7 @@ document.addEventListener("DOMContentLoaded", () => {
               prodBox: p.box,
               text: diffText,
               style: diffStyle,
+              isFixed: isItemFixed,
               isSticky: isItemSticky
             });
           }
@@ -1530,6 +1542,7 @@ document.addEventListener("DOMContentLoaded", () => {
               prodBox: p.box,
               text: diffText,
               style: diffStyle,
+              isFixed: isItemFixed,
               isSticky: isItemSticky
             });
           }
@@ -1549,6 +1562,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 prodBox: p.box,
                 text: sText || pText,
                 style: diffStyle,
+                isFixed: isItemFixed,
                 isSticky: isItemSticky
               });
             }
@@ -1565,6 +1579,7 @@ document.addEventListener("DOMContentLoaded", () => {
               prodBox: p.box,
               text: diffText,
               style: diffStyle,
+              isFixed: isItemFixed,
               isSticky: isItemSticky
             });
           }
@@ -1580,6 +1595,7 @@ document.addEventListener("DOMContentLoaded", () => {
               prodBox: p.box,
               text: diffText,
               style: diffStyle,
+              isFixed: isItemFixed,
               isSticky: isItemSticky
             });
           }
@@ -1730,6 +1746,24 @@ document.addEventListener("DOMContentLoaded", () => {
       return false;
     });
     if (!exists) {
+      if (!diffItem.box) {
+        const stgCands = (currentMode === "swipe" ? swipeStgLandmarks?.diffCandidates : colStgLandmarks?.diffCandidates) || lastStgLandmarks?.diffCandidates || [];
+        const prodCands = (currentMode === "swipe" ? swipeProdLandmarks?.diffCandidates : colProdLandmarks?.diffCandidates) || lastProdLandmarks?.diffCandidates || [];
+        const selectors = diffItem.selector.split(",").map(s => s.trim());
+        let sMatch = null;
+        let pMatch = null;
+        for (const sel of selectors) {
+          if (!sMatch && stgCands) sMatch = stgCands.find(c => c.selector === sel || (c.selector && c.selector.includes(sel)));
+          if (!pMatch && prodCands) pMatch = prodCands.find(c => c.selector === sel || (c.selector && c.selector.includes(sel)));
+        }
+        if (sMatch) diffItem.stgBox = sMatch.box;
+        if (pMatch) diffItem.prodBox = pMatch.box;
+        diffItem.box = sMatch?.box || pMatch?.box || null;
+        if (diffItem.isFixed === undefined) diffItem.isFixed = Boolean(sMatch?.isFixed || pMatch?.isFixed);
+        if (diffItem.isSticky === undefined) diffItem.isSticky = Boolean(sMatch?.isSticky || pMatch?.isSticky || diffItem.isFixed);
+        if (!diffItem.text) diffItem.text = sMatch?.text || pMatch?.text || "";
+        if (!diffItem.style) diffItem.style = Object.assign({}, pMatch?.style || {}, sMatch?.style || {});
+      }
       list.push(diffItem);
     }
   }
@@ -2026,19 +2060,25 @@ document.addEventListener("DOMContentLoaded", () => {
       return { x: 0, y: 72, width: w, height: 56 };
     }
     if (sel.includes("feature-card") || sel.includes("h3")) {
-      return { x: w * 0.08, y: 380, width: 320, height: 36 };
+      return isNarrow ? { x: 20, y: 1250, width: w - 40, height: 36 } : { x: w * 0.08, y: 950, width: 320, height: 36 };
     }
     if (sel.includes("compare-table") || sel.includes("th")) {
-      return { x: w * 0.35, y: 560, width: 180, height: 44 };
+      return isNarrow ? { x: 20, y: 1550, width: w - 40, height: 44 } : { x: w * 0.35, y: 1160, width: 180, height: 44 };
     }
     if (sel.includes("metric-card") || sel.includes("metric-value")) {
-      return { x: w * 0.1, y: 310, width: 140, height: 48 };
+      return isNarrow ? { x: 20, y: 1100, width: w - 40, height: 48 } : { x: w * 0.08, y: 915, width: 220, height: 48 };
     }
     if (sel.includes("pricing-card") || sel.includes("amount")) {
-      return { x: w * 0.42, y: 460, width: 120, height: 44 };
+      return isNarrow ? { x: 20, y: 1300, width: w - 40, height: 44 } : { x: w * 0.38, y: 980, width: 140, height: 44 };
     }
     if (sel.includes("cta-submit") || sel.includes("btn-plan")) {
-      return { x: (w - 220) / 2, y: 740, width: 220, height: 48 };
+      return isNarrow ? { x: 24, y: 2280, width: w - 48, height: 48 } : { x: (w - 220) / 2, y: 1820, width: 220, height: 48 };
+    }
+    if (sel.includes("cta-card")) {
+      return isNarrow ? { x: 16, y: 2180, width: w - 32, height: 200 } : { x: (w - Math.min(1100, w * 0.92)) / 2, y: 1720, width: Math.min(1100, w * 0.92), height: 180 };
+    }
+    if (sel.includes("footer")) {
+      return { x: w * 0.65, y: isNarrow ? 2550 : 2050, width: 280, height: 28 };
     }
     if (sel.includes("footer")) {
       return { x: w * 0.65, y: 1050, width: 280, height: 28 };
@@ -2292,9 +2332,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
               }
             } else {
-              const isSticky = !!item.isSticky;
-              drawX = isSticky ? (box.viewportX !== undefined ? box.viewportX : box.x) : (box.x - currentScrollX);
-              drawY = isSticky ? (box.viewportY !== undefined ? box.viewportY : box.y) : (box.y - currentScrollY);
+              const isFixed = Boolean(item.isFixed || box.isFixed);
+              const isSticky = Boolean(item.isSticky || box.isSticky);
+              drawX = isFixed ? (box.viewportX !== undefined ? box.viewportX : box.x) : (box.x - currentScrollX);
+              drawY = (isFixed || (isSticky && currentScrollY > (box.y || 0))) ? (box.viewportY !== undefined ? box.viewportY : box.y) : (box.y - currentScrollY);
               drawW = box.width;
               drawH = box.height;
             }
@@ -2313,68 +2354,75 @@ document.addEventListener("DOMContentLoaded", () => {
             const targetEl = (liveTargetFrame && liveTargetFrame.contentDocument)
               ? liveTargetFrame.contentDocument.querySelector(item.selector)
               : null;
-            if (targetEl && liveTargetFrame.contentWindow) {
-              const compStyle = liveTargetFrame.contentWindow.getComputedStyle(targetEl);
-              const textContent = (targetEl.innerText || targetEl.textContent || "").trim();
+            if (targetEl && (liveTargetFrame?.contentWindow || liveFallbackFrame?.contentWindow)) {
+              const win = liveTargetFrame?.contentWindow || liveFallbackFrame?.contentWindow;
+              const compStyle = win.getComputedStyle(targetEl);
+              const tag = targetEl.tagName.toLowerCase();
+              const isCardOrContainer = (item.selector && (item.selector.includes("card") || item.selector.includes("section") || item.selector.includes("container") || item.selector.includes("table"))) || drawH > 90 || tag === "section" || tag === "div" || tag === "table";
+              const isTextNode = (tag === "h1" || tag === "h2" || tag === "h3" || tag === "h4" || tag === "h5" || tag === "h6" || tag === "p" || tag === "span" || tag === "label" || tag === "strong" || tag === "em" || tag === "th" || tag === "td" || item.diffType === "typography" || item.diffType === "text");
 
-              // If it's a text change: render ONLY the text glyphs directly (no box, no outline!)
-              if (textContent && (item.diffType === "typography" || item.diffType === "text" || !targetEl.children || targetEl.children.length === 0 || textContent.length < 60)) {
-                offCtx.font = `${compStyle.fontWeight || 'normal'} ${compStyle.fontSize || '16px'} ${compStyle.fontFamily || 'sans-serif'}`;
-                offCtx.fillStyle = "#ef4444";
-                offCtx.textBaseline = "middle";
-                const padLeft = parseFloat(compStyle.paddingLeft) || 0;
-                offCtx.fillText(textContent, drawX + padLeft, drawY + (drawH / 2));
-                renderedGlyphs = true;
-              } else if (compStyle.borderRadius && parseFloat(compStyle.borderRadius) > 0) {
-                // If button/pill: fill button shape with diff color (ZERO OUTLINE!)
-                const rVal = parseFloat(compStyle.borderRadius) || 6;
+              // If it's a typography difference on a text element (not a card/container): highlight exact text glyphs via Range
+              if (isTextNode && !isCardOrContainer && (item.diffType === "typography" || item.diffType === "text")) {
+                const doc = targetEl.ownerDocument;
+                if (doc) {
+                  const range = doc.createRange();
+                  range.selectNodeContents(targetEl);
+                  const rects = Array.from(range.getClientRects());
+                  if (rects.length > 0) {
+                    offCtx.fillStyle = "rgba(239, 68, 68, 0.45)";
+                    rects.forEach(r => {
+                      const rx = Math.round(r.left);
+                      const ry = Math.round(r.top);
+                      const rw = Math.round(r.width);
+                      const rh = Math.round(r.height);
+                      if (rw > 0 && rh > 0) {
+                        offCtx.beginPath();
+                        if (typeof offCtx.roundRect === "function") {
+                          offCtx.roundRect(rx - 2, ry - 1, rw + 4, rh + 2, 4);
+                        } else {
+                          offCtx.rect(rx - 2, ry - 1, rw + 4, rh + 2);
+                        }
+                        offCtx.fill();
+                      }
+                    });
+                    renderedGlyphs = true;
+                  }
+                }
+              }
+
+              // If button, pill, badge, card, or container shape: fill exact shape with border-radius (ZERO OUTLINE!)
+              if (!renderedGlyphs) {
+                const rVal = parseFloat(compStyle.borderRadius) || (parseFloat(item.style?.radius) || 0);
+                offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
                 offCtx.beginPath();
-                if (typeof offCtx.roundRect === "function") {
+                if (rVal > 0 && typeof offCtx.roundRect === "function") {
                   offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
+                } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("button") || item.selector.includes("tab") || item.selector.includes("badge"))) {
+                  offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
                 } else {
                   offCtx.rect(drawX, drawY, drawW, drawH);
                 }
-                offCtx.fillStyle = "rgba(239, 68, 68, 0.45)";
                 offCtx.fill();
                 renderedGlyphs = true;
               }
             }
           } catch (e) {}
 
-          // Fallback if cross-origin: use text and style reported by sync_agent
+          // Fallback if cross-origin or no live element
           if (!renderedGlyphs) {
             const itemText = (item.text || "").trim();
-            if (itemText && (item.diffType === "typography" || item.diffType === "text" || itemText.length < 60)) {
-              const fontStyle = `${item.style?.fontWeight || 'normal'} ${item.style?.fontSize || '16px'} ${item.style?.fontFamily || 'sans-serif'}`;
-              offCtx.font = fontStyle;
-              offCtx.fillStyle = "#ef4444";
-              offCtx.textBaseline = "middle";
-              offCtx.fillText(itemText, drawX + 4, drawY + (drawH / 2));
-              renderedGlyphs = true;
-            } else if (item.style?.radius && parseFloat(item.style.radius) > 0) {
-              const rVal = parseFloat(item.style.radius) || 6;
-              offCtx.beginPath();
-              if (typeof offCtx.roundRect === "function") {
-                offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
-              } else {
-                offCtx.rect(drawX, drawY, drawW, drawH);
-              }
-              offCtx.fillStyle = "rgba(239, 68, 68, 0.45)";
-              offCtx.fill();
-              renderedGlyphs = true;
-            }
-          }
-
-          if (!renderedGlyphs) {
-            const isCardOrContainer = (item.selector && item.selector.includes("card")) || drawH > 100;
+            const isCardOrContainer = (item.selector && (item.selector.includes("card") || item.selector.includes("section") || item.selector.includes("container") || item.selector.includes("table"))) || drawH > 90;
+            const rVal = parseFloat(item.style?.radius) || (item.selector.includes("btn") || item.selector.includes("tab") ? 6 : 0);
             offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
-            if (typeof offCtx.roundRect === "function" && drawW < 300 && drawH < 80) {
-              offCtx.beginPath();
+            offCtx.beginPath();
+            if (rVal > 0 && typeof offCtx.roundRect === "function") {
+              offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
+            } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("tab"))) {
               offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
-              offCtx.fill();
             } else {
-              offCtx.fillRect(drawX, drawY, drawW, drawH);
+              offCtx.rect(drawX, drawY, drawW, drawH);
             }
+            offCtx.fill();
           }
           offCtx.restore();
         });
@@ -2538,9 +2586,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
               }
             } else {
-              const isSticky = !!item.isSticky;
-              drawX = isSticky ? (box.viewportX !== undefined ? box.viewportX : box.x) : (box.x - currentScrollX);
-              drawY = isSticky ? (box.viewportY !== undefined ? box.viewportY : box.y) : (box.y - currentScrollY);
+              const isFixed = Boolean(item.isFixed || box.isFixed);
+              const isSticky = Boolean(item.isSticky || box.isSticky);
+              drawX = isFixed ? (box.viewportX !== undefined ? box.viewportX : box.x) : (box.x - currentScrollX);
+              drawY = (isFixed || (isSticky && currentScrollY > (box.y || 0))) ? (box.viewportY !== undefined ? box.viewportY : box.y) : (box.y - currentScrollY);
               drawW = box.width;
               drawH = box.height;
             }
@@ -2562,66 +2611,72 @@ document.addEventListener("DOMContentLoaded", () => {
             if (targetEl && (iframeDiffBase?.contentWindow || iframeStg?.contentWindow)) {
               const win = iframeDiffBase?.contentWindow || iframeStg?.contentWindow;
               const compStyle = win.getComputedStyle(targetEl);
-              const textContent = (targetEl.innerText || targetEl.textContent || "").trim();
+              const tag = targetEl.tagName.toLowerCase();
+              const isCardOrContainer = (item.selector && (item.selector.includes("card") || item.selector.includes("section") || item.selector.includes("container") || item.selector.includes("table"))) || drawH > 90 || tag === "section" || tag === "div" || tag === "table";
+              const isTextNode = (tag === "h1" || tag === "h2" || tag === "h3" || tag === "h4" || tag === "h5" || tag === "h6" || tag === "p" || tag === "span" || tag === "label" || tag === "strong" || tag === "em" || tag === "th" || tag === "td" || item.diffType === "typography" || item.diffType === "text");
 
-              // If it's a text change: render ONLY the text glyphs directly (no box, no outline!)
-              if (textContent && (item.diffType === "typography" || item.diffType === "text" || !targetEl.children || targetEl.children.length === 0 || textContent.length < 60)) {
-                offCtx.font = `${compStyle.fontWeight || 'normal'} ${compStyle.fontSize || '16px'} ${compStyle.fontFamily || 'sans-serif'}`;
-                offCtx.fillStyle = "#ef4444";
-                offCtx.textBaseline = "middle";
-                const padLeft = parseFloat(compStyle.paddingLeft) || 0;
-                offCtx.fillText(textContent, drawX + padLeft, drawY + (drawH / 2));
-                renderedGlyphs = true;
-              } else if (compStyle.borderRadius && parseFloat(compStyle.borderRadius) > 0) {
-                // If button/pill: fill button shape with diff color (ZERO OUTLINE!)
-                const rVal = parseFloat(compStyle.borderRadius) || 6;
+              // If it's a typography difference on a text element (not a card/container): highlight exact text glyphs via Range
+              if (isTextNode && !isCardOrContainer && (item.diffType === "typography" || item.diffType === "text")) {
+                const doc = targetEl.ownerDocument;
+                if (doc) {
+                  const range = doc.createRange();
+                  range.selectNodeContents(targetEl);
+                  const rects = Array.from(range.getClientRects());
+                  if (rects.length > 0) {
+                    offCtx.fillStyle = "rgba(239, 68, 68, 0.45)";
+                    rects.forEach(r => {
+                      const rx = Math.round(r.left);
+                      const ry = Math.round(r.top);
+                      const rw = Math.round(r.width);
+                      const rh = Math.round(r.height);
+                      if (rw > 0 && rh > 0) {
+                        offCtx.beginPath();
+                        if (typeof offCtx.roundRect === "function") {
+                          offCtx.roundRect(rx - 2, ry - 1, rw + 4, rh + 2, 4);
+                        } else {
+                          offCtx.rect(rx - 2, ry - 1, rw + 4, rh + 2);
+                        }
+                        offCtx.fill();
+                      }
+                    });
+                    renderedGlyphs = true;
+                  }
+                }
+              }
+
+              // If button, pill, badge, card, or container shape: fill exact shape with border-radius (ZERO OUTLINE!)
+              if (!renderedGlyphs) {
+                const rVal = parseFloat(compStyle.borderRadius) || (parseFloat(item.style?.radius) || 0);
+                offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
                 offCtx.beginPath();
-                if (typeof offCtx.roundRect === "function") {
+                if (rVal > 0 && typeof offCtx.roundRect === "function") {
                   offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
+                } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("button") || item.selector.includes("tab") || item.selector.includes("badge"))) {
+                  offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
                 } else {
                   offCtx.rect(drawX, drawY, drawW, drawH);
                 }
-                offCtx.fillStyle = "rgba(239, 68, 68, 0.45)";
                 offCtx.fill();
                 renderedGlyphs = true;
               }
             }
           } catch (e) {}
 
-          // Fallback if cross-origin: use text and style reported by sync_agent
+          // Fallback if cross-origin or no live element
           if (!renderedGlyphs) {
             const itemText = (item.text || "").trim();
-            if (itemText && (item.diffType === "typography" || item.diffType === "text" || itemText.length < 60)) {
-              const fontStyle = `${item.style?.fontWeight || 'normal'} ${item.style?.fontSize || '16px'} ${item.style?.fontFamily || 'sans-serif'}`;
-              offCtx.font = fontStyle;
-              offCtx.fillStyle = "#ef4444";
-              offCtx.textBaseline = "middle";
-              offCtx.fillText(itemText, drawX + 4, drawY + (drawH / 2));
-              renderedGlyphs = true;
-            } else if (item.style?.radius && parseFloat(item.style.radius) > 0) {
-              const rVal = parseFloat(item.style.radius) || 6;
-              offCtx.beginPath();
-              if (typeof offCtx.roundRect === "function") {
-                offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
-              } else {
-                offCtx.rect(drawX, drawY, drawW, drawH);
-              }
-              offCtx.fillStyle = "rgba(239, 68, 68, 0.45)";
-              offCtx.fill();
-              renderedGlyphs = true;
-            }
-          }
-
-          if (!renderedGlyphs) {
-            const isCardOrContainer = (item.selector && item.selector.includes("card")) || drawH > 100;
+            const isCardOrContainer = (item.selector && (item.selector.includes("card") || item.selector.includes("section") || item.selector.includes("container") || item.selector.includes("table"))) || drawH > 90;
+            const rVal = parseFloat(item.style?.radius) || (item.selector.includes("btn") || item.selector.includes("tab") ? 6 : 0);
             offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
-            if (typeof offCtx.roundRect === "function" && drawW < 300 && drawH < 80) {
-              offCtx.beginPath();
+            offCtx.beginPath();
+            if (rVal > 0 && typeof offCtx.roundRect === "function") {
+              offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
+            } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("tab"))) {
               offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
-              offCtx.fill();
             } else {
-              offCtx.fillRect(drawX, drawY, drawW, drawH);
+              offCtx.rect(drawX, drawY, drawW, drawH);
             }
+            offCtx.fill();
           }
           offCtx.restore();
         });

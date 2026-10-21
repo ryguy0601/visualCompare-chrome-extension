@@ -1182,6 +1182,36 @@
     }
   }
 
+  function isElementFixed(el) {
+    if (!el || !el.ownerDocument || !el.ownerDocument.defaultView) return false;
+    let curr = el;
+    while (curr && curr !== curr.ownerDocument.body && curr !== curr.ownerDocument.documentElement) {
+      try {
+        const s = curr.ownerDocument.defaultView.getComputedStyle(curr);
+        if (s && s.position === 'fixed') {
+          return true;
+        }
+      } catch (e) { break; }
+      curr = curr.parentElement;
+    }
+    return false;
+  }
+
+  function isElementSticky(el) {
+    if (!el || !el.ownerDocument || !el.ownerDocument.defaultView) return false;
+    let curr = el;
+    while (curr && curr !== curr.ownerDocument.body && curr !== curr.ownerDocument.documentElement) {
+      try {
+        const s = curr.ownerDocument.defaultView.getComputedStyle(curr);
+        if (s && (s.position === 'sticky' || s.position === 'fixed')) {
+          return true;
+        }
+      } catch (e) { break; }
+      curr = curr.parentElement;
+    }
+    return false;
+  }
+
   function extractDiffCandidates() {
     const candidates = [];
     const scrollY = window.scrollY || window.pageYOffset || 0;
@@ -1217,11 +1247,8 @@
         if (rect.width === 0 || rect.height === 0) return;
 
         const tag = el.tagName.toLowerCase();
-        const isSticky = style.position === 'sticky' || 
-                         style.position === 'fixed' || 
-                         !!el.closest('header') || 
-                         !!el.closest('#header-nav') || 
-                         !!el.closest('nav.navbar');
+        const isFixed = isElementFixed(el);
+        const isSticky = isElementSticky(el);
 
         const vh = window.innerHeight || document.documentElement.clientHeight || 800;
         const vw = window.innerWidth || document.documentElement.clientWidth || 1200;
@@ -1257,8 +1284,9 @@
           href: hrefAttr,
           alt: altAttr,
           title: titleAttr,
+          isFixed,
           isSticky,
-          inViewport: (isSticky || inViewport),
+          inViewport: (isFixed || isSticky || inViewport),
           box: {
             x: Math.round(rect.left + (isSticky ? 0 : scrollX)),
             y: Math.round(rect.top + (isSticky ? 0 : scrollY)),
@@ -1514,15 +1542,13 @@
           const labelText = (item.label && typeof item.label === "string") ? item.label.trim() : "";
 
           const style = window.getComputedStyle(el);
-          const isSticky = style.position === 'sticky' || 
-                           style.position === 'fixed' || 
-                           !!el.closest('header') || 
-                           !!el.closest('#header-nav') || 
-                           !!el.closest('nav.navbar');
+          const isFixed = isElementFixed(el);
+          const isSticky = isElementSticky(el);
 
           appliedBoxes.push({
             selector: item.selector,
             label: labelText,
+            isFixed,
             isSticky,
             viewportX: Math.round(rect.left),
             viewportY: Math.round(rect.top),
