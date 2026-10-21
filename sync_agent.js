@@ -620,7 +620,6 @@
 
     // 3b. SYNCHRONIZED WHEEL SCROLLING (Instant smooth lockstep scroll across all panes)
     window.addEventListener("wheel", (e) => {
-      if (isSyncing) return;
       if (window.parent) {
         window.parent.postMessage({
           type: "VC_WHEEL_SCROLL",
@@ -932,9 +931,12 @@
           behavior: "auto"
         });
 
+        requestAnimationFrame(() => {
+          isSyncing = false;
+        });
         syncScrollTimeout = setTimeout(() => {
           isSyncing = false;
-        }, 120);
+        }, 40);
       } else if (action.kind === "input") {
         let el = currentFocusedElement;
         if (!el || !("value" in el)) {

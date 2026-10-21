@@ -2663,7 +2663,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const viewH = wrapFrameProd?.clientHeight || iframeProd?.clientHeight || 800;
     const docH = Math.max(
       viewH,
-      lastProdLandmarks?.docHeight || lastStgLandmarks?.docHeight || 2000
+      lastProdLandmarks?.docHeight || 0,
+      lastStgLandmarks?.docHeight || 0,
+      lastScrollState?.maxScrollY ? (lastScrollState.maxScrollY + viewH) : 0,
+      50000
     );
     const maxScrollY = Math.max(1, docH - viewH);
     const newScrollY = Math.max(0, Math.min(maxScrollY, currentY + deltaY));
@@ -2699,11 +2702,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const deltaX = e.deltaX || 0;
     const currentY = lastScrollState.scrollY || 0;
     const currentX = lastScrollState.scrollX || 0;
-    const docH = Math.max(
-      swipeContainer?.clientHeight || 800,
-      lastProdLandmarks?.docHeight || lastStgLandmarks?.docHeight || 2000
-    );
     const viewH = swipeContainer?.clientHeight || 800;
+    const docH = Math.max(
+      viewH,
+      lastProdLandmarks?.docHeight || 0,
+      lastStgLandmarks?.docHeight || 0,
+      lastScrollState?.maxScrollY ? (lastScrollState.maxScrollY + viewH) : 0,
+      50000
+    );
     const maxScrollY = Math.max(1, docH - viewH);
     const newScrollY = Math.max(0, Math.min(maxScrollY, currentY + deltaY));
     const newScrollX = Math.max(0, currentX + deltaX);
