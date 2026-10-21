@@ -1594,7 +1594,6 @@
           // Remove any text description badges so differences have no text clutter
           el.querySelectorAll(".vc-red-diff-badge").forEach(b => b.remove());
 
-          const rect = el.getBoundingClientRect();
           const labelText = (item.label && typeof item.label === "string") ? item.label.trim() : "";
 
           const isFixed = isElementFixed(el);

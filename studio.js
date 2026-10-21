@@ -123,6 +123,7 @@ document.addEventListener("DOMContentLoaded", () => {
     PROD: [],
     STG: []
   };
+  let activeShiftRegions = [];
   let activeRedDiffs = [];
   let lastScrollState = { scrollX: 0, scrollY: 0, pctX: 0, pctY: 0 };
   let activeScrollLeader = null;
@@ -171,6 +172,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // ----------------------------------------------------
   function loadAllFrames(prodUrl, stgUrl) {
     if (!prodUrl && !stgUrl) return;
+
+    prodUrl = normalizeUrl(prodUrl);
+    stgUrl = normalizeUrl(stgUrl);
 
     hasAlignedCurrentPage = false;
     lastProdLandmarks = null;
@@ -2033,7 +2037,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // RUN VISUAL DIFF ENGINE (Visual regression & layout diff calculator)
   // ----------------------------------------------------
   let isDiffActive = false;
-  let activeShiftRegions = [];
+  activeShiftRegions = [];
 
   btnRunDiff.addEventListener("click", () => {
     runVisualDiffCalculation(true);
@@ -3341,6 +3345,33 @@ document.addEventListener("DOMContentLoaded", () => {
   // ----------------------------------------------------
   // 9. URL ACTIONS & NAVIGATION
   // ----------------------------------------------------
+  function normalizeUrl(url) {
+    if (!url) return "";
+    url = url.trim();
+    if (url === "about:blank") return url;
+    if (/^(https?:\/\/|chrome-extension:\/\/|file:\/\/|blob:|data:)/i.test(url)) {
+      return url;
+    }
+    if (/^demo[_-].*\.html$/i.test(url) || url.endsWith(".html")) {
+      return url;
+    }
+    if (/^(localhost|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})/i.test(url)) {
+      return "https://" + url;
+    }
+    return url;
+  }
+
+  [prodUrlInput, stgUrlInput].forEach(input => {
+    if (input) {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          loadAllFrames(prodUrlInput.value.trim(), stgUrlInput.value.trim());
+        }
+      });
+    }
+  });
+
   btnNavigateAll.addEventListener("click", () => {
     loadAllFrames(prodUrlInput.value.trim(), stgUrlInput.value.trim());
   });
