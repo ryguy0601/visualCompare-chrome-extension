@@ -622,6 +622,19 @@
       }
     }, { passive: true });
 
+    // 3b. SYNCHRONIZED WHEEL SCROLLING (Instant smooth lockstep scroll across all panes)
+    window.addEventListener("wheel", (e) => {
+      if (isSyncing) return;
+      if (window.parent) {
+        window.parent.postMessage({
+          type: "VC_WHEEL_SCROLL",
+          paneId,
+          deltaY: e.deltaY,
+          deltaX: e.deltaX
+        }, "*");
+      }
+    }, { passive: true });
+
     // 4. FORM INPUT TRACKING
     document.addEventListener("input", (e) => {
       if (isSyncing || e.__vc_synthetic) return;

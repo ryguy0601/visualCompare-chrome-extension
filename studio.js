@@ -397,6 +397,16 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    if (msg.type === "VC_WHEEL_SCROLL") {
+      if (!checkSyncScroll || !checkSyncScroll.checked) return;
+      if (currentMode === "side-by-side") {
+        handleSideBySideWheel({ deltaY: msg.deltaY, deltaX: msg.deltaX });
+      } else if (currentMode === "swipe") {
+        handleSwipeWheel({ deltaY: msg.deltaY, deltaX: msg.deltaX });
+      }
+      return;
+    }
+
     if (msg.type === "VC_ACTION_PERFORMED") {
       const { paneId, action } = msg;
       if (!action) return;
@@ -2594,88 +2604,99 @@ document.addEventListener("DOMContentLoaded", () => {
       const val = parseInt(e.target.value, 10) || 0;
       if (colDiffOpacityVal) colDiffOpacityVal.textContent = `${val}%`;
       if (pixelDiffCanvas) pixelDiffCanvas.style.opacity = (val / 100).toString();
+      if (swipeDiffCanvas) swipeDiffCanvas.style.opacity = (val / 100).toString();
     });
   }
 
-  // Synchronized Wheel Scrolling for Column 3 (Pixel Diff Column)
-  if (wrapFrameDiff) {
-    wrapFrameDiff.addEventListener("wheel", (e) => {
+  // Synchronized Wheel Scrolling for Side-by-Side (Column View) & Swipe Curtain
+  function handleSideBySideWheel(e) {
+    if (!checkSyncScroll || !checkSyncScroll.checked) return;
+    if (e && typeof e.preventDefault === "function") {
       e.preventDefault();
-      const currentY = lastScrollState.scrollY || 0;
-      const currentX = lastScrollState.scrollX || 0;
-      const docH = Math.max(wrapFrameDiff.clientHeight || 800, lastProdLandmarks?.docHeight || 2000);
-      const maxScrollY = Math.max(1, docH - (wrapFrameDiff.clientHeight || 800));
-      const newScrollY = Math.max(0, Math.min(maxScrollY, currentY + e.deltaY));
-      const newScrollX = Math.max(0, currentX + e.deltaX);
+    }
+    const deltaY = e.deltaY || 0;
+    const deltaX = e.deltaX || 0;
+    const currentY = lastScrollState.scrollY || 0;
+    const currentX = lastScrollState.scrollX || 0;
+    const docH = Math.max(
+      wrapFrameProd?.clientHeight || 800,
+      lastProdLandmarks?.docHeight || lastStgLandmarks?.docHeight || 2000
+    );
+    const viewH = wrapFrameProd?.clientHeight || 800;
+    const maxScrollY = Math.max(1, docH - viewH);
+    const newScrollY = Math.max(0, Math.min(maxScrollY, currentY + deltaY));
+    const newScrollX = Math.max(0, currentX + deltaX);
 
-      lastScrollState.scrollY = newScrollY;
-      lastScrollState.scrollX = newScrollX;
+    lastScrollState.scrollY = newScrollY;
+    lastScrollState.scrollX = newScrollX;
 
-      // Dispatch mirror scroll to PROD & STG
-      dispatchToPane("PROD", {
-        type: "VC_MIRROR_ACTION",
-        action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
-      });
-      dispatchToPane("STG", {
-        type: "VC_MIRROR_ACTION",
-        action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
-      });
+    const mirrorAction = {
+      type: "VC_MIRROR_ACTION",
+      action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
+    };
 
-      // Dispatch to Diff Base iframe
-      if (iframeDiffBase && iframeDiffBase.contentWindow) {
-        try {
-          iframeDiffBase.contentWindow.postMessage({
-            type: "VC_MIRROR_ACTION",
-            action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
-          }, "*");
-        } catch (err) {}
-      }
+    if (iframeProd && iframeProd.contentWindow) {
+      try { iframeProd.contentWindow.postMessage(mirrorAction, "*"); } catch (err) {}
+    }
+    if (iframeStg && iframeStg.contentWindow) {
+      try { iframeStg.contentWindow.postMessage(mirrorAction, "*"); } catch (err) {}
+    }
+    if (iframeDiffBase && iframeDiffBase.contentWindow) {
+      try { iframeDiffBase.contentWindow.postMessage(mirrorAction, "*"); } catch (err) {}
+    }
 
-      triggerScrollDiffSync(newScrollY, newScrollX);
-    }, { passive: false });
+    triggerScrollDiffSync(newScrollY, newScrollX);
   }
 
-  // Synchronized Wheel Scrolling for Swipe Split Curtain
-  if (swipeContainer) {
-    swipeContainer.addEventListener("wheel", (e) => {
+  function handleSwipeWheel(e) {
+    if (!checkSyncScroll || !checkSyncScroll.checked) return;
+    if (e && typeof e.preventDefault === "function") {
       e.preventDefault();
-      const currentY = lastScrollState.scrollY || 0;
-      const currentX = lastScrollState.scrollX || 0;
-      const docH = Math.max(swipeContainer.clientHeight || 800, lastProdLandmarks?.docHeight || 2000);
-      const maxScrollY = Math.max(1, docH - (swipeContainer.clientHeight || 800));
-      const newScrollY = Math.max(0, Math.min(maxScrollY, currentY + e.deltaY));
-      const newScrollX = Math.max(0, currentX + e.deltaX);
+    }
+    const deltaY = e.deltaY || 0;
+    const deltaX = e.deltaX || 0;
+    const currentY = lastScrollState.scrollY || 0;
+    const currentX = lastScrollState.scrollX || 0;
+    const docH = Math.max(
+      swipeContainer?.clientHeight || 800,
+      lastProdLandmarks?.docHeight || lastStgLandmarks?.docHeight || 2000
+    );
+    const viewH = swipeContainer?.clientHeight || 800;
+    const maxScrollY = Math.max(1, docH - viewH);
+    const newScrollY = Math.max(0, Math.min(maxScrollY, currentY + deltaY));
+    const newScrollX = Math.max(0, currentX + deltaX);
 
-      lastScrollState.scrollY = newScrollY;
-      lastScrollState.scrollX = newScrollX;
+    lastScrollState.scrollY = newScrollY;
+    lastScrollState.scrollX = newScrollX;
 
-      if (iframeSwipeProd && iframeSwipeProd.contentWindow) {
-        try {
-          iframeSwipeProd.contentWindow.postMessage({
-            type: "VC_MIRROR_ACTION",
-            action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
-          }, "*");
-        } catch (err) {}
-      }
-      if (iframeSwipeStg && iframeSwipeStg.contentWindow) {
-        try {
-          iframeSwipeStg.contentWindow.postMessage({
-            type: "VC_MIRROR_ACTION",
-            action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
-          }, "*");
-        } catch (err) {}
-      }
-      if (iframeSwipeDiff && iframeSwipeDiff.contentWindow) {
-        try {
-          iframeSwipeDiff.contentWindow.postMessage({
-            type: "VC_MIRROR_ACTION",
-            action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
-          }, "*");
-        } catch (err) {}
-      }
+    const mirrorAction = {
+      type: "VC_MIRROR_ACTION",
+      action: { kind: "scroll", scrollY: newScrollY, scrollX: newScrollX }
+    };
 
-      triggerScrollDiffSync(newScrollY, newScrollX);
-    }, { passive: false });
+    if (iframeSwipeProd && iframeSwipeProd.contentWindow) {
+      try { iframeSwipeProd.contentWindow.postMessage(mirrorAction, "*"); } catch (err) {}
+    }
+    if (iframeSwipeStg && iframeSwipeStg.contentWindow) {
+      try { iframeSwipeStg.contentWindow.postMessage(mirrorAction, "*"); } catch (err) {}
+    }
+    if (iframeSwipeDiff && iframeSwipeDiff.contentWindow) {
+      try { iframeSwipeDiff.contentWindow.postMessage(mirrorAction, "*"); } catch (err) {}
+    }
+
+    triggerScrollDiffSync(newScrollY, newScrollX);
+  }
+
+  // Attach synchronized wheel scrolling to all Side-by-Side elements (exact same smooth motion as swipe!)
+  const sideBySideViewEl = document.getElementById("view-side-by-side");
+  [sideBySideViewEl, wrapFrameProd, wrapFrameStg, wrapFrameDiff].forEach(el => {
+    if (el) {
+      el.addEventListener("wheel", handleSideBySideWheel, { passive: false });
+    }
+  });
+
+  if (swipeContainer) {
+    swipeContainer.addEventListener("wheel", handleSwipeWheel, { passive: false });
   }
 
   // Side-by-Side 3rd Column Pixel Diff Toggle
@@ -2735,7 +2756,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (iframeSwipeDiff) {
         iframeSwipeDiff.style.display = "block";
-        iframeSwipeDiff.style.opacity = "0";
+        iframeSwipeDiff.style.opacity = "1";
         iframeSwipeDiff.style.pointerEvents = "none";
         iframeSwipeDiff.style.position = "absolute";
         iframeSwipeDiff.style.top = "0";
@@ -2760,6 +2781,7 @@ document.addEventListener("DOMContentLoaded", () => {
         swipeDiffCanvas.style.width = "100%";
         swipeDiffCanvas.style.height = "100%";
         swipeDiffCanvas.style.zIndex = "5";
+        swipeDiffCanvas.style.opacity = (colDiffOpacitySlider ? colDiffOpacitySlider.value / 100 : 0.85).toString();
       }
       if (swipeOverlayTag) {
         swipeOverlayTag.textContent = "DIFF (LEFT)";

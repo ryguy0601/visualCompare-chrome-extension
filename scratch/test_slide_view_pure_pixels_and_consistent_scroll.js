@@ -17,10 +17,10 @@ assert(studioJs.includes('offCtx.fillText(textContent, drawX + padLeft'), "rende
 assert(studioJs.includes('offCtx.fillRect(px, py, 1.5, 1.5)'), "renderSwipeDiffCanvas must use fine subpixel diff dots rather than whole bounding boxes");
 console.log("PASS 2: Slide diff view exclusively renders differing pixels and text glyphs.");
 
-// 3. Verify Slide View Diff Mode Layering
-assert(studioJs.includes('iframeSwipeDiff.style.opacity = "0"'), "iframeSwipeDiff must be transparent in diff mode to allow clean base view underneath canvas");
+// 3. Verify Slide View Diff Mode Layering matches 3rd Column
+assert(studioJs.includes('iframeSwipeDiff.style.opacity = "1"'), "iframeSwipeDiff must be visible at opacity 1 in diff mode matching 3rd column architecture");
 assert(studioJs.includes('swipeOverlayTag.textContent = "DIFF (LEFT)"'), "swipeOverlayTag must be labeled DIFF (LEFT) in diff mode");
-console.log("PASS 3: Slide diff mode layer correctly sets transparent base and dedicated diff canvas.");
+console.log("PASS 3: Slide diff mode layer correctly sets live base frame and dedicated diff canvas matching 3rd column.");
 
 // 4. Verify Consistent Scroll Synchronization in sync_agent.js
 assert(syncAgentJs.includes('syncScrollTimeout = setTimeout('), "sync_agent.js must use debounced syncScrollTimeout for continuous scroll stream");
