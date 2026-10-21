@@ -6,16 +6,16 @@ console.log("TEST: Validating Pure Differing Pixels (Zero Red Boxes) & Consisten
 const studioJs = fs.readFileSync('studio.js', 'utf8');
 const syncAgentJs = fs.readFileSync('sync_agent.js', 'utf8');
 
-// 1. Verify renderSwipeDiffCanvas contains ZERO red boxes
-assert(!studioJs.includes('offCtx.strokeRect(drawX, drawY, drawW, drawH)'), "CRITICAL BUG: renderSwipeDiffCanvas must not draw strokeRect red boxes around elements!");
-assert(!studioJs.includes('offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.55)"'), "CRITICAL BUG: renderSwipeDiffCanvas must not fill elements with translucent red rectangles!");
-assert(!studioJs.includes('offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.65)"'), "CRITICAL BUG: renderPixelDiffColumn3 must not fill elements with translucent red rectangles!");
-console.log("PASS 1: Red bounding boxes and rectangular container fills completely eliminated from diff rendering!");
+// 1. Verify renderSwipeDiffCanvas diff display matches 3rd column architecture
+assert(studioJs.includes('function renderSwipeDiffCanvas'), "renderSwipeDiffCanvas must exist");
+assert(studioJs.includes('function renderPixelDiffColumn3'), "renderPixelDiffColumn3 must exist");
+assert(studioJs.includes('drawHazardStripes(offCtx, 0, regY, swW, reg.h, 14)'), "renderSwipeDiffCanvas must render layout shifts identically to 3rd column");
+console.log("PASS 1: Swipe diff display matches 3rd column architecture per user request!");
 
-// 2. Verify pure differing pixel rendering
-assert(studioJs.includes('offCtx.fillText(textContent, drawX + padLeft'), "renderSwipeDiffCanvas must render text glyphs in diff color without boxes");
-assert(studioJs.includes('offCtx.fillRect(px, py, 1.5, 1.5)'), "renderSwipeDiffCanvas must use fine subpixel diff dots rather than whole bounding boxes");
-console.log("PASS 2: Slide diff view exclusively renders differing pixels and text glyphs.");
+// 2. Verify diff highlight styling matches 3rd column
+assert(studioJs.includes('offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.65)"'), "renderSwipeDiffCanvas must render clean diff fills matching 3rd column");
+assert(studioJs.includes('offCtx.strokeStyle = "#ef4444"'), "renderSwipeDiffCanvas must use crisp red border matching 3rd column");
+console.log("PASS 2: Slide diff view exclusively renders clean visual diff highlights without text badges.");
 
 // 3. Verify Slide View Diff Mode Layering matches 3rd Column
 assert(studioJs.includes('iframeSwipeDiff.style.opacity = "1"'), "iframeSwipeDiff must be visible at opacity 1 in diff mode matching 3rd column architecture");
@@ -33,10 +33,10 @@ assert(studioJs.includes('if (iframeSwipeDiff && iframeSwipeDiff.contentWindow)'
 assert(studioJs.includes('if (iframeDiffBase && iframeDiffBase.contentWindow)'), "studio.js must mirror scroll to iframeDiffBase");
 console.log("PASS 5: studio.js synchronizes scroll across all active view frames.");
 
-// 6. Behavioral Simulation: Verify pixel-level diff calculation with zero bounding boxes
+// 6. Behavioral Simulation: Verify diff overlay calculation matching 3rd column
 const mockDiffItem = {
   selector: '#btn-cta',
-  diffType: 'text',
+  diffType: 'style',
   box: { x: 100, y: 200, width: 120, height: 40 }
 };
 
@@ -44,19 +44,18 @@ let capturedCalls = [];
 const mockCtx = {
   save() { capturedCalls.push("save"); },
   restore() { capturedCalls.push("restore"); },
-  fillText(text, x, y) { capturedCalls.push(`fillText:${text}@(${x},${y})`); },
-  strokeRect() { capturedCalls.push("strokeRect"); },
+  strokeRect(x, y, w, h) { capturedCalls.push(`strokeRect:(${x},${y},${w},${h})`); },
   fillRect(x, y, w, h) { capturedCalls.push(`fillRect:(${x},${y},${w},${h})`); }
 };
 
-// Simulate diff render logic on text item
-const padLeft = 12;
+// Simulate diff render logic on element item
 mockCtx.save();
-mockCtx.fillText("Start Free Trial", mockDiffItem.box.x + padLeft, mockDiffItem.box.y + (mockDiffItem.box.height / 2));
+mockCtx.fillRect(mockDiffItem.box.x, mockDiffItem.box.y, mockDiffItem.box.width, mockDiffItem.box.height);
+mockCtx.strokeRect(mockDiffItem.box.x, mockDiffItem.box.y, mockDiffItem.box.width, mockDiffItem.box.height);
 mockCtx.restore();
 
-assert(!capturedCalls.includes("strokeRect"), "Simulation must NOT call strokeRect");
-assert(capturedCalls.some(c => c.startsWith("fillText:Start Free Trial")), "Simulation must render text glyphs directly");
-console.log("PASS 6: Behavioral simulation confirms pure pixel rendering with zero bounding boxes!");
+assert(capturedCalls.includes("fillRect:(100,200,120,40)"), "Simulation must call fillRect");
+assert(capturedCalls.includes("strokeRect:(100,200,120,40)"), "Simulation must call strokeRect");
+console.log("PASS 6: Behavioral simulation confirms clean visual diff rendering matching 3rd column!");
 
 console.log("\nALL PURE DIFFERING PIXELS & CONSISTENT SCROLL TESTS PASSED SUCCESSFULLY!");

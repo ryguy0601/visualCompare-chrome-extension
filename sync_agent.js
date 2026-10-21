@@ -68,11 +68,7 @@
     } else if (data.type === "VC_REMOVE_HAZARD_SPACERS") {
       removeHazardSpacers();
     } else if (data.type === "VC_APPLY_RED_DIFFS") {
-      if (data.showOutlines === false) {
-        removeRedDiffs();
-      } else {
-        applyRedDiffs(data.diffs);
-      }
+      applyRedDiffs(data.diffs);
     } else if (data.type === "VC_REMOVE_RED_DIFFS") {
       removeRedDiffs();
     } else if (data.type === "VC_REQUEST_DIFF_CANDIDATES") {
