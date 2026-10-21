@@ -149,7 +149,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   if (params.get("device")) viewportSelect.value = params.get("device");
   if (params.get("syncHazard") !== null) checkSyncHazard.checked = params.get("syncHazard") === "true";
-  if (params.get("syncRedDiff") !== null) checkSyncRedDiff.checked = params.get("syncRedDiff") === "true";
+  if (params.get("syncRedDiff") !== null) {
+    checkSyncRedDiff.checked = params.get("syncRedDiff") === "true";
+  } else {
+    checkSyncRedDiff.checked = false;
+  }
   if (params.get("syncClicks") !== null) checkSyncClicks.checked = params.get("syncClicks") === "true";
   if (params.get("syncScroll") !== null) checkSyncScroll.checked = params.get("syncScroll") === "true";
   if (params.get("syncHover") !== null) checkSyncHover.checked = params.get("syncHover") === "true";
@@ -371,7 +375,7 @@ document.addEventListener("DOMContentLoaded", () => {
           swipeStgLandmarks = { landmarks: [], diffCandidates: msg.candidates, measuredWidth: frameWidth, href: msg.href };
           lastStgLandmarks = swipeStgLandmarks;
         }
-        if (isDiffActive || isColDiffActive || currentMode === "swipe") {
+        if (checkSyncRedDiff && checkSyncRedDiff.checked) {
           if (swipeProdLandmarks && swipeStgLandmarks && Math.abs(swipeProdLandmarks.measuredWidth - swipeStgLandmarks.measuredWidth) < 120) {
             computeAndApplyRedDifferences(true);
             if (swipeCompareMode === "diff") {
@@ -387,7 +391,7 @@ document.addEventListener("DOMContentLoaded", () => {
           colStgLandmarks = { landmarks: [], diffCandidates: msg.candidates, measuredWidth: frameWidth, href: msg.href };
           lastStgLandmarks = colStgLandmarks;
         }
-        if (isDiffActive || isColDiffActive || currentMode === "swipe") {
+        if (checkSyncRedDiff && checkSyncRedDiff.checked) {
           if (colProdLandmarks && colStgLandmarks && Math.abs(colProdLandmarks.measuredWidth - colStgLandmarks.measuredWidth) < 120) {
             computeAndApplyRedDifferences(true);
             if (isColDiffActive) {
@@ -701,6 +705,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (mode === "side-by-side") {
+      isColDiffActive = Boolean(checkSyncRedDiff && checkSyncRedDiff.checked);
+      if (btnToggleColDiff) btnToggleColDiff.classList.toggle("active", isColDiffActive);
       if (isColDiffActive) {
         if (paneColDiff) paneColDiff.style.display = "flex";
         if (viewSide) viewSide.classList.add("mode-view-pixel-diff");
@@ -724,7 +730,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (mode === "swipe") {
-      setSwipeCompareMode(swipeCompareMode);
+      const targetCompare = (checkSyncRedDiff && checkSyncRedDiff.checked) ? "diff" : "prod";
+      setSwipeCompareMode(targetCompare);
       syncScrollToFrames([iframeSwipeProd, iframeSwipeStg, iframeSwipeDiff]);
       // Request fresh landmarks and candidates from all swipe frames at their 1:1 wide desktop aspect ratio
       setTimeout(() => {
@@ -2949,7 +2956,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (stgUrlInput.value) window.open(stgUrlInput.value, "_blank");
   });
 
-  // Red Differences Quick Toggle Button
+  // Red Differences Quick Toggle Button (Single Unified Differences Action)
   if (btnToggleRedDiffs) {
     btnToggleRedDiffs.addEventListener("click", () => {
       checkSyncRedDiff.checked = !checkSyncRedDiff.checked;
@@ -2958,9 +2965,29 @@ document.addEventListener("DOMContentLoaded", () => {
         computeAndApplyRedDifferences(true);
         if (currentMode === "swipe" && swipeCompareMode !== "diff") {
           setSwipeCompareMode("diff");
+        } else if (currentMode === "side-by-side") {
+          isColDiffActive = true;
+          if (btnToggleColDiff) btnToggleColDiff.classList.add("active");
+          if (paneColDiff) paneColDiff.style.display = "flex";
+          const viewSide = document.getElementById("view-side-by-side");
+          if (viewSide) viewSide.classList.add("mode-view-pixel-diff");
+          renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions);
+          updateAllDiffPercentDisplays(lastAccuratePixelDiffPct || "0.00%");
+          scheduleLivePixelDiffCapture();
         }
       } else {
         clearAllRedDiffs(true);
+        if (currentMode === "swipe") {
+          setSwipeCompareMode("prod");
+          updateAllDiffPercentDisplays("0.00%");
+        } else if (currentMode === "side-by-side") {
+          isColDiffActive = false;
+          if (btnToggleColDiff) btnToggleColDiff.classList.remove("active");
+          if (paneColDiff) paneColDiff.style.display = "none";
+          const viewSide = document.getElementById("view-side-by-side");
+          if (viewSide) viewSide.classList.remove("mode-view-pixel-diff");
+          updateAllDiffPercentDisplays("0.00%");
+        }
       }
       if (currentMode === "swipe" && swipeCompareMode === "diff") {
         renderSwipeDiffCanvas(activeRedDiffs, activeShiftRegions);
@@ -3101,6 +3128,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (isColDiffActive) {
         if (paneColDiff) paneColDiff.style.display = "flex";
         if (viewSide) viewSide.classList.add("mode-view-pixel-diff");
+        checkSyncRedDiff.checked = true;
+        updateSyncChipStyles();
         if (activeRedDiffs.length === 0) {
           computeAndApplyRedDifferences(true);
         }
@@ -3111,7 +3140,10 @@ document.addEventListener("DOMContentLoaded", () => {
       } else {
         if (paneColDiff) paneColDiff.style.display = "none";
         if (viewSide) viewSide.classList.remove("mode-view-pixel-diff");
-        updateAllDiffPercentDisplays(lastAccuratePixelDiffPct || "0.00%");
+        checkSyncRedDiff.checked = false;
+        updateSyncChipStyles();
+        clearAllRedDiffs(true);
+        updateAllDiffPercentDisplays("0.00%");
         logAction("3rd Column Pixel Diff toggled OFF (2-column side-by-side view)");
       }
     });
@@ -3120,11 +3152,16 @@ document.addEventListener("DOMContentLoaded", () => {
   // Swipe / Slider Target Toggle (Prod <-> Stage vs Stage <-> Diff)
   if (btnSwipeTargetProd) {
     btnSwipeTargetProd.addEventListener("click", () => {
+      checkSyncRedDiff.checked = false;
+      updateSyncChipStyles();
+      clearAllRedDiffs(true);
       setSwipeCompareMode("prod");
     });
   }
   if (btnSwipeTargetDiff) {
     btnSwipeTargetDiff.addEventListener("click", () => {
+      checkSyncRedDiff.checked = true;
+      updateSyncChipStyles();
       if (activeRedDiffs.length === 0) {
         computeAndApplyRedDifferences(true);
       }
@@ -3308,7 +3345,10 @@ document.addEventListener("DOMContentLoaded", () => {
   function updateSyncChipStyles() {
     if (chipSyncHazard) chipSyncHazard.classList.toggle("active", checkSyncHazard.checked);
     if (chipSyncRedDiff) chipSyncRedDiff.classList.toggle("active", checkSyncRedDiff.checked);
-    if (btnToggleRedDiffs) btnToggleRedDiffs.classList.toggle("inactive", !checkSyncRedDiff.checked);
+    if (btnToggleRedDiffs) {
+      btnToggleRedDiffs.classList.toggle("inactive", !checkSyncRedDiff.checked);
+      btnToggleRedDiffs.classList.toggle("active", checkSyncRedDiff.checked);
+    }
     document.getElementById("chip-sync-clicks").classList.toggle("active", checkSyncClicks.checked);
     document.getElementById("chip-sync-scroll").classList.toggle("active", checkSyncScroll.checked);
     document.getElementById("chip-sync-hover").classList.toggle("active", checkSyncHover.checked);

@@ -70,14 +70,14 @@
         </select>
       </div>
 
-      <!-- Visual Differences Button -->
-      <button id="btn-toggle-red-diffs" class="btn-diff-action btn-red-diffs" title="Highlight all non-height visual regressions (colors, shapes, typography, borders) in RED on live pages">
-        <span class="btn-label-full">🔴 Visual Diffs</span>
+      <!-- Visual Differences Button (Single Unified Differences Action) -->
+      <button id="btn-toggle-red-diffs" class="btn-diff-action btn-red-diffs inactive" title="Toggle visual differences on or off">
+        <span class="btn-label-full">🔴 Differences</span>
         <span class="btn-label-short">🔴 Diffs</span>
       </button>
 
-      <!-- Live Diff Button -->
-      <button id="btn-run-diff" class="btn-diff-action" title="Capture snapshots and calculate visual pixel mismatch">
+      <!-- Live Diff Button (Consolidated into Differences toggle; preserved for API compatibility) -->
+      <button id="btn-run-diff" class="btn-diff-action" title="Capture snapshots and calculate visual pixel mismatch" style="display: none !important;">
         <span class="btn-label-full">📸 Run Diff</span>
         <span class="btn-label-short">📸 Diff</span>
       </button>
@@ -126,7 +126,7 @@
     <!-- Mode Specific Controls (Dynamic) -->
     <div class="mode-controls-area">
       <!-- Side-by-Side Controls: Toggle 3rd Column Pixel Diff -->
-      <div class="side-controls" id="side-controls">
+      <div class="side-controls" id="side-controls" style="display: none !important;">
         <button id="btn-toggle-col-diff" class="sub-btn btn-diff-toggle" title="Toggle 3rd Column Pixel Diff on or off">
           <span class="btn-label-full">▦ 3rd Col Diff</span>
           <span class="btn-label-short">▦ 3rd Col</span>
@@ -135,7 +135,7 @@
 
       <!-- Swipe / Slider Controls: Toggle Prod <-> Stage vs Stage <-> Diff -->
       <div class="swipe-controls" id="swipe-controls" style="display: none;">
-        <div class="segmented-toggle">
+        <div class="segmented-toggle" style="display: none !important;">
           <button id="btn-swipe-target-prod" class="sub-btn active" title="Swipe between Production and Staging">Prod ↔ Stage</button>
           <button id="btn-swipe-target-diff" class="sub-btn" title="Swipe between Staging and Pixel Difference">Stage ↔ Diff</button>
         </div>
@@ -191,8 +191,8 @@
         <span class="chip-label-full">⚠️ Yellow Hazard Spacers</span>
         <span class="chip-label-short">⚠️ Hazard</span>
       </label>
-      <label class="sync-chip active chip-red-diff" id="chip-sync-red-diff" title="Highlight non-height visual regressions (colors, shapes, typography, borders) in RED on live pages">
-        <input type="checkbox" id="check-sync-red-diff" checked />
+      <label class="sync-chip chip-red-diff" id="chip-sync-red-diff" style="display: none !important;" title="Highlight non-height visual regressions (colors, shapes, typography, borders) in RED on live pages">
+        <input type="checkbox" id="check-sync-red-diff" />
         <span class="chip-label-full">🔴 Visual Diffs</span>
         <span class="chip-label-short">🔴 Diffs</span>
       </label>
