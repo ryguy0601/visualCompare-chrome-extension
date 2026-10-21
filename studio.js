@@ -1726,17 +1726,22 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
-    // 5. Update active diff renderings based on current view mode
+    // 4. Update active diff renderings ONLY if the corresponding view/mode is selected
     if (currentMode === "swipe") {
-      setSwipeCompareMode("diff");
-      renderSwipeDiffCanvas(activeRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+      if (swipeCompareMode === "diff") {
+        renderSwipeDiffCanvas(activeRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+      }
     } else if (currentMode === "side-by-side") {
-      isColDiffActive = true;
-      if (btnToggleColDiff) btnToggleColDiff.classList.add("active");
-      if (paneColDiff) paneColDiff.style.display = "flex";
-      const viewSide = document.getElementById("view-side-by-side");
-      if (viewSide) viewSide.classList.add("mode-view-pixel-diff");
-      renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+      if (isColDiffActive) {
+        if (paneColDiff) paneColDiff.style.display = "flex";
+        const viewSide = document.getElementById("view-side-by-side");
+        if (viewSide) viewSide.classList.add("mode-view-pixel-diff");
+        renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+      } else {
+        if (paneColDiff) paneColDiff.style.display = "none";
+        const viewSide = document.getElementById("view-side-by-side");
+        if (viewSide) viewSide.classList.remove("mode-view-pixel-diff");
+      }
     } else if (currentMode === "overlay") {
       renderDiffCanvasHeatmap(activeRedDiffs, activeShiftRegions);
     }
@@ -1834,14 +1839,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const box = item.box || getEstimatedBoxForSelector(item.selector, width);
         if (!box) return;
 
-        // Glowing semi-transparent red fill
+        // Glowing semi-transparent red fill (no outline)
         ctx.fillStyle = "rgba(225, 29, 72, 0.4)";
         ctx.fillRect(box.x, box.y, box.width, box.height);
-
-        // Crisp red outline
-        ctx.strokeStyle = "#f43f5e";
-        ctx.lineWidth = 2.5;
-        ctx.strokeRect(box.x, box.y, box.width, box.height);
 
         // Text descriptions disabled per user instruction: pure pixel difference without text descriptions
       });
@@ -2015,9 +2015,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Dedicated 1:1 renderer for Swipe Split Curtain Diff Canvas (Stage <-> Diff)
-  // Clean diff overlay matching 3rd column architecture
+  // Pure pixel-level difference display - ZERO OUTLINES ON ANYTHING
   function renderSwipeDiffCanvas(diffList = activeRedDiffs, shiftRegions = activeShiftRegions, currentScrollY = (lastScrollState.scrollY || 0), currentScrollX = (lastScrollState.scrollX || 0)) {
     if (!swipeDiffCanvas || swipeDiffCanvas.style.display === "none") return;
+    if (swipeCompareMode !== "diff") {
+      swipeDiffCanvas.style.display = "none";
+      return;
+    }
 
     // Use exact rendered width & height of the swipe container
     const swW = swipeOverlayLayer?.clientWidth || swipeContainer?.clientWidth || iframeSwipeProd?.clientWidth || 1200;
@@ -2040,7 +2044,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let totalDiffArea = 0;
 
-    // 1. If an actual captured subpixel screenshot diff exists, draw it
+    // 1. If an actual captured subpixel screenshot diff exists, draw it directly!
     if (lastCapturedDiffCanvas && !isUserScrolling) {
       offCtx.drawImage(lastCapturedDiffCanvas, 0, 0, swW, swH);
     } else {
@@ -2116,19 +2120,51 @@ document.addEventListener("DOMContentLoaded", () => {
 
           totalDiffArea += (drawW * drawH);
 
-          const isCardOrContainer = (item.selector && item.selector.includes("card")) || drawH > 100;
+          // PURE PIXEL LEVEL DIFFERENCE - ZERO OUTLINES ON ANYTHING!
           offCtx.save();
-          offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.65)";
-          offCtx.strokeStyle = "#ef4444";
-          offCtx.lineWidth = 2;
-          if (typeof offCtx.roundRect === "function" && drawW < 300 && drawH < 80) {
-            offCtx.beginPath();
-            offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
-            offCtx.fill();
-            offCtx.stroke();
-          } else {
-            offCtx.fillRect(drawX, drawY, drawW, drawH);
-            offCtx.strokeRect(drawX, drawY, drawW, drawH);
+          let renderedGlyphs = false;
+          try {
+            const targetEl = (liveTargetFrame && liveTargetFrame.contentDocument)
+              ? liveTargetFrame.contentDocument.querySelector(item.selector)
+              : null;
+            if (targetEl && liveTargetFrame.contentWindow) {
+              const compStyle = liveTargetFrame.contentWindow.getComputedStyle(targetEl);
+              const textContent = (targetEl.innerText || targetEl.textContent || "").trim();
+
+              // If it's a text change: render ONLY the text glyphs directly (no box, no outline!)
+              if (textContent && (item.diffType === "typography" || item.diffType === "text" || !targetEl.children || targetEl.children.length === 0 || textContent.length < 60)) {
+                offCtx.font = `${compStyle.fontWeight || 'normal'} ${compStyle.fontSize || '16px'} ${compStyle.fontFamily || 'sans-serif'}`;
+                offCtx.fillStyle = "#ef4444";
+                offCtx.textBaseline = "middle";
+                const padLeft = parseFloat(compStyle.paddingLeft) || 0;
+                offCtx.fillText(textContent, drawX + padLeft, drawY + (drawH / 2));
+                renderedGlyphs = true;
+              } else if (compStyle.borderRadius && parseFloat(compStyle.borderRadius) > 0) {
+                // If button/pill: fill button shape with diff color (ZERO OUTLINE!)
+                const rVal = parseFloat(compStyle.borderRadius) || 6;
+                offCtx.beginPath();
+                if (typeof offCtx.roundRect === "function") {
+                  offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
+                } else {
+                  offCtx.rect(drawX, drawY, drawW, drawH);
+                }
+                offCtx.fillStyle = "rgba(239, 68, 68, 0.45)";
+                offCtx.fill();
+                renderedGlyphs = true;
+              }
+            }
+          } catch (e) {}
+
+          if (!renderedGlyphs) {
+            const isCardOrContainer = (item.selector && item.selector.includes("card")) || drawH > 100;
+            offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
+            if (typeof offCtx.roundRect === "function" && drawW < 300 && drawH < 80) {
+              offCtx.beginPath();
+              offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
+              offCtx.fill();
+            } else {
+              offCtx.fillRect(drawX, drawY, drawW, drawH);
+            }
           }
           offCtx.restore();
         });
@@ -2168,6 +2204,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (!pixelDiffCanvas) return;
+    if (!isColDiffActive) {
+      if (paneColDiff) paneColDiff.style.display = "none";
+      return;
+    }
 
     // Ensure diff base iframe src matches Staging (or Prod)
     const targetSrc = (stgUrlInput && stgUrlInput.value && stgUrlInput.value.trim() !== "about:blank")
@@ -2271,19 +2311,52 @@ document.addEventListener("DOMContentLoaded", () => {
 
           totalDiffArea += (drawW * drawH);
 
-          const isCardOrContainer = (item.selector && item.selector.includes("card")) || drawH > 100;
+          // PURE PIXEL LEVEL DIFFERENCE - ZERO OUTLINES ON ANYTHING!
           offCtx.save();
-          offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.65)";
-          offCtx.strokeStyle = "#ef4444";
-          offCtx.lineWidth = 2;
-          if (typeof offCtx.roundRect === "function" && drawW < 300 && drawH < 80) {
-            offCtx.beginPath();
-            offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
-            offCtx.fill();
-            offCtx.stroke();
-          } else {
-            offCtx.fillRect(drawX, drawY, drawW, drawH);
-            offCtx.strokeRect(drawX, drawY, drawW, drawH);
+          let renderedGlyphs = false;
+          try {
+            const targetEl = (iframeDiffBase && iframeDiffBase.contentDocument)
+              ? iframeDiffBase.contentDocument.querySelector(item.selector)
+              : ((iframeStg && iframeStg.contentDocument) ? iframeStg.contentDocument.querySelector(item.selector) : null);
+            if (targetEl && (iframeDiffBase?.contentWindow || iframeStg?.contentWindow)) {
+              const win = iframeDiffBase?.contentWindow || iframeStg?.contentWindow;
+              const compStyle = win.getComputedStyle(targetEl);
+              const textContent = (targetEl.innerText || targetEl.textContent || "").trim();
+
+              // If it's a text change: render ONLY the text glyphs directly (no box, no outline!)
+              if (textContent && (item.diffType === "typography" || item.diffType === "text" || !targetEl.children || targetEl.children.length === 0 || textContent.length < 60)) {
+                offCtx.font = `${compStyle.fontWeight || 'normal'} ${compStyle.fontSize || '16px'} ${compStyle.fontFamily || 'sans-serif'}`;
+                offCtx.fillStyle = "#ef4444";
+                offCtx.textBaseline = "middle";
+                const padLeft = parseFloat(compStyle.paddingLeft) || 0;
+                offCtx.fillText(textContent, drawX + padLeft, drawY + (drawH / 2));
+                renderedGlyphs = true;
+              } else if (compStyle.borderRadius && parseFloat(compStyle.borderRadius) > 0) {
+                // If button/pill: fill button shape with diff color (ZERO OUTLINE!)
+                const rVal = parseFloat(compStyle.borderRadius) || 6;
+                offCtx.beginPath();
+                if (typeof offCtx.roundRect === "function") {
+                  offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
+                } else {
+                  offCtx.rect(drawX, drawY, drawW, drawH);
+                }
+                offCtx.fillStyle = "rgba(239, 68, 68, 0.45)";
+                offCtx.fill();
+                renderedGlyphs = true;
+              }
+            }
+          } catch (e) {}
+
+          if (!renderedGlyphs) {
+            const isCardOrContainer = (item.selector && item.selector.includes("card")) || drawH > 100;
+            offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
+            if (typeof offCtx.roundRect === "function" && drawW < 300 && drawH < 80) {
+              offCtx.beginPath();
+              offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
+              offCtx.fill();
+            } else {
+              offCtx.fillRect(drawX, drawY, drawW, drawH);
+            }
           }
           offCtx.restore();
         });

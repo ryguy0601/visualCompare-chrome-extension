@@ -12,10 +12,11 @@ assert(studioJs.includes('function renderPixelDiffColumn3'), "renderPixelDiffCol
 assert(studioJs.includes('drawHazardStripes(offCtx, 0, regY, swW, reg.h, 14)'), "renderSwipeDiffCanvas must render layout shifts identically to 3rd column");
 console.log("PASS 1: Swipe diff display matches 3rd column architecture per user request!");
 
-// 2. Verify diff highlight styling matches 3rd column
-assert(studioJs.includes('offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.65)"'), "renderSwipeDiffCanvas must render clean diff fills matching 3rd column");
-assert(studioJs.includes('offCtx.strokeStyle = "#ef4444"'), "renderSwipeDiffCanvas must use crisp red border matching 3rd column");
-console.log("PASS 2: Slide diff view exclusively renders clean visual diff highlights without text badges.");
+// 2. Verify diff highlight styling matches 3rd column with ZERO outlines on anything
+assert(studioJs.includes('offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)"'), "renderSwipeDiffCanvas must render clean diff fills matching 3rd column");
+assert(!studioJs.includes('strokeRect'), "studio.js must have ZERO strokeRect calls - no outline boxes");
+assert(!studioJs.includes('offCtx.strokeStyle = "#ef4444"'), "renderSwipeDiffCanvas must NOT use red outline borders");
+console.log("PASS 2: Slide diff view exclusively renders pure pixel diff fills with ZERO outlines on anything.");
 
 // 3. Verify Slide View Diff Mode Layering matches 3rd Column
 assert(studioJs.includes('iframeSwipeDiff.style.opacity = "1"'), "iframeSwipeDiff must be visible at opacity 1 in diff mode matching 3rd column architecture");
@@ -48,14 +49,13 @@ const mockCtx = {
   fillRect(x, y, w, h) { capturedCalls.push(`fillRect:(${x},${y},${w},${h})`); }
 };
 
-// Simulate diff render logic on element item
+// Simulate diff render logic on element item (pure fill, zero outline)
 mockCtx.save();
 mockCtx.fillRect(mockDiffItem.box.x, mockDiffItem.box.y, mockDiffItem.box.width, mockDiffItem.box.height);
-mockCtx.strokeRect(mockDiffItem.box.x, mockDiffItem.box.y, mockDiffItem.box.width, mockDiffItem.box.height);
 mockCtx.restore();
 
 assert(capturedCalls.includes("fillRect:(100,200,120,40)"), "Simulation must call fillRect");
-assert(capturedCalls.includes("strokeRect:(100,200,120,40)"), "Simulation must call strokeRect");
-console.log("PASS 6: Behavioral simulation confirms clean visual diff rendering matching 3rd column!");
+assert(!capturedCalls.some(c => c.startsWith("strokeRect")), "Simulation must NOT call strokeRect - zero outlines");
+console.log("PASS 6: Behavioral simulation confirms pure pixel diff rendering with zero outlines!");
 
 console.log("\nALL PURE DIFFERING PIXELS & CONSISTENT SCROLL TESTS PASSED SUCCESSFULLY!");

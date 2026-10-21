@@ -1466,27 +1466,14 @@
     }
     style.textContent = `
       .vc-red-diff-highlight {
-        outline: 3px solid #ef4444 !important;
-        outline-offset: 2px !important;
-        box-shadow: 0 0 14px rgba(239, 68, 68, 0.75), inset 0 0 10px rgba(239, 68, 68, 0.12) !important;
-        position: relative !important;
-        animation: vc-red-diff-pulse 2s infinite ease-in-out !important;
-      }
-      @keyframes vc-red-diff-pulse {
-        0%, 100% { outline-color: #ef4444; box-shadow: 0 0 12px rgba(239, 68, 68, 0.75); }
-        50% { outline-color: #f43f5e; box-shadow: 0 0 22px rgba(244, 63, 94, 0.95); }
+        outline: none !important;
+        box-shadow: none !important;
       }
       .vc-red-diff-badge {
         display: none !important;
       }
       .vc-red-diff-dot {
-        width: 6px !important;
-        height: 6px !important;
-        border-radius: 50% !important;
-        background: #fecaca !important;
-        box-shadow: 0 0 6px #fff !important;
-        display: inline-block !important;
-        flex-shrink: 0 !important;
+        display: none !important;
       }
     `;
   }
@@ -1513,7 +1500,8 @@
           if (processedElements.has(el)) return;
           processedElements.add(el);
 
-          el.classList.add("vc-red-diff-highlight");
+          // Zero outlines on live pages per user instruction:
+          // Differences are exclusively displayed in the 3rd column or swipe diff view.
 
           // Remove any text description badges so differences have no text clutter
           el.querySelectorAll(".vc-red-diff-badge").forEach(b => b.remove());
