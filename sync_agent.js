@@ -1276,6 +1276,11 @@
         const altAttr = el.getAttribute('alt') || '';
         const titleAttr = el.getAttribute('title') || '';
 
+        let origBg = style.backgroundColor;
+        if (el.classList.contains("vc-red-diff-hug") && el.dataset.vcOriginalBg !== undefined) {
+          origBg = el.dataset.vcOriginalBg;
+        }
+
         candidates.push({
           selector: elSelector,
           tag,
@@ -1297,7 +1302,7 @@
             measuredWidth: vw
           },
           style: {
-            bg: style.backgroundColor,
+            bg: origBg,
             bgImage: style.backgroundImage,
             color: style.color,
             radius: style.borderRadius,
@@ -1497,6 +1502,21 @@
       document.head.appendChild(style);
     }
     style.textContent = `
+      .vc-red-diff-hug {
+        outline: none !important;
+        box-shadow: none !important;
+        background-color: rgba(239, 68, 68, 0.28) !important;
+        border-radius: inherit !important;
+      }
+      .vc-red-diff-hug::after {
+        content: "" !important;
+        position: absolute !important;
+        inset: 0 !important;
+        background-color: rgba(239, 68, 68, 0.18) !important;
+        border-radius: inherit !important;
+        pointer-events: none !important;
+        z-index: 1000 !important;
+      }
       .vc-red-diff-highlight {
         outline: none !important;
         box-shadow: none !important;
@@ -1532,8 +1552,17 @@
           if (processedElements.has(el)) return;
           processedElements.add(el);
 
-          // Zero outlines on live pages per user instruction:
-          // Differences are exclusively displayed in the 3rd column or swipe diff view.
+          // Pure red hug on differing tags hugging tag's exact shape with zero outlines
+          const style = window.getComputedStyle(el);
+          const pos = style.position;
+          if (pos === "static") {
+            el.style.position = "relative";
+            el.dataset.vcOriginalStatic = "true";
+          }
+          if (el.dataset.vcOriginalBg === undefined) {
+            el.dataset.vcOriginalBg = style.backgroundColor;
+          }
+          el.classList.add("vc-red-diff-hug");
 
           // Remove any text description badges so differences have no text clutter
           el.querySelectorAll(".vc-red-diff-badge").forEach(b => b.remove());
@@ -1541,7 +1570,6 @@
           const rect = el.getBoundingClientRect();
           const labelText = (item.label && typeof item.label === "string") ? item.label.trim() : "";
 
-          const style = window.getComputedStyle(el);
           const isFixed = isElementFixed(el);
           const isSticky = isElementSticky(el);
 
@@ -1582,6 +1610,14 @@
   }
 
   function removeRedDiffs() {
+    document.querySelectorAll(".vc-red-diff-hug").forEach(el => {
+      el.classList.remove("vc-red-diff-hug");
+      if (el.dataset.vcOriginalStatic === "true") {
+        el.style.position = "";
+        delete el.dataset.vcOriginalStatic;
+      }
+      delete el.dataset.vcOriginalBg;
+    });
     document.querySelectorAll(".vc-red-diff-highlight").forEach(el => {
       el.classList.remove("vc-red-diff-highlight");
     });

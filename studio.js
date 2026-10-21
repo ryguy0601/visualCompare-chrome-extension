@@ -2211,10 +2211,19 @@ document.addEventListener("DOMContentLoaded", () => {
   // Dedicated 1:1 renderer for Swipe Split Curtain Diff Canvas (Stage <-> Diff)
   // Pure pixel-level difference display - ZERO OUTLINES ON ANYTHING
   function renderSwipeDiffCanvas(diffList = activeRedDiffs, shiftRegions = activeShiftRegions, currentScrollY = (lastScrollState.scrollY || 0), currentScrollX = (lastScrollState.scrollX || 0)) {
-    if (!swipeDiffCanvas || swipeDiffCanvas.style.display === "none") return;
+    if (!swipeDiffCanvas) return;
     if (swipeCompareMode !== "diff") {
       swipeDiffCanvas.style.display = "none";
       return;
+    }
+    swipeDiffCanvas.style.display = "block";
+    if (iframeSwipeDiff && iframeSwipeDiff.style.display === "none") {
+      iframeSwipeDiff.style.display = "block";
+      iframeSwipeDiff.style.opacity = "1";
+      const stgSrc = (iframeStg && iframeStg.src && iframeStg.src !== "about:blank") ? iframeStg.src : stgUrlInput.value.trim();
+      if (stgSrc && iframeSwipeDiff.src !== stgSrc) {
+        iframeSwipeDiff.src = stgSrc;
+      }
     }
 
     // Use exact rendered width & height of the swipe container
@@ -2947,6 +2956,9 @@ document.addEventListener("DOMContentLoaded", () => {
       updateSyncChipStyles();
       if (checkSyncRedDiff.checked) {
         computeAndApplyRedDifferences(true);
+        if (currentMode === "swipe" && swipeCompareMode !== "diff") {
+          setSwipeCompareMode("diff");
+        }
       } else {
         clearAllRedDiffs(true);
       }
@@ -3281,6 +3293,9 @@ document.addEventListener("DOMContentLoaded", () => {
         } else if (chk === checkSyncRedDiff) {
           if (chk.checked) {
             computeAndApplyRedDifferences();
+            if (currentMode === "swipe" && swipeCompareMode !== "diff") {
+              setSwipeCompareMode("diff");
+            }
           } else {
             clearAllRedDiffs(true);
           }
