@@ -1049,8 +1049,19 @@ body.is-dragging-curtain {
   background: var(--bg-card-inner);
 }
 
-.swipe-overlay {
+#swipe-diff-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
   z-index: 2;
+  opacity: 0.85;
+}
+
+.swipe-overlay {
+  z-index: 10;
   background: transparent;
   clip-path: inset(0 50% 0 0); /* Dynamically adjusted */
   will-change: clip-path;
@@ -1064,7 +1075,7 @@ body.is-dragging-curtain {
   padding: 3px 8px;
   border-radius: 4px;
   pointer-events: none;
-  z-index: 10;
+  z-index: 20;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
 }
 
@@ -1080,6 +1091,13 @@ body.is-dragging-curtain {
   background: rgba(15, 23, 42, 0.85);
   color: var(--color-stg);
   border: 1px solid var(--color-stg);
+}
+
+.tag-stg.diff-active {
+  background: rgba(30, 16, 20, 0.9) !important;
+  color: #f87171 !important;
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.45) !important;
 }
 
 /* Draggable Split Handle with generous 44px hit-box */
@@ -1111,6 +1129,11 @@ body.is-dragging-curtain {
   pointer-events: none;
 }
 
+.swipe-container.diff-mode .handle-line {
+  background: linear-gradient(180deg, #38bdf8 0%, #ef4444 100%);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.7);
+}
+
 .handle-pill {
   position: relative;
   z-index: 2;
@@ -1136,6 +1159,21 @@ body.is-dragging-curtain {
   transform: scale(1.08);
   border-color: #38bdf8;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.9), 0 0 18px rgba(56, 189, 248, 0.7);
+}
+
+.handle-pill.diff-active {
+  border-color: #ef4444 !important;
+  background: #181014 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.8), 0 0 16px rgba(239, 68, 68, 0.6) !important;
+}
+
+.handle-pill.diff-active .handle-label {
+  color: #fca5a5 !important;
+  font-weight: 800;
+}
+
+.handle-pill.diff-active .handle-arrow {
+  color: #ef4444 !important;
 }
 
 .handle-arrow {

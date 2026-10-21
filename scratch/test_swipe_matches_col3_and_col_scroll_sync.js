@@ -7,7 +7,7 @@ const studioJs = fs.readFileSync('studio.js', 'utf8');
 const syncAgentJs = fs.readFileSync('sync_agent.js', 'utf8');
 
 // 1. Verify Swipe Diff View Architecture Matches Column 3 Architecture
-assert(studioJs.includes('iframeSwipeDiff.style.opacity = "1"'), "iframeSwipeDiff must be visible at opacity 1 in diff mode matching iframeDiffBase in column 3");
+assert(studioJs.includes('iframeSwipeStg.style.opacity = "1"'), "iframeSwipeStg must be visible at opacity 1 in diff mode as base frame");
 assert(studioJs.includes('swipeDiffCanvas.style.opacity = (colDiffOpacitySlider ? colDiffOpacitySlider.value / 100 : 0.85).toString()'), "swipeDiffCanvas opacity must be linked to diff opacity slider matching column 3");
 console.log("PASS 1: Swipe diff view layer architecture matches column 3 identically (live base frame + overlaid diff canvas).");
 

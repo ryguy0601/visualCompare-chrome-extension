@@ -85,6 +85,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const swipeContainer = document.getElementById("swipe-container");
   const swipeOverlayLayer = document.getElementById("swipe-overlay-layer");
   const swipeDivider = document.getElementById("swipe-divider");
+  const swipeHandlePill = document.getElementById("swipe-handle-pill");
+  const swipeHandleLabel = document.getElementById("swipe-handle-label");
   const btnFlickerPlay = document.getElementById("btn-flicker-play");
   const flickerSpeedSelect = document.getElementById("flicker-speed");
   const flickerLabel = document.getElementById("flicker-label");
@@ -2387,43 +2389,9 @@ document.addEventListener("DOMContentLoaded", () => {
     isCapturingDiff = true;
 
     if (currentMode === "swipe") {
-      // In swipe mode: capture Prod and Staging viewports sequentially without UI disruption
-      if (!iframeSwipeProd || !iframeSwipeStg) {
-        isCapturingDiff = false;
-        return;
-      }
-      const origProdOpacity = iframeSwipeProd.style.opacity;
-      const origDiffOpacity = iframeSwipeDiff ? iframeSwipeDiff.style.opacity : "1";
-      iframeSwipeProd.style.opacity = "1";
-      if (iframeSwipeDiff) iframeSwipeDiff.style.opacity = "0";
-
-      try {
-        chrome.runtime.sendMessage({ type: "CAPTURE_ACTIVE_TAB" }, (resProd) => {
-          if (!resProd || resProd.status !== "ok" || !resProd.dataUrl) {
-            iframeSwipeProd.style.opacity = origProdOpacity;
-            if (iframeSwipeDiff) iframeSwipeDiff.style.opacity = origDiffOpacity;
-            isCapturingDiff = false;
-            return;
-          }
-
-          iframeSwipeProd.style.opacity = "0";
-
-          chrome.runtime.sendMessage({ type: "CAPTURE_ACTIVE_TAB" }, (resStg) => {
-            iframeSwipeProd.style.opacity = origProdOpacity;
-            if (iframeSwipeDiff) iframeSwipeDiff.style.opacity = origDiffOpacity;
-
-            if (resStg && resStg.status === "ok" && resStg.dataUrl) {
-              applyCapturedSwipePixelDiff(resProd.dataUrl, resStg.dataUrl, activeShiftRegions);
-            } else {
-              isCapturingDiff = false;
-            }
-          });
-        });
-      } catch (err) {
-        iframeSwipeProd.style.opacity = origProdOpacity;
-        if (iframeSwipeDiff) iframeSwipeDiff.style.opacity = origDiffOpacity;
-        isCapturingDiff = false;
-      }
+      // In swipe mode, live DOM subpixel diffs and layout shift hazard stripes are rendered
+      // directly on top of Staging in the swipe base layer with zero flicker and 60fps responsiveness.
+      isCapturingDiff = false;
       return;
     }
 
@@ -2440,7 +2408,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Dedicated 1:1 renderer for Swipe Split Curtain Diff Canvas (Stage <-> Diff)
+  // Dedicated 1:1 renderer for Swipe Split Curtain Diff Canvas (Prod on Left <-> Staging+Diff on Right)
   // Pure pixel-level difference display - ZERO OUTLINES ON ANYTHING
   function renderSwipeDiffCanvas(diffList = activeRedDiffs, shiftRegions = activeShiftRegions, currentScrollY = (lastScrollState.scrollY || 0), currentScrollX = (lastScrollState.scrollX || 0)) {
     if (!swipeDiffCanvas) return;
@@ -2449,18 +2417,10 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     swipeDiffCanvas.style.display = "block";
-    if (iframeSwipeDiff && iframeSwipeDiff.style.display === "none") {
-      iframeSwipeDiff.style.display = "block";
-      iframeSwipeDiff.style.opacity = "1";
-      const stgSrc = (iframeStg && iframeStg.src && iframeStg.src !== "about:blank") ? iframeStg.src : stgUrlInput.value.trim();
-      if (stgSrc && iframeSwipeDiff.src !== stgSrc) {
-        iframeSwipeDiff.src = stgSrc;
-      }
-    }
 
     // Use exact rendered width & height of the swipe container
-    const swW = swipeOverlayLayer?.clientWidth || swipeContainer?.clientWidth || iframeSwipeProd?.clientWidth || 1200;
-    const swH = swipeOverlayLayer?.clientHeight || swipeContainer?.clientHeight || iframeSwipeProd?.clientHeight || 800;
+    const swW = swipeContainer?.clientWidth || iframeSwipeStg?.clientWidth || 1200;
+    const swH = swipeContainer?.clientHeight || iframeSwipeStg?.clientHeight || 800;
 
     if (swW <= 0 || swH <= 0) return;
 
@@ -2490,49 +2450,51 @@ document.addEventListener("DOMContentLoaded", () => {
         lastCapturedDiffCanvas = null;
       }
     }
+
     if (!drawnCapturedDiff) {
       // Frame to query for live element bounding boxes (100% pixel-perfect subpixel accuracy)
-      const liveTargetFrame = (swipeCompareMode === "diff") ? (iframeSwipeDiff || iframeSwipeStg) : iframeSwipeProd;
-      const liveFallbackFrame = iframeSwipeStg;
+      // Diff canvas sits in swipe-base-layer right on top of live iframeSwipeStg!
+      const liveTargetFrame = iframeSwipeStg;
+      const liveFallbackFrame = iframeSwipeProd;
 
-      const effectiveDiffs = (diffList && diffList.length > 0) ? diffList : (swipeRedDiffs && swipeRedDiffs.length > 0 ? swipeRedDiffs : activeRedDiffs);
-      if (effectiveDiffs && effectiveDiffs.length > 0) {
-        effectiveDiffs.forEach(item => {
-          if (!item) return;
+    const effectiveDiffs = (diffList && diffList.length > 0) ? diffList : (swipeRedDiffs && swipeRedDiffs.length > 0 ? swipeRedDiffs : activeRedDiffs);
+    if (effectiveDiffs && effectiveDiffs.length > 0) {
+      effectiveDiffs.forEach(item => {
+        if (!item) return;
 
-          let drawX = 0;
-          let drawY = 0;
-          let drawW = 0;
-          let drawH = 0;
-          let hasExactBox = false;
+        let drawX = 0;
+        let drawY = 0;
+        let drawW = 0;
+        let drawH = 0;
+        let hasExactBox = false;
 
-          // Try querying the live DOM directly in the swipe frame if same-origin
-          if (item.selector) {
-            try {
-              let el = null;
-              if (liveTargetFrame && liveTargetFrame.contentDocument) {
-                el = liveTargetFrame.contentDocument.querySelector(item.selector);
-              }
-              if (!el && liveFallbackFrame && liveFallbackFrame.contentDocument) {
-                el = liveFallbackFrame.contentDocument.querySelector(item.selector);
-              }
-              if (!el && iframeSwipeProd && iframeSwipeProd.contentDocument) {
-                el = iframeSwipeProd.contentDocument.querySelector(item.selector);
-              }
-              if (el) {
-                const r = el.getBoundingClientRect();
-                if (r.width > 0 && r.height > 0) {
-                  drawX = Math.round(r.left);
-                  drawY = Math.round(r.top);
-                  drawW = Math.round(r.width);
-                  drawH = Math.round(r.height);
-                  hasExactBox = true;
-                }
-              }
-            } catch (e) {
-              // Cross-origin iframe
+        // Try querying the live DOM directly in the swipe frame if same-origin
+        if (item.selector) {
+          try {
+            let el = null;
+            if (liveTargetFrame && liveTargetFrame.contentDocument) {
+              el = liveTargetFrame.contentDocument.querySelector(item.selector);
             }
+            if (!el && liveFallbackFrame && liveFallbackFrame.contentDocument) {
+              el = liveFallbackFrame.contentDocument.querySelector(item.selector);
+            }
+            if (!el && iframeSwipeProd && iframeSwipeProd.contentDocument) {
+              el = iframeSwipeProd.contentDocument.querySelector(item.selector);
+            }
+            if (el) {
+              const r = el.getBoundingClientRect();
+              if (r.width > 0 && r.height > 0) {
+                drawX = Math.round(r.left);
+                drawY = Math.round(r.top);
+                drawW = Math.round(r.width);
+                drawH = Math.round(r.height);
+                hasExactBox = true;
+              }
+            }
+          } catch (e) {
+            // Cross-origin iframe
           }
+        }
 
           // If not queryable via contentDocument, use candidate measured box or estimated box
           if (!hasExactBox) {
@@ -3656,62 +3618,69 @@ document.addEventListener("DOMContentLoaded", () => {
       if (swipeRedDiffs.length === 0 || activeRedDiffs.length === 0) {
         computeAndApplyRedDifferences(true);
       }
-      // 1. Keep Production actively rendered in the container so its layout is live and accurate, but make it invisible to the user
+
+      // Production frame is the clean baseline on the LEFT of the curtain slider
       if (iframeSwipeProd) {
         iframeSwipeProd.style.display = "block";
-        iframeSwipeProd.style.opacity = "0";
-        iframeSwipeProd.style.pointerEvents = "none";
-        iframeSwipeProd.style.position = "absolute";
-        iframeSwipeProd.style.top = "0";
-        iframeSwipeProd.style.left = "0";
-        iframeSwipeProd.style.width = "100%";
-        iframeSwipeProd.style.height = "100%";
-        iframeSwipeProd.style.zIndex = "1";
-      }
-      if (iframeSwipeDiff) {
-        iframeSwipeDiff.style.display = "block";
-        iframeSwipeDiff.style.opacity = "1";
-        iframeSwipeDiff.style.pointerEvents = "none";
-        iframeSwipeDiff.style.position = "absolute";
-        iframeSwipeDiff.style.top = "0";
-        iframeSwipeDiff.style.left = "0";
-        iframeSwipeDiff.style.width = "100%";
-        iframeSwipeDiff.style.height = "100%";
-        iframeSwipeDiff.style.zIndex = "2";
-        if (stgSrc && iframeSwipeDiff.src !== stgSrc) {
-          iframeSwipeDiff.src = stgSrc;
+        iframeSwipeProd.style.opacity = "1";
+        iframeSwipeProd.style.pointerEvents = "auto";
+        if (prodSrc && (!iframeSwipeProd.src || iframeSwipeProd.src === "about:blank")) {
+          iframeSwipeProd.src = prodSrc;
         }
       }
+
+      // Staging frame is the base on the RIGHT of the curtain slider
+      if (iframeSwipeStg) {
+        iframeSwipeStg.style.display = "block";
+        iframeSwipeStg.style.opacity = "1";
+        iframeSwipeStg.style.pointerEvents = "auto";
+        if (stgSrc && (!iframeSwipeStg.src || iframeSwipeStg.src === "about:blank")) {
+          iframeSwipeStg.src = stgSrc;
+        }
+      }
+
+      if (iframeSwipeDiff) {
+        iframeSwipeDiff.style.display = "none";
+      }
+
       if (swipeOverlayLayer) {
         swipeOverlayLayer.style.background = "transparent";
-        swipeOverlayLayer.style.pointerEvents = "none";
       }
+
+      // Diff canvas overlays Staging in swipe-base-layer (right side)
       if (swipeDiffCanvas) {
         swipeDiffCanvas.style.display = "block";
         swipeDiffCanvas.style.pointerEvents = "none";
-        swipeDiffCanvas.style.position = "absolute";
-        swipeDiffCanvas.style.top = "0";
-        swipeDiffCanvas.style.left = "0";
-        swipeDiffCanvas.style.width = "100%";
-        swipeDiffCanvas.style.height = "100%";
-        swipeDiffCanvas.style.zIndex = "5";
         swipeDiffCanvas.style.opacity = (colDiffOpacitySlider ? colDiffOpacitySlider.value / 100 : 0.85).toString();
       }
-      if (swipeOverlayTag) {
-        swipeOverlayTag.textContent = "DIFF (LEFT)";
-        swipeOverlayTag.style.borderColor = "#ef4444";
-        swipeOverlayTag.style.color = "#f87171";
-      }
-      if (swipeBaseTag) {
-        swipeBaseTag.textContent = "STAGING (RIGHT)";
-        swipeBaseTag.style.borderColor = "var(--color-stg)";
-        swipeBaseTag.style.color = "var(--color-stg)";
+
+      if (swipeContainer) {
+        swipeContainer.classList.add("diff-mode");
       }
 
-      // Sync scroll to both diff base frame and invisible production frame
+      if (swipeHandlePill) {
+        swipeHandlePill.classList.add("diff-active");
+      }
+      if (swipeHandleLabel) {
+        swipeHandleLabel.textContent = "PROD ↔ DIFF";
+      }
+
+      if (swipeOverlayTag) {
+        swipeOverlayTag.textContent = "PRODUCTION (LEFT)";
+        swipeOverlayTag.style.borderColor = "var(--color-prod)";
+        swipeOverlayTag.style.color = "var(--color-prod)";
+      }
+      if (swipeBaseTag) {
+        swipeBaseTag.textContent = "STAGING + DIFF (RIGHT)";
+        swipeBaseTag.classList.add("diff-active");
+        swipeBaseTag.style.borderColor = "#ef4444";
+        swipeBaseTag.style.color = "#f87171";
+      }
+
+      // Sync scroll to both frames
       const currentY = lastScrollState.scrollY || 0;
       const currentX = lastScrollState.scrollX || 0;
-      [iframeSwipeDiff, iframeSwipeProd, iframeSwipeStg].forEach(frame => {
+      [iframeSwipeProd, iframeSwipeStg].forEach(frame => {
         if (frame && frame.contentWindow) {
           try {
             frame.contentWindow.postMessage({
@@ -3723,7 +3692,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       // Request fresh live landmarks & diff candidates from frames at this container size
-      [iframeSwipeProd, iframeSwipeDiff, iframeSwipeStg].forEach(frame => {
+      [iframeSwipeProd, iframeSwipeStg].forEach(frame => {
         if (frame && frame.contentWindow) {
           try {
             frame.contentWindow.postMessage({ type: "VC_REQUEST_LANDMARKS" }, "*");
@@ -3734,24 +3703,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
       renderSwipeDiffCanvas(swipeRedDiffs, activeShiftRegions, currentY, currentX);
       updateAllDiffPercentDisplays(lastAccuratePixelDiffPct || "0.00%");
-      scheduleLivePixelDiffCapture();
-      logAction("Swipe slider comparison set to: STAGE ↔ DIFF (Invisible live Production base)");
+      logAction("Swipe slider comparison set to: PROD ↔ STAGING+DIFF (Clean Production on Left, Staging with Differences on Right)");
     } else {
       if (iframeSwipeProd) {
         iframeSwipeProd.style.display = "block";
         iframeSwipeProd.style.opacity = "1";
         iframeSwipeProd.style.pointerEvents = "auto";
-        iframeSwipeProd.style.zIndex = "2";
-        if (prodSrc && iframeSwipeProd.src !== prodSrc) {
+        if (prodSrc && (!iframeSwipeProd.src || iframeSwipeProd.src === "about:blank")) {
           iframeSwipeProd.src = prodSrc;
+        }
+      }
+      if (iframeSwipeStg) {
+        iframeSwipeStg.style.display = "block";
+        iframeSwipeStg.style.opacity = "1";
+        iframeSwipeStg.style.pointerEvents = "auto";
+        if (stgSrc && (!iframeSwipeStg.src || iframeSwipeStg.src === "about:blank")) {
+          iframeSwipeStg.src = stgSrc;
         }
       }
       if (iframeSwipeDiff) iframeSwipeDiff.style.display = "none";
       if (swipeOverlayLayer) {
         swipeOverlayLayer.style.background = "transparent";
-        swipeOverlayLayer.style.pointerEvents = "auto";
       }
       if (swipeDiffCanvas) swipeDiffCanvas.style.display = "none";
+
+      if (swipeContainer) {
+        swipeContainer.classList.remove("diff-mode");
+      }
+      if (swipeHandlePill) {
+        swipeHandlePill.classList.remove("diff-active");
+      }
+      if (swipeHandleLabel) {
+        swipeHandleLabel.textContent = "SWIPE";
+      }
+
       if (swipeOverlayTag) {
         swipeOverlayTag.textContent = "PRODUCTION (LEFT)";
         swipeOverlayTag.style.borderColor = "var(--color-prod)";
@@ -3759,22 +3744,27 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (swipeBaseTag) {
         swipeBaseTag.textContent = "STAGING (RIGHT)";
+        swipeBaseTag.classList.remove("diff-active");
         swipeBaseTag.style.borderColor = "var(--color-stg)";
         swipeBaseTag.style.color = "var(--color-stg)";
       }
       updateAllDiffPercentDisplays(lastAccuratePixelDiffPct || "0.00%");
 
-      // Sync scroll to the production frame
-      if (iframeSwipeProd && iframeSwipeProd.contentWindow) {
-        try {
-          iframeSwipeProd.contentWindow.postMessage({
-            type: "VC_MIRROR_ACTION",
-            action: { kind: "scroll", scrollY: lastScrollState.scrollY || 0, scrollX: lastScrollState.scrollX || 0 }
-          }, "*");
-        } catch (e) {}
-      }
+      // Sync scroll to both frames
+      const currentY = lastScrollState.scrollY || 0;
+      const currentX = lastScrollState.scrollX || 0;
+      [iframeSwipeProd, iframeSwipeStg].forEach(frame => {
+        if (frame && frame.contentWindow) {
+          try {
+            frame.contentWindow.postMessage({
+              type: "VC_MIRROR_ACTION",
+              action: { kind: "scroll", scrollY: currentY, scrollX: currentX }
+            }, "*");
+          } catch (e) {}
+        }
+      });
 
-      logAction("Swipe slider comparison set to: PROD ↔ STAGE");
+      logAction("Swipe slider comparison set to: PROD ↔ STAGING (Clean before/after swipe)");
     }
   }
 

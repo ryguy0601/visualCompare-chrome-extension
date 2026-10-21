@@ -292,26 +292,26 @@
       <!-- ============================================== -->
       <div class="stage-view mode-view-swipe" id="view-swipe">
         <div class="swipe-container" id="swipe-container">
-          <!-- Background Base: Staging -->
+          <!-- Background Base: Staging with Diff Overlay (Right) -->
           <div class="swipe-layer swipe-base" id="swipe-base-layer">
             <iframe id="iframe-swipe-stg" class="compare-iframe" src="about:blank"></iframe>
+            <canvas id="swipe-diff-canvas" class="pixel-diff-canvas" style="display: none;"></canvas>
             <div class="layer-tag tag-stg" id="swipe-base-tag">STAGING (RIGHT)</div>
           </div>
 
-          <!-- Foreground Overlay: Production / Diff (Clipped) -->
+          <!-- Foreground Overlay: Production (Left, Clipped by Slider) -->
           <div class="swipe-layer swipe-overlay" id="swipe-overlay-layer">
             <iframe id="iframe-swipe-prod" class="compare-iframe" src="about:blank"></iframe>
             <iframe id="iframe-swipe-diff" class="compare-iframe diff-base-iframe" src="about:blank" style="display: none;"></iframe>
-            <canvas id="swipe-diff-canvas" class="pixel-diff-canvas" style="display: none;"></canvas>
             <div class="layer-tag tag-prod" id="swipe-overlay-tag">PRODUCTION (LEFT)</div>
           </div>
 
           <!-- Draggable Curtain Handle -->
           <div class="swipe-divider-handle" id="swipe-divider">
             <div class="handle-line"></div>
-            <div class="handle-pill">
+            <div class="handle-pill" id="swipe-handle-pill">
               <span class="handle-arrow">◀</span>
-              <span class="handle-label">SWIPE</span>
+              <span class="handle-label" id="swipe-handle-label">SWIPE</span>
               <span class="handle-arrow">▶</span>
             </div>
           </div>

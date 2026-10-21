@@ -18,10 +18,10 @@ assert(!studioJs.includes('strokeRect'), "studio.js must have ZERO strokeRect ca
 assert(!studioJs.includes('offCtx.strokeStyle = "#ef4444"'), "renderSwipeDiffCanvas must NOT use red outline borders");
 console.log("PASS 2: Slide diff view exclusively renders pure pixel diff fills with ZERO outlines on anything.");
 
-// 3. Verify Slide View Diff Mode Layering matches 3rd Column
-assert(studioJs.includes('iframeSwipeDiff.style.opacity = "1"'), "iframeSwipeDiff must be visible at opacity 1 in diff mode matching 3rd column architecture");
-assert(studioJs.includes('swipeOverlayTag.textContent = "DIFF (LEFT)"'), "swipeOverlayTag must be labeled DIFF (LEFT) in diff mode");
-console.log("PASS 3: Slide diff mode layer correctly sets live base frame and dedicated diff canvas matching 3rd column.");
+// 3. Verify Slide View Diff Mode Layering
+assert(studioJs.includes('swipeBaseTag.textContent = "STAGING + DIFF (RIGHT)"'), "swipeBaseTag must be labeled STAGING + DIFF (RIGHT) in diff mode");
+assert(studioJs.includes('swipeOverlayTag.textContent = "PRODUCTION (LEFT)"'), "swipeOverlayTag must be labeled PRODUCTION (LEFT) in diff mode");
+console.log("PASS 3: Slide diff mode layer correctly sets clean Production on Left and Staging with Diff on Right.");
 
 // 4. Verify Consistent Scroll Synchronization in sync_agent.js
 assert(syncAgentJs.includes('syncScrollTimeout = setTimeout('), "sync_agent.js must use debounced syncScrollTimeout for continuous scroll stream");

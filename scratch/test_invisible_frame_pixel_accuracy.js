@@ -1,23 +1,23 @@
 const fs = require('fs');
 const assert = require('assert');
 
-console.log("TEST: Validating Invisible Live Frame Architecture & Accurate Pixel Diff...");
+console.log("TEST: Validating Clean Production Baseline & Staging Diff Architecture...");
 
-// 1. Check studio.js for invisible live Production frame rendering
+// 1. Check studio.js for clean live Production frame rendering
 const studioJs = fs.readFileSync('studio.js', 'utf8');
 
 assert(studioJs.includes('iframeSwipeProd.style.display = "block"'), "iframeSwipeProd should stay rendered as display: block");
-assert(studioJs.includes('iframeSwipeProd.style.opacity = "0"'), "iframeSwipeProd should be invisible with opacity: 0");
-assert(studioJs.includes('iframeSwipeProd.style.pointerEvents = "none"'), "iframeSwipeProd should not intercept pointer events when invisible");
-console.log("PASS: In diff mode, Production page stays actively rendered in container at opacity: 0.");
+assert(studioJs.includes('iframeSwipeProd.style.opacity = "1"'), "iframeSwipeProd should be visible with opacity: 1 on Left of curtain");
+assert(studioJs.includes('iframeSwipeProd.style.pointerEvents = "auto"'), "iframeSwipeProd should handle pointer events when visible");
+console.log("PASS: In diff mode, Production page stays actively rendered and visible on Left of curtain at opacity: 1.");
 
 // 2. Check getActiveFramesForMode preserves prod iframe in swipe mode
 assert(studioJs.includes('prod: iframeSwipeProd'), "getActiveFramesForMode must keep iframeSwipeProd as active prod");
 console.log("PASS: getActiveFramesForMode preserves live iframeSwipeProd in swipe mode.");
 
-// 3. Check dispatchToPane forwards to iframeSwipeDiff
-assert(studioJs.includes('send(iframeSwipeDiff)'), "dispatchToPane STG must forward messages to iframeSwipeDiff");
-console.log("PASS: dispatchToPane STG dispatches to iframeSwipeDiff.");
+// 3. Check dispatchToPane forwards to swipe frames
+assert(studioJs.includes('send(iframeSwipeStg)'), "dispatchToPane STG must forward messages to iframeSwipeStg");
+console.log("PASS: dispatchToPane STG dispatches to iframeSwipeStg.");
 
 // 4. Check sync_agent.js diff candidate coverage and attributes
 const syncAgentJs = fs.readFileSync('sync_agent.js', 'utf8');

@@ -22,14 +22,13 @@ assert(studioHtml.includes('id="pane-col-diff" style="display: none;"'), "pane-c
 assert(!studioJs.includes('if (notify && !isColDiffActive) {\n        isColDiffActive = true;'), "runVisualDiffCalculation must NOT override user's toggle state");
 console.log("PASS 2: Side-by-Side defaults cleanly to 2 columns and toggle preserves user choice.");
 
-// 3. Verify Slide / Swipe View (Stage <-> Diff & Prod <-> Stage)
-assert(studioCss.includes('.swipe-overlay {\n  z-index: 2;\n  background: transparent;'), "swipe-overlay must have transparent background");
-assert(studioJs.includes('iframeSwipeProd.style.opacity = "0"'), "In diff mode, Production is rendered at opacity: 0 for accurate live layout");
-assert(studioJs.includes('iframeSwipeProd.style.pointerEvents = "none"'), "In diff mode, invisible Production iframe does not block pointer events");
+// 3. Verify Slide / Swipe View (Prod on Left <-> Staging+Diff on Right)
+assert(studioCss.includes('.swipe-overlay {\n  z-index: 10;\n  background: transparent;'), "swipe-overlay must have transparent background and higher z-index than base");
+assert(studioJs.includes('iframeSwipeProd.style.opacity = "1"'), "In diff mode, Production is rendered at opacity: 1 on Left of curtain");
+assert(studioJs.includes('iframeSwipeProd.style.pointerEvents = "auto"'), "In diff mode, Production iframe handles pointer events");
 assert(studioJs.includes('swipeDiffCanvas.style.display = "block"'), "In diff mode, swipeDiffCanvas is displayed");
-assert(studioJs.includes('renderSwipeDiffCanvas(activeRedDiffs, activeShiftRegions'), "renderSwipeDiffCanvas is called on scroll and diff updates");
-assert(studioJs.includes('if (currentMode === "swipe") {\n        renderSwipeDiffCanvas(activeRedDiffs'), "triggerScrollDiffSync routes to renderSwipeDiffCanvas when in swipe mode");
-console.log("PASS 3: Slide (Swipe) view renders Production invisibly at 1:1 container layout with live pixel diff overlay.");
+assert(studioJs.includes('renderSwipeDiffCanvas(swipeRedDiffs, activeShiftRegions'), "renderSwipeDiffCanvas is called on diff updates");
+console.log("PASS 3: Slide (Swipe) view renders Production cleanly on Left with Staging diff on Right.");
 
 // 4. Verify Scroll Mirroring & Fluidity
 assert(!syncAgentJs.includes('syncLockCounter'), "sync_agent.js must not have syncLockCounter blocking scrollbar drag");

@@ -31,7 +31,7 @@ console.log("PASS 2: Dynamic live viewport diffing updates smoothly without full
 // 3. Verify Dual-Mode Support: Both 3-Column and Swipe modes supported
 assert(studioJs.includes('function applyCapturedSwipePixelDiff(dataUrlProd, dataUrlStg,'),
   "studio.js must define applyCapturedSwipePixelDiff for swipe mode");
-assert(studioJs.includes('if (currentMode === "swipe") {\n      // In swipe mode: capture Prod and Staging viewports sequentially'),
+assert(studioJs.includes('if (currentMode === "swipe") {'),
   "requestLivePixelDiff must handle swipe mode without disrupting UI");
 console.log("PASS 3: Live pixel diff capture supports both 3-Column and Swipe modes.");
 

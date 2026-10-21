@@ -17,12 +17,11 @@ console.log("PASS: studio.js queries iframeSwipeDiff element.");
 
 // 3. Verify setSwipeCompareMode never mutates iframeSwipeProd.src to targetSrc/Staging
 assert(!studioJs.includes('iframeSwipeProd.src = targetSrc'), "BUG DETECTED: iframeSwipeProd.src was being mutated to targetSrc!");
-assert(studioJs.includes('iframeSwipeDiff.style.display = "block"'), "iframeSwipeDiff should be shown in diff mode");
-assert(studioJs.includes('iframeSwipeProd.style.opacity = "0"'), "iframeSwipeProd should be rendered invisibly with opacity 0 in diff mode");
-assert(studioJs.includes('iframeSwipeProd.style.pointerEvents = "none"'), "iframeSwipeProd should have pointerEvents none when invisible");
-assert(studioJs.includes('iframeSwipeProd.style.opacity = "1"'), "iframeSwipeProd should have opacity 1 in prod mode");
-assert(studioJs.includes('iframeSwipeDiff.style.display = "none"'), "iframeSwipeDiff should be hidden in prod mode");
-console.log("PASS: setSwipeCompareMode renders Production invisibly in diff mode for accurate live coordinates.");
+assert(studioJs.includes('swipeDiffCanvas.style.display = "block"'), "swipeDiffCanvas should be shown in diff mode");
+assert(studioJs.includes('iframeSwipeProd.style.opacity = "1"'), "iframeSwipeProd should be rendered with opacity 1 on Left of curtain");
+assert(studioJs.includes('iframeSwipeProd.style.pointerEvents = "auto"'), "iframeSwipeProd should receive pointer events");
+assert(studioJs.includes('swipeDiffCanvas.style.display = "none"'), "swipeDiffCanvas should be hidden in prod mode");
+console.log("PASS: setSwipeCompareMode preserves clean Production on Left and renders Staging diff on Right.");
 
 // 4. Verify renderSwipeDiffCanvas queries live DOM elements with getBoundingClientRect
 assert(studioJs.includes('liveTargetFrame.contentDocument.querySelector(item.selector)'), "renderSwipeDiffCanvas does not query live frame DOM");
