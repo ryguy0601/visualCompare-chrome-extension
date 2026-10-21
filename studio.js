@@ -361,7 +361,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const active = getActiveFramesForMode(currentMode);
 
       // Drop messages from iframes that do not belong to the currently visible mode
-      if (sourceWindow !== active.prod?.contentWindow && sourceWindow !== active.stg?.contentWindow) {
+      if (sourceWindow !== active.prod?.contentWindow &&
+          sourceWindow !== active.stg?.contentWindow &&
+          (!active.baseStg || sourceWindow !== active.baseStg.contentWindow)) {
         return;
       }
 
@@ -403,7 +405,10 @@ document.addEventListener("DOMContentLoaded", () => {
       // Log event to UI ticker
       if (action.kind === "click") {
         const textSnippet = action.text ? ` ("${action.text}")` : "";
-        logAction(`[MIRROR CLICK] ${action.selector || action.tagName}${textSnippet} at (${Math.round(action.pctX * 100)}%, ${Math.round(action.pctY * 100)}%) -> ${targetPane}`);
+        const coordSnippet = action.clientX !== undefined
+          ? ` (${Math.round(action.clientX)}px, ${Math.round(action.clientY)}px) [${Math.round((action.pctX || 0) * 100)}%, ${Math.round((action.pctY || 0) * 100)}%]`
+          : ` at (${Math.round((action.pctX || 0) * 100)}%, ${Math.round((action.pctY || 0) * 100)}%)`;
+        logAction(`[MIRROR CLICK] Viewport${coordSnippet}${textSnippet} -> ${targetPane}`);
       } else if (action.kind === "input") {
         logAction(`[MIRROR TYPE] ${action.selector} value: "${action.value}" -> ${targetPane}`);
       } else if (action.kind === "focus") {

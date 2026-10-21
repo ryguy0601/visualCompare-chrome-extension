@@ -17,6 +17,7 @@
   const isFramed = window.self !== window.top;
   let paneId = null; // "PROD" or "STG"
   let isSyncing = false;
+  let lastMirroredClickTime = 0;
   let ghostCursor = null;
   let hasSentInitialLandmarks = false;
   let currentHoveredElements = [];
@@ -271,7 +272,20 @@
 
   // Visual ripple on mirrored click
   function showClickRipple(x, y) {
+    if (!document.getElementById("vc-ripple-styles")) {
+      const style = document.createElement("style");
+      style.id = "vc-ripple-styles";
+      style.textContent = `
+        @keyframes vc-ripple-anim {
+          0% { transform: translate(-50%, -50%) scale(0.8); opacity: 1; }
+          100% { transform: translate(-50%, -50%) scale(3.5); opacity: 0; }
+        }
+      `;
+      (document.head || document.documentElement).appendChild(style);
+    }
+
     const ripple = document.createElement("div");
+    ripple.className = "vc-click-ripple";
     ripple.style.cssText = `
       position: fixed;
       left: ${x}px;
@@ -288,20 +302,62 @@
       animation: vc-ripple-anim 0.5s ease-out forwards;
     `;
 
-    if (!document.getElementById("vc-ripple-styles")) {
-      const style = document.createElement("style");
-      style.id = "vc-ripple-styles";
-      style.textContent = `
-        @keyframes vc-ripple-anim {
-          0% { transform: translate(-50%, -50%) scale(0.8); opacity: 1; }
-          100% { transform: translate(-50%, -50%) scale(3.5); opacity: 0; }
-        }
-      `;
-      document.head.appendChild(style);
+    (document.body || document.documentElement).appendChild(ripple);
+    setTimeout(() => {
+      try { ripple.remove(); } catch (e) {}
+    }, 550);
+  }
+
+  // Resolve topmost element at specified viewport coordinates (pure X/Y basis relative to visible viewport)
+  function getViewportElementAt(x, y) {
+    let el = null;
+    if (typeof document.elementsFromPoint === "function") {
+      const list = document.elementsFromPoint(x, y);
+      for (const item of list) {
+        if (!item) continue;
+        if (item === ghostCursor || (ghostCursor && ghostCursor.contains(item))) continue;
+        if (item.classList && item.classList.contains("vc-click-ripple")) continue;
+        if (item.classList && (item.classList.contains("vc-hazard-badge") || item.classList.contains("vc-hazard-close"))) continue;
+        el = item;
+        break;
+      }
+    }
+    if (!el && typeof document.elementFromPoint === "function") {
+      const atPoint = document.elementFromPoint(x, y);
+      if (atPoint && atPoint !== ghostCursor && (!ghostCursor || !ghostCursor.contains(atPoint))) {
+        el = atPoint;
+      }
     }
 
-    document.body.appendChild(ripple);
-    setTimeout(() => ripple.remove(), 550);
+    // Pierce open shadow roots if any
+    while (el && el.shadowRoot && typeof el.shadowRoot.elementFromPoint === "function") {
+      const shadowEl = el.shadowRoot.elementFromPoint(x, y);
+      if (!shadowEl || shadowEl === el) break;
+      el = shadowEl;
+    }
+
+    // If point resolved directly to html or body, probe adjacent ±2px and ±4px boundary offsets
+    // to catch any interactive button, link, or tab near the pixel boundary
+    if (!el || el === document.body || el === document.documentElement) {
+      const probes = [
+        { dx: 0, dy: -2 }, { dx: 0, dy: 2 }, { dx: -2, dy: 0 }, { dx: 2, dy: 0 },
+        { dx: 0, dy: -4 }, { dx: 0, dy: 4 }, { dx: -4, dy: 0 }, { dx: 4, dy: 0 }
+      ];
+      for (const { dx, dy } of probes) {
+        const px = Math.max(0, Math.min(window.innerWidth - 1, x + dx));
+        const py = Math.max(0, Math.min(window.innerHeight - 1, y + dy));
+        const cand = document.elementFromPoint(px, py);
+        if (cand && cand !== document.body && cand !== document.documentElement && cand !== ghostCursor) {
+          const interactive = cand.closest ? cand.closest("button, a, input, select, textarea, [role='button'], summary, label") : null;
+          if (interactive) {
+            el = cand;
+            break;
+          }
+        }
+      }
+    }
+
+    return el || document.body;
   }
 
   // ----------------------------------------------------
@@ -461,12 +517,13 @@
   // EVENT LISTENERS (OUTGOING ACTIONS)
   // ----------------------------------------------------
   if (isFramed) {
-    // 1. CLICK TRACKING
+    // 1. CLICK TRACKING (Viewport X/Y coordinates)
     document.addEventListener("click", (e) => {
-      if (isSyncing || e.__vc_synthetic) return;
+      if (isSyncing || e.__vc_synthetic || (Date.now() - lastMirroredClickTime < 150)) return;
+      if (e.button !== undefined && e.button !== 0) return;
 
       const target = e.target;
-      if (!target || target === ghostCursor) return;
+      if (!target || target === ghostCursor || (target.classList && target.classList.contains("vc-click-ripple"))) return;
 
       const rect = target.getBoundingClientRect();
       const pctX = e.clientX / window.innerWidth;
@@ -475,7 +532,7 @@
       const text = (target.textContent || "").trim().slice(0, 50);
       const href = target.getAttribute("href") || (target.closest("a") ? target.closest("a").getAttribute("href") : "");
 
-      // Send to studio parent
+      // Send to studio parent with explicit viewport dimensions and coordinates
       window.parent.postMessage({
         type: "VC_ACTION_PERFORMED",
         paneId,
@@ -489,7 +546,9 @@
           pctX,
           pctY,
           clientX: e.clientX,
-          clientY: e.clientY
+          clientY: e.clientY,
+          viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight
         }
       }, "*");
     }, true);
@@ -632,9 +691,34 @@
 
     try {
       if (action.kind === "click") {
-        const el = findMatchingElement(action);
-        const clickX = action.pctX !== undefined ? Math.round(action.pctX * window.innerWidth) : 100;
-        const clickY = action.pctY !== undefined ? Math.round(action.pctY * window.innerHeight) : 100;
+        lastMirroredClickTime = Date.now();
+
+        // 1. Calculate viewport coordinates (X/Y basis relative to visible viewport)
+        let clickX;
+        let clickY;
+
+        if (action.clientX !== undefined && action.viewportWidth && Math.abs(window.innerWidth - action.viewportWidth) < 2) {
+          clickX = action.clientX;
+        } else if (action.pctX !== undefined) {
+          clickX = Math.round(action.pctX * window.innerWidth);
+        } else {
+          clickX = action.clientX !== undefined ? action.clientX : 100;
+        }
+
+        if (action.clientY !== undefined && action.viewportHeight && Math.abs(window.innerHeight - action.viewportHeight) < 2) {
+          clickY = action.clientY;
+        } else if (action.pctY !== undefined) {
+          clickY = Math.round(action.pctY * window.innerHeight);
+        } else {
+          clickY = action.clientY !== undefined ? action.clientY : 100;
+        }
+
+        // Clamp inside current window viewport boundaries
+        clickX = Math.max(0, Math.min(window.innerWidth - 1, clickX));
+        clickY = Math.max(0, Math.min(window.innerHeight - 1, clickY));
+
+        // 2. Locate topmost element directly at viewport (X, Y) - NOT on class or ID basis!
+        const el = getViewportElementAt(clickX, clickY);
 
         if (!ghostCursor) initGhostCursor();
         if (ghostCursor) {
@@ -646,51 +730,93 @@
         showClickRipple(clickX, clickY);
 
         if (el) {
+          // Identify closest interactive element if clicked inside a child node (e.g. span/svg inside button or link)
+          const interactiveEl = (el.closest)
+            ? (el.closest("a, button, input, select, textarea, [role='button'], summary, label") || el)
+            : el;
+
+          // Focus target element
+          const focusTarget = (interactiveEl && typeof interactiveEl.focus === "function")
+            ? interactiveEl
+            : (typeof el.focus === "function" ? el : null);
+          if (focusTarget && focusTarget !== document.body && focusTarget !== document.documentElement) {
+            try {
+              focusTarget.focus({ preventScroll: true });
+            } catch (e) {
+              try { focusTarget.focus(); } catch (err) {}
+            }
+          }
+
           // If element is a details or dropdown toggle
           if (el.tagName === "DETAILS") {
             el.open = !el.open;
+          } else if (interactiveEl && interactiveEl.tagName === "SUMMARY" && interactiveEl.parentElement && interactiveEl.parentElement.tagName === "DETAILS") {
+            interactiveEl.parentElement.open = !interactiveEl.parentElement.open;
           }
 
-          // Focus element
-          if (typeof el.focus === "function") {
-            el.focus();
-          }
-
-          // Synthesize mouse event sequence
+          // Synthesize full pointer and mouse event chain with exact viewport clientX and clientY
           const evtOptions = {
             bubbles: true,
             cancelable: true,
             view: window,
             clientX: clickX,
-            clientY: clickY
+            clientY: clickY,
+            screenX: clickX,
+            screenY: clickY,
+            button: 0,
+            buttons: 1
           };
+
+          if (typeof window.PointerEvent === "function") {
+            try {
+              const pDown = new PointerEvent("pointerdown", evtOptions);
+              pDown.__vc_synthetic = true;
+              el.dispatchEvent(pDown);
+            } catch (e) {}
+          }
 
           const downEvt = new MouseEvent("mousedown", evtOptions);
           downEvt.__vc_synthetic = true;
           el.dispatchEvent(downEvt);
 
-          const upEvt = new MouseEvent("mouseup", evtOptions);
+          if (typeof window.PointerEvent === "function") {
+            try {
+              const pUp = new PointerEvent("pointerup", { ...evtOptions, buttons: 0 });
+              pUp.__vc_synthetic = true;
+              el.dispatchEvent(pUp);
+            } catch (e) {}
+          }
+
+          const upEvt = new MouseEvent("mouseup", { ...evtOptions, buttons: 0 });
           upEvt.__vc_synthetic = true;
           el.dispatchEvent(upEvt);
 
-          const clickEvt = new MouseEvent("click", evtOptions);
+          const clickEvt = new MouseEvent("click", { ...evtOptions, buttons: 0 });
           clickEvt.__vc_synthetic = true;
           el.dispatchEvent(clickEvt);
 
-          // If native .click() didn't fire handlers
-          if (typeof el.click === "function" && (el.tagName !== "A" || el.hasAttribute("data-page") || (el.closest && el.closest("[data-page]")))) {
-            el.click();
+          // If interactive element has native .click() (e.g. buttons, checkboxes, inputs, tabs), trigger it
+          const link = (el.tagName === "A") ? el : (el.closest ? el.closest("a") : null);
+          if (interactiveEl && typeof interactiveEl.click === "function") {
+            if (interactiveEl !== link || interactiveEl.hasAttribute("data-page") || (interactiveEl.closest && interactiveEl.closest("[data-page]"))) {
+              try {
+                interactiveEl.click();
+              } catch (e) {}
+            }
           }
 
           // If it's a normal navigation link without in-page routing, navigate
-          if (!el.hasAttribute("data-page") && (!el.closest || !el.closest("[data-page]")) && action.href && (el.tagName === "A" || el.closest("a"))) {
-            const link = el.tagName === "A" ? el : el.closest("a");
-            if (link.href && link.target !== "_blank") {
-              window.location.href = link.href;
+          if (link && !clickEvt.defaultPrevented && !link.hasAttribute("data-page") && (!link.closest || !link.closest("[data-page]"))) {
+            if (link.href && !link.href.startsWith("javascript:void") && !link.href.startsWith("javascript:;")) {
+              if (link.hash && link.origin === window.location.origin && link.pathname === window.location.pathname) {
+                window.location.hash = link.hash;
+              } else if (link.target !== "_blank") {
+                window.location.href = link.href;
+              }
             }
           }
         } else if (action.href) {
-          // If element wasn't in DOM but href is known, navigate matching counterpart route
+          // Fallback if coordinate point yielded nothing and counterpart route is known
           try {
             const destHref = paneId === "STG"
               ? action.href.replace(/([_-])prod\b/gi, '$1stg').replace(/\bprod([_-])/gi, 'stg$1')
@@ -700,17 +826,25 @@
         }
       } else if (action.kind === "hover") {
         if (!ghostCursor) initGhostCursor();
-        if (ghostCursor && action.pctX !== undefined && action.pctY !== undefined) {
-          const x = Math.round(action.pctX * window.innerWidth);
-          const y = Math.round(action.pctY * window.innerHeight);
+        let x = (action.clientX !== undefined && action.viewportWidth && Math.abs(window.innerWidth - action.viewportWidth) < 2)
+          ? action.clientX
+          : (action.pctX !== undefined ? Math.round(action.pctX * window.innerWidth) : (action.clientX || 0));
+        let y = (action.clientY !== undefined && action.viewportHeight && Math.abs(window.innerHeight - action.viewportHeight) < 2)
+          ? action.clientY
+          : (action.pctY !== undefined ? Math.round(action.pctY * window.innerHeight) : (action.clientY || 0));
+
+        x = Math.max(0, Math.min(window.innerWidth - 1, x));
+        y = Math.max(0, Math.min(window.innerHeight - 1, y));
+
+        if (ghostCursor) {
           ghostCursor.style.display = "block";
           ghostCursor.style.opacity = "1";
           ghostCursor.style.left = `${x - 4}px`;
           ghostCursor.style.top = `${y - 2}px`;
         }
 
-        // Mirror authentic :hover state onto matching counterpart element
-        const hoveredEl = findMatchingElement(action);
+        // Mirror authentic :hover state onto element at viewport (x, y)
+        const hoveredEl = getViewportElementAt(x, y) || findMatchingElement(action);
         setHoveredElement(hoveredEl);
       } else if (action.kind === "hover_leave") {
         if (ghostCursor) {
@@ -718,7 +852,16 @@
         }
         clearHoveredElements();
       } else if (action.kind === "focus") {
-        const el = findMatchingElement(action);
+        let el = null;
+        if (action.clientX !== undefined && action.clientY !== undefined) {
+          const atPoint = getViewportElementAt(action.clientX, action.clientY);
+          if (atPoint && atPoint.closest) {
+            el = atPoint.closest("input, textarea, select, button, a, [tabindex]") || atPoint;
+          }
+        }
+        if (!el) {
+          el = findMatchingElement(action);
+        }
         if (el) {
           if (currentFocusedElement && currentFocusedElement !== el) {
             currentFocusedElement.classList.remove("vc-focused-pseudo");
@@ -773,7 +916,16 @@
           }, 35);
         });
       } else if (action.kind === "input") {
-        const el = findMatchingElement(action);
+        let el = currentFocusedElement;
+        if (!el || !("value" in el)) {
+          if (action.clientX !== undefined && action.clientY !== undefined) {
+            const atPoint = getViewportElementAt(action.clientX, action.clientY);
+            if (atPoint && ("value" in atPoint)) el = atPoint;
+          }
+        }
+        if (!el || !("value" in el)) {
+          el = findMatchingElement(action);
+        }
         if (el && ("value" in el)) {
           el.value = action.value;
           if (action.checked !== undefined) el.checked = action.checked;

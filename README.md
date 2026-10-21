@@ -6,7 +6,7 @@ A real-time dual-site visual regression and interaction testing extension for Go
 
 ## ✨ Features
 
-- **Mirrored Click & Interaction Engine:** Click any button, dropdown, navigation link, tab, or modal on one site, and the action is mirrored in real time on the second site.
+- **Viewport (X, Y) Mirrored Click & Interaction Engine:** Click any button, dropdown, navigation link, tab, or modal on one site, and the action is mirrored in real time onto the counterpart site on a viewport-based (X, Y) basis rather than class or ID matching. This ensures clicks work accurately even across redesigned sites with different class names, hashed styles, dynamic IDs, or varied text.
 - **Synchronized Scrolling & Typing:** Scroll positions and form inputs are mirrored synchronously between both frames with loop-prevention.
 - **Ghost Pointer Cursor:** A real-time glowing cursor indicator reflects your mouse movement onto the counterpart site.
 - **4 Live Comparison Modes:**
