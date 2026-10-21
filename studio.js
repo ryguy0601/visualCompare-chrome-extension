@@ -58,11 +58,15 @@ document.addEventListener("DOMContentLoaded", () => {
   // Mode Specific & 3-Column Pixel Diff
   const sideControls = document.getElementById("side-controls");
   const btnToggleColDiff = document.getElementById("btn-toggle-col-diff");
+  const paneColProd = document.getElementById("pane-col-prod");
+  const paneColStg = document.getElementById("pane-col-stg");
   const paneColDiff = document.getElementById("pane-col-diff");
   const colDiffPct = document.getElementById("col-diff-pct");
   const colDiffOpacitySlider = document.getElementById("col-diff-opacity-slider");
   const colDiffOpacityVal = document.getElementById("col-diff-opacity-val");
   const btnColDiffRefresh = document.getElementById("btn-col-diff-refresh");
+  const wrapFrameProd = document.getElementById("wrap-frame-prod");
+  const wrapFrameStg = document.getElementById("wrap-frame-stg");
   const wrapFrameDiff = document.getElementById("wrap-frame-diff");
   const pixelDiffViewport = document.getElementById("pixel-diff-viewport");
   const iframeDiffBase = document.getElementById("iframe-diff-base");
@@ -2656,11 +2660,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const deltaX = e.deltaX || 0;
     const currentY = lastScrollState.scrollY || 0;
     const currentX = lastScrollState.scrollX || 0;
+    const viewH = wrapFrameProd?.clientHeight || iframeProd?.clientHeight || 800;
     const docH = Math.max(
-      wrapFrameProd?.clientHeight || 800,
+      viewH,
       lastProdLandmarks?.docHeight || lastStgLandmarks?.docHeight || 2000
     );
-    const viewH = wrapFrameProd?.clientHeight || 800;
     const maxScrollY = Math.max(1, docH - viewH);
     const newScrollY = Math.max(0, Math.min(maxScrollY, currentY + deltaY));
     const newScrollX = Math.max(0, currentX + deltaX);
