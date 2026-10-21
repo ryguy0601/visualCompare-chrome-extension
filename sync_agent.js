@@ -17,6 +17,7 @@
   const isFramed = window.self !== window.top;
   let paneId = null; // "PROD" or "STG"
   let isSyncing = false;
+  let syncScrollTimeout = null;
   let lastMirroredClickTime = 0;
   let ghostCursor = null;
   let hasSentInitialLandmarks = false;
@@ -610,6 +611,8 @@
                 kind: "scroll",
                 scrollY: window.scrollY,
                 scrollX: window.scrollX,
+                maxScrollY,
+                maxScrollX,
                 pctY,
                 pctX
               }
@@ -897,11 +900,21 @@
           currentFocusedElement = null;
         }
       } else if (action.kind === "scroll") {
+        clearTimeout(syncScrollTimeout);
         isSyncing = true;
 
         const maxScrollY = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
         const maxScrollX = Math.max(0, document.documentElement.scrollWidth - window.innerWidth);
-        const targetY = (action.scrollY !== undefined) ? Math.min(maxScrollY, Math.max(0, action.scrollY)) : Math.round((action.pctY || 0) * maxScrollY);
+
+        let targetY;
+        if (action.scrollY === 0) {
+          targetY = 0;
+        } else if (action.pctY !== undefined && action.maxScrollY !== undefined && Math.abs(maxScrollY - action.maxScrollY) > 30) {
+          targetY = Math.min(maxScrollY, Math.max(0, Math.round(action.pctY * maxScrollY)));
+        } else {
+          targetY = (action.scrollY !== undefined) ? Math.min(maxScrollY, Math.max(0, action.scrollY)) : Math.round((action.pctY || 0) * maxScrollY);
+        }
+
         const targetX = (action.scrollX !== undefined) ? Math.min(maxScrollX, Math.max(0, action.scrollX)) : 0;
 
         window.scrollTo({
@@ -910,11 +923,9 @@
           behavior: "auto"
         });
 
-        requestAnimationFrame(() => {
-          setTimeout(() => {
-            isSyncing = false;
-          }, 35);
-        });
+        syncScrollTimeout = setTimeout(() => {
+          isSyncing = false;
+        }, 120);
       } else if (action.kind === "input") {
         let el = currentFocusedElement;
         if (!el || !("value" in el)) {

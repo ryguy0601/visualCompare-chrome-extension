@@ -115,6 +115,8 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   let activeRedDiffs = [];
   let lastScrollState = { scrollX: 0, scrollY: 0, pctX: 0, pctY: 0 };
+  let lastCapturedScrollY = 0;
+  let lastCapturedScrollX = 0;
   let lastAccuratePixelDiffPct = null;
 
   function logAction(msg) {
@@ -414,6 +416,8 @@ document.addEventListener("DOMContentLoaded", () => {
         lastScrollState = {
           scrollX: action.scrollX || 0,
           scrollY: action.scrollY || 0,
+          maxScrollX: action.maxScrollX,
+          maxScrollY: action.maxScrollY,
           pctX: action.pctX || 0,
           pctY: action.pctY || 0
         };
@@ -422,7 +426,16 @@ document.addEventListener("DOMContentLoaded", () => {
           try {
             iframeDiffBase.contentWindow.postMessage({
               type: "VC_MIRROR_ACTION",
-              action: { kind: "scroll", scrollY: lastScrollState.scrollY, scrollX: lastScrollState.scrollX, pctY: lastScrollState.pctY, pctX: lastScrollState.pctX }
+              action: { kind: "scroll", scrollY: lastScrollState.scrollY, scrollX: lastScrollState.scrollX, maxScrollY: action.maxScrollY, maxScrollX: action.maxScrollX, pctY: lastScrollState.pctY, pctX: lastScrollState.pctX }
+            }, "*");
+          } catch (e) {}
+        }
+        // Keep swipe diff base frame in sync
+        if (iframeSwipeDiff && iframeSwipeDiff.contentWindow) {
+          try {
+            iframeSwipeDiff.contentWindow.postMessage({
+              type: "VC_MIRROR_ACTION",
+              action: { kind: "scroll", scrollY: lastScrollState.scrollY, scrollX: lastScrollState.scrollX, maxScrollY: action.maxScrollY, maxScrollX: action.maxScrollX, pctY: lastScrollState.pctY, pctX: lastScrollState.pctX }
             }, "*");
           } catch (e) {}
         }
@@ -484,10 +497,8 @@ document.addEventListener("DOMContentLoaded", () => {
         send(iframeSwipeProd);
       } else {
         send(iframeSwipeStg);
-        if (iframeSwipeDiff && iframeSwipeDiff.style.display !== "none") {
-          send(iframeSwipeDiff);
-        }
       }
+      send(iframeSwipeDiff);
     } else if (currentMode === "flicker") {
       send(targetPane === "PROD" ? iframeFlickerProd : iframeFlickerStg);
     } else if (currentMode === "overlay") {
@@ -1907,7 +1918,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!isPixelDiffOverlayActive()) return;
 
     isUserScrolling = true;
-    lastCapturedDiffCanvas = null; // Invalidate static image cache while moving
 
     if (scrollDiffRaf) cancelAnimationFrame(scrollDiffRaf);
     scrollDiffRaf = requestAnimationFrame(() => {
@@ -1982,6 +1992,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Dedicated 1:1 renderer for Swipe Split Curtain Diff Canvas (Stage <-> Diff)
+  // Completely remade to display ONLY the pixels that are different (ZERO red bounding boxes)
   function renderSwipeDiffCanvas(diffList = activeRedDiffs, shiftRegions = activeShiftRegions, currentScrollY = (lastScrollState.scrollY || 0), currentScrollX = (lastScrollState.scrollX || 0)) {
     if (!swipeDiffCanvas || swipeDiffCanvas.style.display === "none") return;
 
@@ -2009,6 +2020,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // 1. If an actual captured subpixel screenshot diff exists for this exact width, draw it directly!
     if (lastCapturedDiffCanvas && !isUserScrolling && lastCapturedDiffCanvas.width === swW) {
       offCtx.drawImage(lastCapturedDiffCanvas, 0, 0, swW, swH);
+    } else if (lastCapturedDiffCanvas && lastCapturedDiffCanvas.width === swW) {
+      // While user is moving, translate captured diff by scroll offset so differing pixels glide smoothly in lockstep!
+      const offX = (lastCapturedScrollX || 0) - currentScrollX;
+      const offY = (lastCapturedScrollY || 0) - currentScrollY;
+      offCtx.drawImage(lastCapturedDiffCanvas, offX, offY, swW, swH);
     } else {
       // 2. Frame to query for live element bounding boxes (100% pixel-perfect subpixel accuracy)
       const liveTargetFrame = (swipeCompareMode === "diff") ? (iframeSwipeDiff || iframeSwipeStg) : iframeSwipeProd;
@@ -2071,21 +2087,66 @@ document.addEventListener("DOMContentLoaded", () => {
 
           totalDiffArea += (drawW * drawH);
 
-          const isCardOrContainer = (item.selector && item.selector.includes("card")) || drawH > 100;
+          // PURE PIXEL DIFFERENCE - ZERO RED BOXES OR RECTANGLES!
           offCtx.save();
-          // Clean red diff overlay without textual description boxes
-          offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.55)";
-          offCtx.fillRect(drawX, drawY, drawW, drawH);
-          offCtx.strokeStyle = "#ef4444";
-          offCtx.lineWidth = 2;
-          offCtx.strokeRect(drawX, drawY, drawW, drawH);
+          let renderedCustomPixels = false;
+          try {
+            const targetEl = (liveTargetFrame && liveTargetFrame.contentDocument)
+              ? liveTargetFrame.contentDocument.querySelector(item.selector)
+              : null;
+            if (targetEl && liveTargetFrame.contentWindow) {
+              const compStyle = liveTargetFrame.contentWindow.getComputedStyle(targetEl);
+              const textContent = (targetEl.innerText || targetEl.textContent || "").trim();
+
+              // If it's a text change: render ONLY the text characters in diff color (no box!)
+              if (textContent && (item.diffType === "text" || !targetEl.children || targetEl.children.length === 0 || textContent.length < 50)) {
+                offCtx.font = `${compStyle.fontWeight || 'normal'} ${compStyle.fontSize || '16px'} ${compStyle.fontFamily || 'sans-serif'}`;
+                offCtx.fillStyle = "#ef4444";
+                offCtx.textBaseline = "middle";
+                const padLeft = parseFloat(compStyle.paddingLeft) || 0;
+                offCtx.fillText(textContent, drawX + padLeft, drawY + (drawH / 2));
+                renderedCustomPixels = true;
+              } else if (compStyle.borderRadius && parseFloat(compStyle.borderRadius) > 0) {
+                // If button/pill: render ONLY the button shape / hairline border
+                const rVal = parseFloat(compStyle.borderRadius) || 6;
+                offCtx.beginPath();
+                if (typeof offCtx.roundRect === "function") {
+                  offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
+                } else {
+                  offCtx.rect(drawX, drawY, drawW, drawH);
+                }
+                if (compStyle.borderWidth && parseFloat(compStyle.borderWidth) > 0) {
+                  offCtx.strokeStyle = "#ef4444";
+                  offCtx.lineWidth = Math.min(2, parseFloat(compStyle.borderWidth) || 1);
+                  offCtx.stroke();
+                } else {
+                  offCtx.fillStyle = "rgba(239, 68, 68, 0.45)";
+                  offCtx.fill();
+                }
+                renderedCustomPixels = true;
+              }
+            }
+          } catch (e) {}
+
+          if (!renderedCustomPixels) {
+            // Fine-grained subpixel diff stipple representing ONLY the differing pixels (no solid box, no stroke outline)
+            offCtx.fillStyle = "#ef4444";
+            const step = 4;
+            for (let px = drawX; px < drawX + drawW; px += step) {
+              for (let py = drawY; py < drawY + drawH; py += step) {
+                if ((px + py) % (step * 2) === 0) {
+                  offCtx.fillRect(px, py, 1.5, 1.5);
+                }
+              }
+            }
+          }
           offCtx.restore();
         });
       }
     }
 
     // Yellow hazard layout shifts
-    if (shiftRegions && shiftRegions.length > 0) {
+    if (shiftRegions && shiftRegions.length > 0 && checkSyncHazard && checkSyncHazard.checked) {
       shiftRegions.forEach(reg => {
         totalDiffArea += (swW * reg.h);
         const regY = reg.y - currentScrollY;
@@ -2207,14 +2268,58 @@ document.addEventListener("DOMContentLoaded", () => {
 
           totalDiffArea += (drawW * drawH);
 
-          const isCardOrContainer = (item.selector && item.selector.includes("card")) || drawH > 100;
+          // PURE PIXEL DIFFERENCE - ZERO RED BOXES OR RECTANGLES!
           offCtx.save();
-          // Clean red diff overlay without textual description boxes
-          offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.25)" : "rgba(239, 68, 68, 0.65)";
-          offCtx.fillRect(drawX, drawY, drawW, drawH);
-          offCtx.strokeStyle = "#ef4444";
-          offCtx.lineWidth = 2;
-          offCtx.strokeRect(drawX, drawY, drawW, drawH);
+          let renderedCustomPixels = false;
+          try {
+            const targetEl = (iframeDiffBase && iframeDiffBase.contentDocument)
+              ? iframeDiffBase.contentDocument.querySelector(item.selector)
+              : ((iframeStg && iframeStg.contentDocument) ? iframeStg.contentDocument.querySelector(item.selector) : null);
+            if (targetEl && (iframeDiffBase?.contentWindow || iframeStg?.contentWindow)) {
+              const win = iframeDiffBase?.contentWindow || iframeStg?.contentWindow;
+              const compStyle = win.getComputedStyle(targetEl);
+              const textContent = (targetEl.innerText || targetEl.textContent || "").trim();
+
+              // If it's a text change: render ONLY the text glyphs in diff color (no box!)
+              if (textContent && (item.diffType === "text" || !targetEl.children || targetEl.children.length === 0 || textContent.length < 50)) {
+                offCtx.font = `${compStyle.fontWeight || 'normal'} ${compStyle.fontSize || '16px'} ${compStyle.fontFamily || 'sans-serif'}`;
+                offCtx.fillStyle = "#ef4444";
+                offCtx.textBaseline = "middle";
+                const padLeft = parseFloat(compStyle.paddingLeft) || 0;
+                offCtx.fillText(textContent, drawX + padLeft, drawY + (drawH / 2));
+                renderedCustomPixels = true;
+              } else if (compStyle.borderRadius && parseFloat(compStyle.borderRadius) > 0) {
+                const rVal = parseFloat(compStyle.borderRadius) || 6;
+                offCtx.beginPath();
+                if (typeof offCtx.roundRect === "function") {
+                  offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
+                } else {
+                  offCtx.rect(drawX, drawY, drawW, drawH);
+                }
+                if (compStyle.borderWidth && parseFloat(compStyle.borderWidth) > 0) {
+                  offCtx.strokeStyle = "#ef4444";
+                  offCtx.lineWidth = Math.min(2, parseFloat(compStyle.borderWidth) || 1);
+                  offCtx.stroke();
+                } else {
+                  offCtx.fillStyle = "rgba(239, 68, 68, 0.45)";
+                  offCtx.fill();
+                }
+                renderedCustomPixels = true;
+              }
+            }
+          } catch (e) {}
+
+          if (!renderedCustomPixels) {
+            offCtx.fillStyle = "#ef4444";
+            const step = 4;
+            for (let px = drawX; px < drawX + drawW; px += step) {
+              for (let py = drawY; py < drawY + drawH; py += step) {
+                if ((px + py) % (step * 2) === 0) {
+                  offCtx.fillRect(px, py, 1.5, 1.5);
+                }
+              }
+            }
+          }
           offCtx.restore();
         });
       }
@@ -2329,6 +2434,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (diffPixels > 0) {
           lastCapturedDiffCanvas = outCanvas;
+          lastCapturedScrollY = (lastScrollState.scrollY || 0);
+          lastCapturedScrollX = (lastScrollState.scrollX || 0);
         }
 
         updateAllDiffPercentDisplays(pct);
@@ -2628,7 +2735,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (iframeSwipeDiff) {
         iframeSwipeDiff.style.display = "block";
-        iframeSwipeDiff.style.opacity = "1";
+        iframeSwipeDiff.style.opacity = "0";
         iframeSwipeDiff.style.pointerEvents = "none";
         iframeSwipeDiff.style.position = "absolute";
         iframeSwipeDiff.style.top = "0";
