@@ -1280,7 +1280,8 @@
             padding: style.padding,
             opacity: style.opacity,
             fontSize: style.fontSize,
-            fontWeight: style.fontWeight
+            fontWeight: style.fontWeight,
+            fontFamily: style.fontFamily
           }
         });
       });
@@ -1529,7 +1530,14 @@
             y: Math.round(rect.top + (isSticky ? 0 : scrollY)),
             width: Math.round(rect.width),
             height: Math.round(rect.height),
-            measuredWidth: (window.innerWidth || document.documentElement.clientWidth || 1200)
+            measuredWidth: (window.innerWidth || document.documentElement.clientWidth || 1200),
+            text: (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 100),
+            style: {
+              radius: style.borderRadius,
+              fontSize: style.fontSize,
+              fontWeight: style.fontWeight,
+              fontFamily: style.fontFamily
+            }
           });
         });
       } catch (err) {
