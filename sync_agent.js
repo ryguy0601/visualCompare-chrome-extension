@@ -77,12 +77,35 @@
       prepareForCapture();
     } else if (data.type === "VC_RESTORE_CAPTURE") {
       restoreAfterCapture();
+    } else if (data.type === "VC_CAPTURE_SLICE_START") {
+      hideFixedHeadersForSlice(data.sliceIndex > 0);
     }
   });
 
   let captureFreezeStyle = null;
 
+  function hideFixedHeadersForSlice(hide) {
+    document.querySelectorAll("*").forEach(el => {
+      try {
+        const style = window.getComputedStyle(el);
+        const isFixed = style.position === "fixed" || (style.position === "sticky" && (style.top === "0px" || style.top === "0"));
+        if (isFixed) {
+          if (hide) {
+            if (!el.dataset.vcOrigVis) {
+              el.dataset.vcOrigVis = el.style.visibility || "visible";
+            }
+            el.style.setProperty("visibility", "hidden", "important");
+          } else if (el.dataset.vcOrigVis !== undefined) {
+            el.style.visibility = el.dataset.vcOrigVis === "visible" ? "" : el.dataset.vcOrigVis;
+            delete el.dataset.vcOrigVis;
+          }
+        }
+      } catch (e) {}
+    });
+  }
+
   function prepareForCapture() {
+    hideFixedHeadersForSlice(false);
     if (!captureFreezeStyle) {
       captureFreezeStyle = document.createElement("style");
       captureFreezeStyle.id = "vc-capture-freeze";
@@ -117,6 +140,7 @@
   }
 
   function restoreAfterCapture() {
+    hideFixedHeadersForSlice(false);
     if (captureFreezeStyle) {
       captureFreezeStyle.remove();
       captureFreezeStyle = null;

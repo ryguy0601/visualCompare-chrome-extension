@@ -831,6 +831,34 @@
   }
 
   /**
+   * Directly exports a single targeted full-page PNG screenshot matching GoFullPage.
+   */
+  function exportSinglePng(canvas, filename = "") {
+    if (!canvas) throw new Error("No canvas provided for PNG export.");
+    if (!filename) {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      filename = `gofullpage-screenshot-${dateStr}.png`;
+    }
+    const pngBytes = canvasToPngBytes(canvas);
+    if (!pngBytes) throw new Error("Failed to encode canvas as PNG.");
+
+    if (typeof Blob !== "undefined" && typeof URL !== "undefined" && typeof document !== "undefined") {
+      const blob = new Blob([pngBytes], { type: "image/png" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(a.href);
+        a.remove();
+      }, 1000);
+    }
+
+    return { filename, size: pngBytes.length, bytes: pngBytes };
+  }
+
+  /**
    * Exports full comparison package as ZIP archive.
    * Includes full-page visual PDFs of each page, lossless PNG screenshots, JSON, and offline viewer.
    */
@@ -985,6 +1013,7 @@ Click the "Import ZIP" button in the studio toolbar and select this zip file!
     exportComparisonZip,
     importComparisonZip,
     exportSinglePdf,
+    exportSinglePng,
     buildGoFullPagePdf,
     buildFullPageVisualPdf,
     buildFullPageDiffPdf,

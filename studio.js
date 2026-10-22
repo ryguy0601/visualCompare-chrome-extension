@@ -123,6 +123,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnDownloadPdfProd = document.getElementById("btn-download-pdf-prod");
   const btnDownloadPdfStg = document.getElementById("btn-download-pdf-stg");
   const btnDownloadAllZip = document.getElementById("btn-download-all-zip");
+  const btnExportPng = document.getElementById("btn-export-png");
+  const gofullpageViewerModal = document.getElementById("gofullpage-viewer-modal");
+  const gofullpageViewerTitle = document.getElementById("gofullpage-viewer-title");
+  const gofullpageViewerDims = document.getElementById("gofullpage-viewer-dims");
+  const btnGofullpageViewStg = document.getElementById("btn-gofullpage-view-stg");
+  const btnGofullpageViewProd = document.getElementById("btn-gofullpage-view-prod");
+  const btnGofullpageViewDiff = document.getElementById("btn-gofullpage-view-diff");
+  const btnGofullpageDlPdf = document.getElementById("btn-gofullpage-dl-pdf");
+  const btnGofullpageDlPng = document.getElementById("btn-gofullpage-dl-png");
+  const btnGofullpageClose = document.getElementById("btn-gofullpage-close");
+  const gofullpageBodyWrap = document.getElementById("gofullpage-body-wrap");
+  const gofullpagePreviewCanvas = document.getElementById("gofullpage-preview-canvas");
   const shortcutsModal = document.getElementById("shortcuts-modal");
   const btnCloseShortcutsModal = document.getElementById("btn-close-shortcuts-modal");
   const btnShowShortcuts = document.getElementById("btn-show-shortcuts");
@@ -1045,6 +1057,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (e.key === "Escape") {
+      if (gofullpageViewerModal) gofullpageViewerModal.style.display = "none";
       if (pdfExportModal) pdfExportModal.style.display = "none";
       if (shortcutsModal) shortcutsModal.style.display = "none";
       return;
@@ -1064,7 +1077,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (btnSwapUrls) btnSwapUrls.click();
     } else if (e.key === "r" || e.key === "R") {
       if (btnNavigateAll) btnNavigateAll.click();
-    } else if (e.key === "e" || e.key === "E") {
+    } else if (e.key === "e" || e.key === "E" || e.key === "p" || e.key === "P" || (e.altKey && (e.key === "p" || e.key === "P"))) {
       if (btnExportPdf) btnExportPdf.click();
     } else if (e.key === "?") {
       if (shortcutsModal) shortcutsModal.style.display = shortcutsModal.style.display === "none" ? "flex" : "none";
@@ -4518,13 +4531,16 @@ document.addEventListener("DOMContentLoaded", () => {
         const pct = Math.round(10 + ((s + 1) / (numSlices * 2)) * 40);
         onProgress({ percent: pct, status: `Capturing Production full-page slices (${s + 1} of ${numSlices})...` });
 
-        // Scroll Production frame
+        // Scroll Production frame & notify frame of slice index to hide duplicate fixed headers
         const scrollAction = {
           type: "VC_MIRROR_ACTION",
           action: { kind: "scroll", scrollY: targetY, scrollX: 0 }
         };
         if (iframeProd && iframeProd.contentWindow) {
-          try { iframeProd.contentWindow.postMessage(scrollAction, "*"); } catch (e) {}
+          try {
+            iframeProd.contentWindow.postMessage({ type: "VC_CAPTURE_SLICE_START", sliceIndex: s }, "*");
+            iframeProd.contentWindow.postMessage(scrollAction, "*");
+          } catch (e) {}
         }
         if (wrapFrameProd) wrapFrameProd.scrollTop = targetY;
 
@@ -4566,13 +4582,16 @@ document.addEventListener("DOMContentLoaded", () => {
         const pct = Math.round(50 + ((s + 1) / (numSlices * 2)) * 35);
         onProgress({ percent: pct, status: `Capturing Staging full-page slices (${s + 1} of ${numSlices})...` });
 
-        // Scroll Staging frame
+        // Scroll Staging frame & notify frame of slice index to hide duplicate fixed headers
         const scrollAction = {
           type: "VC_MIRROR_ACTION",
           action: { kind: "scroll", scrollY: targetY, scrollX: 0 }
         };
         if (iframeStg && iframeStg.contentWindow) {
-          try { iframeStg.contentWindow.postMessage(scrollAction, "*"); } catch (e) {}
+          try {
+            iframeStg.contentWindow.postMessage({ type: "VC_CAPTURE_SLICE_START", sliceIndex: s }, "*");
+            iframeStg.contentWindow.postMessage(scrollAction, "*");
+          } catch (e) {}
         }
         if (wrapFrameStg) wrapFrameStg.scrollTop = targetY;
 
@@ -4702,6 +4721,102 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
+  let lastGoFullPageAudit = null;
+  let currentGoFullPageView = "stg"; // "stg", "prod", "diff"
+
+  function renderGoFullPagePreview(viewKey) {
+    currentGoFullPageView = viewKey;
+    if (!lastGoFullPageAudit || !gofullpagePreviewCanvas) return;
+
+    let targetCanvas = lastGoFullPageAudit.canvasStg;
+    let label = "Candidate (Staging)";
+    if (viewKey === "prod") {
+      targetCanvas = lastGoFullPageAudit.canvasProd;
+      label = "Reference (Production)";
+    } else if (viewKey === "diff") {
+      targetCanvas = lastGoFullPageAudit.canvasDiff || lastGoFullPageAudit.canvasStg;
+      label = "Visual Differences";
+    }
+
+    if (btnGofullpageViewStg) btnGofullpageViewStg.classList.toggle("active", viewKey === "stg");
+    if (btnGofullpageViewProd) btnGofullpageViewProd.classList.toggle("active", viewKey === "prod");
+    if (btnGofullpageViewDiff) btnGofullpageViewDiff.classList.toggle("active", viewKey === "diff");
+
+    if (gofullpageViewerTitle) gofullpageViewerTitle.textContent = `GoFullPage Visual Capture - ${label}`;
+    if (gofullpageViewerDims && targetCanvas) {
+      gofullpageViewerDims.textContent = `${targetCanvas.width} × ${targetCanvas.height} px • 1-Page Continuous PDF`;
+    }
+
+    if (targetCanvas) {
+      gofullpagePreviewCanvas.width = targetCanvas.width;
+      gofullpagePreviewCanvas.height = targetCanvas.height;
+      const ctx = gofullpagePreviewCanvas.getContext("2d");
+      ctx.drawImage(targetCanvas, 0, 0);
+    }
+  }
+
+  async function handleGoFullPageExportFlow(autoDownloadFormat = "pdf") {
+    if (pdfExportModal) pdfExportModal.style.display = "none";
+    if (!window.VisualCompareZip || typeof window.VisualCompareZip.buildGoFullPagePdf !== "function") {
+      alert("GoFullPage export engine initializing, please try again in a moment.");
+      return;
+    }
+
+    try {
+      showCaptureProgress("GoFullPage Visual Capture", "Scanning document dimensions and preparing capture...", 5);
+      const audit = await captureFullPageAuditCanvases((p) => {
+        showCaptureProgress("GoFullPage Visual Capture", p.status, p.percent);
+      });
+      lastGoFullPageAudit = audit;
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const meta = {
+        prodUrl: prodUrlInput.value.trim(),
+        stgUrl: stgUrlInput.value.trim(),
+        timestamp: new Date().toLocaleString(),
+        device: viewportSelect.value,
+        currentMode,
+        hazardSpacers: activeHazardSpacers,
+        redDiffs: activeRedDiffs,
+        totalShiftDelta: document.getElementById("metric-shift-val") ? document.getElementById("metric-shift-val").textContent : "+0px",
+        diffMismatchPct: audit.diffMismatchPct || (document.getElementById("metric-diff-pct") ? document.getElementById("metric-diff-pct").textContent : "0.00%"),
+        canvasProd: audit.canvasProd,
+        canvasStg: audit.canvasStg,
+        canvasDiff: audit.canvasDiff
+      };
+
+      const activeView = (currentMode === "diff" || isDiffActive) ? "diff" : "stg";
+
+      if (autoDownloadFormat === "pdf") {
+        showCaptureProgress("Generating GoFullPage PDF", "Building continuous 1-page PDF document...", 94);
+        await waitAsync(60);
+        const res = window.VisualCompareZip.exportSinglePdf(meta, activeView === "diff" ? "diff" : (activeView === "prod" ? "prod" : "stg"));
+        logAction(`[GOFULLPAGE] Downloaded continuous 1-page PDF: ${res.filename}`);
+        showToast("GoFullPage PDF Downloaded", `Saved ${res.filename} (1 continuous page).`);
+      } else if (autoDownloadFormat === "png") {
+        showCaptureProgress("Generating GoFullPage PNG", "Encoding lossless PNG image...", 94);
+        await waitAsync(60);
+        const targetCanvas = (activeView === "diff" ? audit.canvasDiff : (activeView === "prod" ? audit.canvasProd : audit.canvasStg)) || audit.canvasStg;
+        const res = window.VisualCompareZip.exportSinglePng(targetCanvas, `gofullpage-${activeView}-${dateStr}.png`);
+        logAction(`[GOFULLPAGE] Downloaded full-page PNG: ${res.filename}`);
+        showToast("GoFullPage PNG Downloaded", `Saved ${res.filename} (high-res PNG).`);
+      }
+
+      hideCaptureProgress();
+
+      // Open GoFullPage Result Viewer exactly like GoFullPage
+      if (gofullpageViewerModal) {
+        gofullpageViewerModal.style.display = "flex";
+        renderGoFullPagePreview(activeView);
+        if (gofullpageBodyWrap) gofullpageBodyWrap.scrollTop = 0;
+      }
+    } catch (err) {
+      hideCaptureProgress();
+      console.error("GoFullPage Export error:", err);
+      alert("Failed to export: " + err.message);
+    }
+  }
+
   async function handleExportPdfFlow(type = "master") {
     if (pdfExportModal) pdfExportModal.style.display = "none";
     if (!window.VisualCompareZip || typeof window.VisualCompareZip.exportSinglePdf !== "function") {
@@ -4714,6 +4829,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const audit = await captureFullPageAuditCanvases((p) => {
         showCaptureProgress("Capturing Full-Page Visual Audit", p.status, p.percent);
       });
+      lastGoFullPageAudit = audit;
 
       showCaptureProgress("Compiling PDF Document", "Generating vector-aligned PDF-1.4 file...", 92);
       await waitAsync(80);
@@ -4737,6 +4853,12 @@ document.addEventListener("DOMContentLoaded", () => {
       hideCaptureProgress();
       logAction(`[EXPORT] Downloaded Full-Page PDF: ${res.filename} (${Math.round(res.size / 1024)} KB)`);
       showToast("PDF Exported Successfully", `Saved ${res.filename} (${Math.round(res.size / 1024)} KB).`);
+
+      if (gofullpageViewerModal) {
+        gofullpageViewerModal.style.display = "flex";
+        renderGoFullPagePreview(type === "prod" ? "prod" : (type === "diff" ? "diff" : "stg"));
+        if (gofullpageBodyWrap) gofullpageBodyWrap.scrollTop = 0;
+      }
     } catch (err) {
       hideCaptureProgress();
       console.error("PDF Export error:", err);
@@ -4786,13 +4908,78 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Open PDF Export Dialog
-  if (btnExportPdf && pdfExportModal) {
+  // GoFullPage Direct Export Actions (Matches GoFullPage Chrome Extension)
+  if (btnExportPdf) {
     btnExportPdf.addEventListener("click", () => {
-      pdfExportModal.style.display = "flex";
+      handleGoFullPageExportFlow("pdf");
     });
   }
 
+  if (btnExportPng) {
+    btnExportPng.addEventListener("click", () => {
+      handleGoFullPageExportFlow("png");
+    });
+  }
+
+  // GoFullPage Result Viewer Controls
+  if (btnGofullpageViewStg) {
+    btnGofullpageViewStg.addEventListener("click", () => renderGoFullPagePreview("stg"));
+  }
+  if (btnGofullpageViewProd) {
+    btnGofullpageViewProd.addEventListener("click", () => renderGoFullPagePreview("prod"));
+  }
+  if (btnGofullpageViewDiff) {
+    btnGofullpageViewDiff.addEventListener("click", () => renderGoFullPagePreview("diff"));
+  }
+
+  if (btnGofullpageDlPdf) {
+    btnGofullpageDlPdf.addEventListener("click", () => {
+      if (!lastGoFullPageAudit) return;
+      const meta = {
+        prodUrl: prodUrlInput.value.trim(),
+        stgUrl: stgUrlInput.value.trim(),
+        timestamp: new Date().toLocaleString(),
+        device: viewportSelect.value,
+        currentMode,
+        hazardSpacers: activeHazardSpacers,
+        redDiffs: activeRedDiffs,
+        totalShiftDelta: document.getElementById("metric-shift-val") ? document.getElementById("metric-shift-val").textContent : "+0px",
+        diffMismatchPct: lastGoFullPageAudit.diffMismatchPct || (document.getElementById("metric-diff-pct") ? document.getElementById("metric-diff-pct").textContent : "0.00%"),
+        canvasProd: lastGoFullPageAudit.canvasProd,
+        canvasStg: lastGoFullPageAudit.canvasStg,
+        canvasDiff: lastGoFullPageAudit.canvasDiff
+      };
+      const res = window.VisualCompareZip.exportSinglePdf(meta, currentGoFullPageView);
+      showToast("GoFullPage PDF Downloaded", `Saved ${res.filename} (1 continuous page).`);
+    });
+  }
+
+  if (btnGofullpageDlPng) {
+    btnGofullpageDlPng.addEventListener("click", () => {
+      if (!lastGoFullPageAudit) return;
+      let targetCanvas = lastGoFullPageAudit.canvasStg;
+      if (currentGoFullPageView === "prod") targetCanvas = lastGoFullPageAudit.canvasProd;
+      else if (currentGoFullPageView === "diff") targetCanvas = lastGoFullPageAudit.canvasDiff || lastGoFullPageAudit.canvasStg;
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const res = window.VisualCompareZip.exportSinglePng(targetCanvas, `gofullpage-${currentGoFullPageView}-${dateStr}.png`);
+      showToast("GoFullPage PNG Downloaded", `Saved ${res.filename} (lossless PNG).`);
+    });
+  }
+
+  if (btnGofullpageClose && gofullpageViewerModal) {
+    btnGofullpageClose.addEventListener("click", () => {
+      gofullpageViewerModal.style.display = "none";
+    });
+  }
+
+  if (gofullpageViewerModal) {
+    gofullpageViewerModal.addEventListener("click", (e) => {
+      if (e.target === gofullpageViewerModal) gofullpageViewerModal.style.display = "none";
+    });
+  }
+
+  // Backward-compatible PDF Export Modal
   if (btnClosePdfModal && pdfExportModal) {
     btnClosePdfModal.addEventListener("click", () => {
       pdfExportModal.style.display = "none";

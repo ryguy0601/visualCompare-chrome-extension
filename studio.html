@@ -86,9 +86,14 @@
 
       <!-- Archive / Package Tools -->
       <div class="header-tools-group">
-        <button id="btn-export-pdf" class="btn-diff-action btn-export-pdf" title="Export full-page visual PDFs of Production, Staging, and Differences">
-          <span class="btn-label-full">📄 Export PDF</span>
+        <button id="btn-export-pdf" class="btn-diff-action btn-export-pdf" title="GoFullPage: capture and download 1-page continuous PDF">
+          <span class="btn-label-full">📄 GoFullPage PDF</span>
           <span class="btn-label-short">📄 PDF</span>
+        </button>
+
+        <button id="btn-export-png" class="btn-diff-action btn-export-png" title="GoFullPage: download lossless full-page PNG screenshot">
+          <span class="btn-label-full">🖼️ Export PNG</span>
+          <span class="btn-label-short">🖼️ PNG</span>
         </button>
 
         <button id="btn-export-zip" class="btn-diff-action btn-export-zip" title="Export comparison report, links, and PDFs of both pages with differences into a ZIP package">
@@ -498,8 +503,50 @@
           <div class="shortcut-row"><kbd>S</kbd><span>Swap Prod &amp; Staging URLs</span></div>
           <div class="shortcut-row"><kbd>R</kbd><span>Reload Both Panes</span></div>
           <div class="shortcut-row"><kbd>Space</kbd><span>Toggle Flicker (in Flicker mode)</span></div>
-          <div class="shortcut-row"><kbd>E</kbd><span>Open PDF / ZIP Export Menu</span></div>
+          <div class="shortcut-row"><kbd>P</kbd><span>GoFullPage 1-Page PDF Export</span></div>
+          <div class="shortcut-row"><kbd>E</kbd><span>PDF / ZIP Export Package</span></div>
           <div class="shortcut-row"><kbd>?</kbd><span>Show / Hide Shortcuts</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GoFullPage Full-Page Capture Result Viewer (Matches GoFullPage Results Page) -->
+  <div id="gofullpage-viewer-modal" class="studio-modal-backdrop gofullpage-viewer-backdrop" style="display: none;">
+    <div class="gofullpage-viewer-window">
+      <!-- GoFullPage Action Bar -->
+      <div class="gofullpage-header-bar">
+        <div class="gofullpage-title-group">
+          <div class="gofullpage-logo-icon">📸</div>
+          <div>
+            <h3 id="gofullpage-viewer-title">GoFullPage Visual Capture</h3>
+            <span id="gofullpage-viewer-dims" class="gofullpage-dims-badge">1280 × 3600 px • 1-Page Continuous PDF</span>
+          </div>
+        </div>
+
+        <!-- View Switcher Pills -->
+        <div class="gofullpage-view-pills">
+          <button id="btn-gofullpage-view-stg" class="gofullpage-pill active" title="Show Staging Candidate Capture">🟪 Staging Candidate</button>
+          <button id="btn-gofullpage-view-prod" class="gofullpage-pill" title="Show Production Reference Capture">🟦 Production Reference</button>
+          <button id="btn-gofullpage-view-diff" class="gofullpage-pill" title="Show Visual Difference Overlay">🔴 Visual Diff</button>
+        </div>
+
+        <!-- Export Actions -->
+        <div class="gofullpage-actions-group">
+          <button id="btn-gofullpage-dl-pdf" class="btn-gofullpage-action primary" title="Download as GoFullPage 1-Page Continuous PDF">
+            <span>📥 Download PDF</span>
+          </button>
+          <button id="btn-gofullpage-dl-png" class="btn-gofullpage-action secondary" title="Download as High-Resolution PNG">
+            <span>🖼️ Download PNG</span>
+          </button>
+          <button id="btn-gofullpage-close" class="btn-modal-close" title="Close Preview & Return to Studio">✕</button>
+        </div>
+      </div>
+
+      <!-- Scrollable Preview Area -->
+      <div class="gofullpage-body-wrap" id="gofullpage-body-wrap">
+        <div class="gofullpage-canvas-container">
+          <canvas id="gofullpage-preview-canvas" class="gofullpage-preview-canvas"></canvas>
         </div>
       </div>
     </div>

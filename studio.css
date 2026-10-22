@@ -2126,3 +2126,163 @@ footer.studio-footer {
   min-width: 22px;
   text-align: center;
 }
+
+/* ----------------------------------------------------
+   GOFULLPAGE CONTINUOUS RESULT VIEWER & EXPORT BAR
+   (Exact UX matching GoFullPage Chrome extension)
+   ---------------------------------------------------- */
+.gofullpage-viewer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999999;
+  background: rgba(10, 15, 29, 0.94);
+  backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+}
+
+.gofullpage-viewer-window {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.gofullpage-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: #0f172a;
+  border-bottom: 1px solid #1e293b;
+  color: #fff;
+  flex-shrink: 0;
+  gap: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.gofullpage-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.gofullpage-logo-icon {
+  font-size: 22px;
+  background: rgba(2, 132, 199, 0.2);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 8px;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.gofullpage-title-group h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+.gofullpage-dims-badge {
+  font-size: 11px;
+  color: #94a3b8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.gofullpage-view-pills {
+  display: inline-flex;
+  background: #1e293b;
+  border-radius: 8px;
+  padding: 3px;
+  gap: 4px;
+}
+
+.gofullpage-pill {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gofullpage-pill:hover {
+  color: #f8fafc;
+}
+
+.gofullpage-pill.active {
+  background: #0284c7;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.gofullpage-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-gofullpage-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s ease;
+}
+
+.btn-gofullpage-action.primary {
+  background: #0284c7;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35);
+}
+
+.btn-gofullpage-action.primary:hover {
+  background: #0369a1;
+}
+
+.btn-gofullpage-action.secondary {
+  background: #1e293b;
+  color: #f1f5f9;
+  border: 1px solid #334155;
+}
+
+.btn-gofullpage-action.secondary:hover {
+  background: #334155;
+}
+
+.gofullpage-body-wrap {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: 30px;
+  background: #090d16;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.gofullpage-canvas-container {
+  display: inline-block;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.gofullpage-preview-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
