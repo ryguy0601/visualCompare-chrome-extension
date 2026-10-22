@@ -873,6 +873,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  const setMode = switchMode;
+
   // ----------------------------------------------------
   // 5. MODE 2: SWIPE CURTAIN SLIDER LOGIC
   // ----------------------------------------------------
@@ -2292,9 +2294,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 4. Update active diff renderings ONLY if the corresponding view/mode is selected
     if (currentMode === "swipe") {
-      if (swipeCompareMode === "diff") {
-        renderSwipeDiffCanvas(swipeRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
-      }
+      setSwipeCompareMode("diff");
+      renderSwipeDiffCanvas((swipeRedDiffs && swipeRedDiffs.length > 0) ? swipeRedDiffs : activeRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
     } else if (currentMode === "side-by-side") {
       if (isColDiffActive) {
         if (paneColDiff) paneColDiff.style.display = "flex";
@@ -2855,7 +2856,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           // If not queryable via contentDocument, use candidate measured box or estimated box
           if (!hasExactBox) {
-            const box = item.swipeBox || item.stgBox || item.box;
+            const box = item.swipeBox || item.stgBox || item.box || item.prodBox;
             const isBoxFromNarrow = box && box.measuredWidth && box.measuredWidth < 600 && swW > 800;
             if (isBoxFromNarrow) {
               const prodHref = (prodUrlInput?.value || "").toLowerCase();
@@ -2864,20 +2865,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 const est = getEstimatedBoxForSelector(item.selector, swW);
                 if (est) {
                   drawX = est.x;
-                  drawY = est.y - currentScrollY;
+                  drawY = (box && box.y ? box.y : est.y) - currentScrollY;
                   drawW = est.width;
-                  drawH = est.height;
+                  drawH = (box && box.height ? box.height : est.height);
                   hasExactBox = true;
-                } else {
-                  return;
                 }
-              } else {
-                return;
               }
-            } else if (!box || (box.width === 0 && box.height === 0)) {
-              const prodHref = (prodUrlInput?.value || "").toLowerCase();
-              const isDemoSite = prodHref.includes("demo_") || prodHref.includes("demo-");
-              if (isDemoSite) {
+            }
+
+            if (!hasExactBox) {
+              if (!box || (box.width === 0 && box.height === 0)) {
                 const est = getEstimatedBoxForSelector(item.selector, swW);
                 if (est) {
                   drawX = est.x;
@@ -2889,15 +2886,15 @@ document.addEventListener("DOMContentLoaded", () => {
                   return;
                 }
               } else {
-                return;
+                const scaleX = (box.measuredWidth && box.measuredWidth > 0 && Math.abs(box.measuredWidth - swW) > 30) ? (swW / box.measuredWidth) : 1;
+                const isFixed = Boolean(item.isFixed || box.isFixed);
+                const isSticky = Boolean(item.isSticky || box.isSticky);
+                drawX = Math.round((isFixed ? (box.viewportX !== undefined ? box.viewportX : box.x) : (box.x - currentScrollX)) * scaleX);
+                drawY = (isFixed || (isSticky && currentScrollY > (box.y || 0))) ? (box.viewportY !== undefined ? box.viewportY : box.y) : (box.y - currentScrollY);
+                drawW = Math.round(box.width * scaleX);
+                drawH = box.height;
+                hasExactBox = true;
               }
-            } else {
-              const isFixed = Boolean(item.isFixed || box.isFixed);
-              const isSticky = Boolean(item.isSticky || box.isSticky);
-              drawX = isFixed ? (box.viewportX !== undefined ? box.viewportX : box.x) : (box.x - currentScrollX);
-              drawY = (isFixed || (isSticky && currentScrollY > (box.y || 0))) ? (box.viewportY !== undefined ? box.viewportY : box.y) : (box.y - currentScrollY);
-              drawW = box.width;
-              drawH = box.height;
             }
           }
 
@@ -2964,12 +2961,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 const rVal = parseFloat(compStyle.borderRadius) || (parseFloat(item.style?.radius) || 0);
                 offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
                 renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame, liveFallbackFrame);
-                if (!renderedGlyphs && !isTextNode) {
+                if (!renderedGlyphs) {
                   offCtx.beginPath();
                   if (rVal > 0 && typeof offCtx.roundRect === "function") {
                     offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
                   } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("button") || item.selector.includes("tab") || item.selector.includes("badge"))) {
                     offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
+                  } else if (typeof offCtx.roundRect === "function" && isTextNode) {
+                    offCtx.roundRect(drawX, drawY, drawW, drawH, 4);
+                  } else {
+                    offCtx.rect(drawX, drawY, drawW, drawH);
                   }
                   offCtx.fill();
                   renderedGlyphs = true;
@@ -2987,12 +2988,16 @@ document.addEventListener("DOMContentLoaded", () => {
             const rVal = parseFloat(item.style?.radius) || (item.selector.includes("btn") || item.selector.includes("tab") ? 6 : 0);
             offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
             renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, null, null);
-            if (!renderedGlyphs && !isTextNode) {
+            if (!renderedGlyphs) {
               offCtx.beginPath();
               if (rVal > 0 && typeof offCtx.roundRect === "function") {
                 offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
               } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("tab"))) {
                 offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
+              } else if (typeof offCtx.roundRect === "function" && isTextNode) {
+                offCtx.roundRect(drawX, drawY, drawW, drawH, 4);
+              } else {
+                offCtx.rect(drawX, drawY, drawW, drawH);
               }
               offCtx.fill();
             }
@@ -3007,10 +3012,24 @@ document.addEventListener("DOMContentLoaded", () => {
     if (effectiveShifts && effectiveShifts.length > 0 && checkSyncHazard && checkSyncHazard.checked) {
       effectiveShifts.forEach(reg => {
         totalDiffArea += (swW * reg.h);
-        const regY = reg.y - currentScrollY;
+        let regY = reg.y - currentScrollY;
+        try {
+          const domSpacer = (liveFallbackFrame?.contentDocument?.querySelector?.(".vc-hazard-stripe-spacer") || liveTargetFrame?.contentDocument?.querySelector?.(".vc-hazard-stripe-spacer"));
+          if (domSpacer) {
+            const r = domSpacer.getBoundingClientRect();
+            if (r.height > 0) {
+              regY = Math.round(r.top);
+            }
+          }
+        } catch (e) {}
+
         if (regY + reg.h < -10 || regY > swH + 10) return;
 
+        offCtx.save();
+        offCtx.globalAlpha = 0.35;
         drawHazardStripes(offCtx, 0, regY, swW, reg.h, 14);
+        offCtx.restore();
+        drawCanvasShiftBadge(offCtx, swW, regY, reg.h, reg.label || reg.delta);
       });
     }
 
@@ -4451,14 +4470,27 @@ document.addEventListener("DOMContentLoaded", () => {
     const prevScrollX = lastScrollState.scrollX || 0;
 
     if (currentMode !== "side-by-side") {
-      setMode("side-by-side");
+      switchMode("side-by-side");
       await waitAsync(150);
     }
 
+    const paneProd = document.getElementById("pane-col-prod");
+    const paneStg = document.getElementById("pane-col-stg");
+    const paneDiff = document.getElementById("pane-col-diff");
+
+    // Phase 1: Expand Production to full stage width (e.g. 1200px+)
+    if (paneStg) paneStg.style.display = "none";
+    if (paneDiff) paneDiff.style.display = "none";
+    if (paneProd) {
+      paneProd.style.display = "flex";
+      paneProd.style.flex = "1 1 100%";
+      paneProd.style.width = "100%";
+    }
+    await waitAsync(80);
+
     const rProd = iframeProd.getBoundingClientRect();
-    const rStg = iframeStg.getBoundingClientRect();
-    const frameW = Math.max(300, Math.round(rProd.width));
-    const visibleH = Math.max(200, Math.round(rProd.height));
+    const frameW = Math.max(800, Math.round(rProd.width));
+    const visibleH = Math.max(300, Math.round(rProd.height));
 
     const canvasProd = document.createElement("canvas");
     canvasProd.width = frameW;
@@ -4480,12 +4512,13 @@ document.addEventListener("DOMContentLoaded", () => {
     let captureSucceeded = false;
 
     try {
+      // 1. Capture full-width Production slices
       for (let s = 0; s < numSlices; s++) {
         const targetY = Math.min(s * stepH, Math.max(0, totalH - visibleH));
-        const pct = Math.round(10 + ((s + 1) / numSlices) * 55);
-        onProgress({ percent: pct, status: `Capturing scroll slices (${s + 1} of ${numSlices})...` });
+        const pct = Math.round(10 + ((s + 1) / (numSlices * 2)) * 40);
+        onProgress({ percent: pct, status: `Capturing Production full-page slices (${s + 1} of ${numSlices})...` });
 
-        // Scroll both frames
+        // Scroll Production frame
         const scrollAction = {
           type: "VC_MIRROR_ACTION",
           action: { kind: "scroll", scrollY: targetY, scrollX: 0 }
@@ -4493,15 +4526,16 @@ document.addEventListener("DOMContentLoaded", () => {
         if (iframeProd && iframeProd.contentWindow) {
           try { iframeProd.contentWindow.postMessage(scrollAction, "*"); } catch (e) {}
         }
-        if (iframeStg && iframeStg.contentWindow) {
-          try { iframeStg.contentWindow.postMessage(scrollAction, "*"); } catch (e) {}
-        }
         if (wrapFrameProd) wrapFrameProd.scrollTop = targetY;
-        if (wrapFrameStg) wrapFrameStg.scrollTop = targetY;
 
-        await waitAsync(130);
+        await waitAsync(110);
 
+        // Hide progress overlay so it never appears in captured screenshots!
+        if (captureProgressOverlay) captureProgressOverlay.style.visibility = "hidden";
+        await waitAsync(35);
         const dataUrl = await captureActiveTabPng();
+        if (captureProgressOverlay) captureProgressOverlay.style.visibility = "visible";
+
         if (dataUrl) {
           captureSucceeded = true;
           const img = await loadImageAsync(dataUrl);
@@ -4512,17 +4546,75 @@ document.addEventListener("DOMContentLoaded", () => {
           const cropProdW = Math.round(rProd.width * dpr);
           const cropProdH = Math.round(rProd.height * dpr);
 
+          ctxProd.drawImage(img, cropProdLeft, cropProdTop, cropProdW, cropProdH, 0, targetY, frameW, visibleH);
+        }
+      }
+
+      // 2. Expand Staging to full stage width (e.g. 1200px+)
+      if (paneProd) paneProd.style.display = "none";
+      if (paneStg) {
+        paneStg.style.display = "flex";
+        paneStg.style.flex = "1 1 100%";
+        paneStg.style.width = "100%";
+      }
+      await waitAsync(80);
+      const rStg = iframeStg.getBoundingClientRect();
+
+      // Capture full-width Staging slices
+      for (let s = 0; s < numSlices; s++) {
+        const targetY = Math.min(s * stepH, Math.max(0, totalH - visibleH));
+        const pct = Math.round(50 + ((s + 1) / (numSlices * 2)) * 35);
+        onProgress({ percent: pct, status: `Capturing Staging full-page slices (${s + 1} of ${numSlices})...` });
+
+        // Scroll Staging frame
+        const scrollAction = {
+          type: "VC_MIRROR_ACTION",
+          action: { kind: "scroll", scrollY: targetY, scrollX: 0 }
+        };
+        if (iframeStg && iframeStg.contentWindow) {
+          try { iframeStg.contentWindow.postMessage(scrollAction, "*"); } catch (e) {}
+        }
+        if (wrapFrameStg) wrapFrameStg.scrollTop = targetY;
+
+        await waitAsync(110);
+
+        // Hide progress overlay so it never appears in captured screenshots!
+        if (captureProgressOverlay) captureProgressOverlay.style.visibility = "hidden";
+        await waitAsync(35);
+        const dataUrl = await captureActiveTabPng();
+        if (captureProgressOverlay) captureProgressOverlay.style.visibility = "visible";
+
+        if (dataUrl) {
+          const img = await loadImageAsync(dataUrl);
+          const dpr = img.width / Math.max(1, window.innerWidth);
+
           const cropStgLeft = Math.round(rStg.left * dpr);
           const cropStgTop = Math.round(rStg.top * dpr);
           const cropStgW = Math.round(rStg.width * dpr);
           const cropStgH = Math.round(rStg.height * dpr);
 
-          ctxProd.drawImage(img, cropProdLeft, cropProdTop, cropProdW, cropProdH, 0, targetY, frameW, visibleH);
           ctxStg.drawImage(img, cropStgLeft, cropStgTop, cropStgW, cropStgH, 0, targetY, frameW, visibleH);
         }
       }
     } catch (err) {
       console.warn("[VisualCompare Live] Scroll slice capture warning:", err);
+    } finally {
+      if (paneProd) {
+        paneProd.style.display = "";
+        paneProd.style.flex = "";
+        paneProd.style.width = "";
+      }
+      if (paneStg) {
+        paneStg.style.display = "";
+        paneStg.style.flex = "";
+        paneStg.style.width = "";
+      }
+      if (paneDiff) {
+        paneDiff.style.display = "";
+      }
+      if (captureProgressOverlay) {
+        captureProgressOverlay.style.visibility = "visible";
+      }
     }
 
     // Fallback if browser screenshot API was unavailable
@@ -4548,7 +4640,7 @@ document.addEventListener("DOMContentLoaded", () => {
     lastScrollState.scrollX = prevScrollX;
 
     if (prevMode !== "side-by-side") {
-      setMode(prevMode);
+      switchMode(prevMode);
     }
 
     // Restore CSS animations

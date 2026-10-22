@@ -794,22 +794,22 @@
     const dateStr = new Date().toISOString().slice(0, 10);
 
     if (type === "prod") {
-      pdfBytes = buildFullPageVisualPdf("Production Reference", meta.prodUrl, "PROD", meta.canvasProd, meta);
+      pdfBytes = buildGoFullPagePdf(meta.canvasProd || meta.canvasDiff || meta.canvasStg);
       filename = `visualcompare-prod-fullpage-${dateStr}.pdf`;
     } else if (type === "stg") {
-      pdfBytes = buildFullPageVisualPdf("Staging Candidate", meta.stgUrl, "STG", meta.canvasStg, meta);
+      pdfBytes = buildGoFullPagePdf(meta.canvasStg || meta.canvasDiff || meta.canvasProd);
       filename = `visualcompare-stg-fullpage-${dateStr}.pdf`;
     } else if (type === "diff") {
-      pdfBytes = buildFullPageDiffPdf(meta, meta.canvasDiff, meta.canvasProd, meta.canvasStg);
+      pdfBytes = buildGoFullPagePdf(meta.canvasDiff || meta.canvasStg || meta.canvasProd);
       filename = `visualcompare-diff-fullpage-${dateStr}.pdf`;
     } else {
       // type === "master" or general PDF export
       // Per user request: "work like gofull page where it just shows the one websiete page as one big pdf, i dont need any of that stat stuff"
-      const targetCanvas = meta.canvasDiff || meta.canvasStg || meta.canvasProd;
+      const targetCanvas = meta.targetCanvas || (meta.currentMode === "diff" ? meta.canvasDiff : (meta.canvasStg || meta.canvasProd || meta.canvasDiff));
       if (targetCanvas && targetCanvas.width && targetCanvas.height) {
         pdfBytes = buildGoFullPagePdf(targetCanvas);
       } else {
-        pdfBytes = buildComprehensiveReportPdf(meta, meta.canvasDiff, meta.canvasProd, meta.canvasStg);
+        pdfBytes = buildGoFullPagePdf(meta.canvasDiff || meta.canvasStg || meta.canvasProd);
       }
       filename = `visualcompare-master-report-${dateStr}.pdf`;
     }
