@@ -627,14 +627,18 @@ document.addEventListener("DOMContentLoaded", () => {
       if (action.kind === "scroll") {
         const scrollSender = (active.diff && sourceWindow === active.diff.contentWindow) ? "DIFF" : paneId;
         // Prevent echo loop fighting between leader and follower pane
-        if (activeScrollLeader && activeScrollLeader !== scrollSender) {
+        if (activeScrollLeader && activeScrollLeader !== scrollSender && activeScrollLeader !== "WHEEL") {
           return;
         }
-        activeScrollLeader = scrollSender;
-        clearTimeout(scrollLeaderTimer);
-        scrollLeaderTimer = setTimeout(() => {
-          activeScrollLeader = null;
-        }, 120);
+        if (activeScrollLeader !== "WHEEL") {
+          activeScrollLeader = scrollSender;
+          clearTimeout(scrollLeaderTimer);
+          scrollLeaderTimer = setTimeout(() => {
+            activeScrollLeader = null;
+          }, 120);
+        } else {
+          activeScrollLeader = scrollSender;
+        }
 
         lastScrollState = {
           scrollX: action.scrollX || 0,
@@ -1428,6 +1432,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const y = currAlignedY;
         activeShiftRegions.push({ y, h: gapDiff, label: `+${gapDiff}px (inserted space)` });
         currAlignedY += gapDiff;
+        activeShiftRegions[activeShiftRegions.length - 1].spacerId = gapSpacerId;
+        activeShiftRegions[activeShiftRegions.length - 1].pane = pGap < sGap ? "PROD" : "STG";
+        activeShiftRegions[activeShiftRegions.length - 1].targetSelector = pGap < sGap ? pSec.selector : sSec.selector;
 
         if (pGap < sGap) {
           // Extra space / section inserted in Staging before this section!
@@ -1478,6 +1485,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const y = currAlignedY;
         activeShiftRegions.push({ y, h: secDiff, label: `+${secDiff}px ("${pSec.heading || pSec.tag || sSec.heading || sSec.tag}" is larger)` });
         currAlignedY += secDiff;
+        activeShiftRegions[activeShiftRegions.length - 1].spacerId = secSpacerId;
+        activeShiftRegions[activeShiftRegions.length - 1].pane = pH < sH ? "PROD" : "STG";
+        activeShiftRegions[activeShiftRegions.length - 1].targetSelector = pH < sH ? pSec.selector : sSec.selector;
 
         if (pH < sH) {
           // Staging's section is larger by secDiff!
@@ -1818,10 +1828,7 @@ document.addEventListener("DOMContentLoaded", () => {
         usedIndices.set(p.selector, idx + 1);
 
         if (s) {
-          // On actual websites, only look at differences that are in or near the viewport!
-          if (!isDemoSite && p.inViewport === false && s.inViewport === false && !p.isSticky && !s.isSticky) {
-            return;
-          }
+          // Dynamic document-wide visual regression detection (viewport clipping occurs dynamically during render)
 
           // Clean text comparison
           const pText = (p.text || "").trim();
@@ -2556,6 +2563,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     isUserScrolling = true;
 
+    // Invalidate stale screenshot diff if scroll position changed so live vector diffs render smoothly
+    if (lastCapturedDiffCanvas && Math.abs((lastScrollState.scrollY || 0) - lastCapturedScrollY) > 2) {
+      lastCapturedDiffCanvas = null;
+    }
+
     if (scrollDiffRaf) cancelAnimationFrame(scrollDiffRaf);
     scrollDiffRaf = requestAnimationFrame(() => {
       scrollDiffRaf = null;
@@ -2570,6 +2582,9 @@ document.addEventListener("DOMContentLoaded", () => {
     if (scrollEndTimer) clearTimeout(scrollEndTimer);
     scrollEndTimer = setTimeout(() => {
       isUserScrolling = false;
+      if (lastCapturedDiffCanvas && Math.abs((lastScrollState.scrollY || 0) - lastCapturedScrollY) > 2) {
+        lastCapturedDiffCanvas = null;
+      }
       if (isPixelDiffOverlayActive()) {
         scheduleLivePixelDiffCapture();
       }
@@ -2832,8 +2847,12 @@ document.addEventListener("DOMContentLoaded", () => {
     let drawnCapturedDiff = false;
     if (lastCapturedDiffCanvas && !isUserScrolling) {
       if (Math.abs(lastCapturedDiffCanvas.width - swW) < 5) {
-        offCtx.drawImage(lastCapturedDiffCanvas, 0, 0, swW, swH);
-        drawnCapturedDiff = true;
+        if (Math.abs((lastScrollState.scrollY || 0) - lastCapturedScrollY) < 5) {
+          offCtx.drawImage(lastCapturedDiffCanvas, 0, 0, swW, swH);
+          drawnCapturedDiff = true;
+        } else {
+          lastCapturedDiffCanvas = null;
+        }
       } else {
         // Mismatched aspect ratio or width (e.g. from 3-column view) - drop stale canvas so it never warps!
         lastCapturedDiffCanvas = null;
@@ -2857,6 +2876,11 @@ document.addEventListener("DOMContentLoaded", () => {
         let drawH = 0;
         let hasExactBox = false;
 
+        const liveTargetWin = liveTargetFrame?.contentWindow;
+        const liveFallbackWin = liveFallbackFrame?.contentWindow;
+        const frameScrollY = liveTargetWin ? (liveTargetWin.scrollY || liveTargetWin.pageYOffset || 0) : (liveFallbackWin ? (liveFallbackWin.scrollY || liveFallbackWin.pageYOffset || 0) : currentScrollY);
+        const frameScrollX = liveTargetWin ? (liveTargetWin.scrollX || liveTargetWin.pageXOffset || 0) : (liveFallbackWin ? (liveFallbackWin.scrollX || liveFallbackWin.pageXOffset || 0) : currentScrollX);
+
         // Try querying the live DOM directly in the swipe frame if same-origin
         if (item.selector) {
           try {
@@ -2873,8 +2897,21 @@ document.addEventListener("DOMContentLoaded", () => {
             if (el) {
               const r = el.getBoundingClientRect();
               if (r.width > 0 && r.height > 0) {
-                drawX = Math.round(r.left);
-                drawY = Math.round(r.top);
+                const isFixed = Boolean(item.isFixed || (typeof isElementFixed === "function" && isElementFixed(el)));
+                const isSticky = Boolean(item.isSticky || (typeof isElementSticky === "function" && isElementSticky(el)));
+
+                if (isFixed) {
+                  drawX = Math.round(r.left);
+                  drawY = Math.round(r.top);
+                } else if (isSticky && currentScrollY > (item.box?.y || 0)) {
+                  drawX = Math.round(r.left);
+                  drawY = Math.round(r.top);
+                } else {
+                  const elDocY = r.top + frameScrollY;
+                  const elDocX = r.left + frameScrollX;
+                  drawX = Math.round(elDocX - currentScrollX);
+                  drawY = Math.round(elDocY - currentScrollY);
+                }
                 drawW = Math.round(r.width);
                 drawH = Math.round(r.height);
                 hasExactBox = true;
@@ -2962,8 +2999,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (!renderedGlyphs) {
                       offCtx.fillStyle = "rgba(225, 29, 72, 0.86)";
                       rects.forEach(r => {
-                        const rx = Math.round(r.left);
-                        const ry = Math.round(r.top);
+                        const rx = Math.round((r.left + frameScrollX) - currentScrollX);
+                        const ry = Math.round((r.top + frameScrollY) - currentScrollY);
                         const rw = Math.round(r.width);
                         const rh = Math.round(r.height);
                         if (rw > 0 && rh > 0) {
@@ -3043,13 +3080,16 @@ document.addEventListener("DOMContentLoaded", () => {
     if (effectiveShifts && effectiveShifts.length > 0 && checkSyncHazard && checkSyncHazard.checked) {
       effectiveShifts.forEach(reg => {
         totalDiffArea += (swW * reg.h);
-        let regY = reg.y - currentScrollY;
+        let regY = Math.round(reg.y - currentScrollY);
         try {
-          const domSpacer = (liveFallbackFrame?.contentDocument?.querySelector?.(".vc-hazard-stripe-spacer") || liveTargetFrame?.contentDocument?.querySelector?.(".vc-hazard-stripe-spacer"));
+          const spacerSelector = reg.spacerId ? `.vc-hazard-stripe-spacer[data-spacer-id="${reg.spacerId}"]` : ".vc-hazard-stripe-spacer";
+          const domSpacer = (liveFallbackFrame?.contentDocument?.querySelector?.(spacerSelector) || liveTargetFrame?.contentDocument?.querySelector?.(spacerSelector));
           if (domSpacer) {
             const r = domSpacer.getBoundingClientRect();
             if (r.height > 0) {
-              regY = Math.round(r.top);
+              const fWin = (domSpacer.ownerDocument?.defaultView) || liveTargetFrame?.contentWindow;
+              const fScrollY = fWin ? (fWin.scrollY || fWin.pageYOffset || 0) : currentScrollY;
+              regY = Math.round((r.top + fScrollY) - currentScrollY);
             }
           }
         } catch (e) {}
@@ -3128,8 +3168,12 @@ document.addEventListener("DOMContentLoaded", () => {
     let drawnCapturedDiff = false;
     if (lastCapturedDiffCanvas && !isUserScrolling) {
       if (Math.abs(lastCapturedDiffCanvas.width - width) < 5) {
-        offCtx.drawImage(lastCapturedDiffCanvas, 0, 0, width, height);
-        drawnCapturedDiff = true;
+        if (Math.abs((lastScrollState.scrollY || 0) - lastCapturedScrollY) < 5) {
+          offCtx.drawImage(lastCapturedDiffCanvas, 0, 0, width, height);
+          drawnCapturedDiff = true;
+        } else {
+          lastCapturedDiffCanvas = null;
+        }
       } else {
         lastCapturedDiffCanvas = null;
       }
@@ -3143,6 +3187,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
           let drawX = 0, drawY = 0, drawW = 0, drawH = 0;
           let hasExactBox = false;
+
+          const frameWin = (iframeDiffBase?.contentWindow || iframeStg?.contentWindow || iframeProd?.contentWindow);
+          const frameScrollY = frameWin ? (frameWin.scrollY || frameWin.pageYOffset || 0) : currentScrollY;
+          const frameScrollX = frameWin ? (frameWin.scrollX || frameWin.pageXOffset || 0) : currentScrollX;
 
           // Try querying live element directly in diff or staging frame
           if (item.selector) {
@@ -3160,8 +3208,20 @@ document.addEventListener("DOMContentLoaded", () => {
               if (el) {
                 const r = el.getBoundingClientRect();
                 if (r.width > 0 && r.height > 0) {
-                  drawX = Math.round(r.left);
-                  drawY = Math.round(r.top);
+                  const isFixed = Boolean(item.isFixed || (typeof isElementFixed === "function" && isElementFixed(el)));
+                  const isSticky = Boolean(item.isSticky || (typeof isElementSticky === "function" && isElementSticky(el)));
+                  if (isFixed) {
+                    drawX = Math.round(r.left);
+                    drawY = Math.round(r.top);
+                  } else if (isSticky && currentScrollY > (item.box?.y || 0)) {
+                    drawX = Math.round(r.left);
+                    drawY = Math.round(r.top);
+                  } else {
+                    const elDocY = r.top + frameScrollY;
+                    const elDocX = r.left + frameScrollX;
+                    drawX = Math.round(elDocX - currentScrollX);
+                    drawY = Math.round(elDocY - currentScrollY);
+                  }
                   drawW = Math.round(r.width);
                   drawH = Math.round(r.height);
                   hasExactBox = true;
@@ -3250,8 +3310,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (!renderedGlyphs) {
                       offCtx.fillStyle = "rgba(225, 29, 72, 0.86)";
                       rects.forEach(r => {
-                        const rx = Math.round(r.left);
-                        const ry = Math.round(r.top);
+                        const rx = Math.round((r.left + frameScrollX) - currentScrollX);
+                        const ry = Math.round((r.top + frameScrollY) - currentScrollY);
                         const rw = Math.round(r.width);
                         const rh = Math.round(r.height);
                         if (rw > 0 && rh > 0) {
@@ -3324,7 +3384,20 @@ document.addEventListener("DOMContentLoaded", () => {
       effectiveShifts.forEach(reg => {
         totalDiffArea += (width * reg.h);
 
-        const regY = reg.y - currentScrollY;
+        let regY = Math.round(reg.y - currentScrollY);
+        try {
+          const spacerSelector = reg.spacerId ? `.vc-hazard-stripe-spacer[data-spacer-id="${reg.spacerId}"]` : ".vc-hazard-stripe-spacer";
+          const domSpacer = (iframeDiffBase?.contentDocument?.querySelector?.(spacerSelector) || iframeStg?.contentDocument?.querySelector?.(spacerSelector) || iframeProd?.contentDocument?.querySelector?.(spacerSelector));
+          if (domSpacer) {
+            const r = domSpacer.getBoundingClientRect();
+            if (r.height > 0) {
+              const fWin = (domSpacer.ownerDocument?.defaultView) || iframeDiffBase?.contentWindow;
+              const fScrollY = fWin ? (fWin.scrollY || fWin.pageYOffset || 0) : currentScrollY;
+              regY = Math.round((r.top + fScrollY) - currentScrollY);
+            }
+          }
+        } catch (e) {}
+
         if (regY + reg.h < -10 || regY > height + 10) return;
 
         drawHazardStripes(offCtx, 0, regY, width, reg.h, 14);

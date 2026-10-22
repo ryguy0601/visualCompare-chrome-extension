@@ -778,6 +778,20 @@
       }
     }, { passive: true });
 
+    // 3c. DYNAMIC SCROLL DIFF CANDIDATE REFRESH (Refreshes candidates as user scrolls into new sections)
+    let lastCandidateScrollY = 0;
+    let candidateScrollDebounce = null;
+    window.addEventListener("scroll", () => {
+      clearTimeout(candidateScrollDebounce);
+      candidateScrollDebounce = setTimeout(() => {
+        const sy = window.scrollY || window.pageYOffset || 0;
+        if (Math.abs(sy - lastCandidateScrollY) > 250) {
+          lastCandidateScrollY = sy;
+          sendDiffCandidatesReport();
+        }
+      }, 150);
+    }, { passive: true });
+
     // 4. FORM INPUT TRACKING
     document.addEventListener("input", (e) => {
       if (isSyncing || e.__vc_synthetic) return;
@@ -1298,7 +1312,7 @@
 
     try {
       const data = extractLandmarks();
-      const diffCandidates = extractDiffCandidates();
+      const diffCandidates = extractDiffCandidates({ includeAll: true });
       if (window.parent) {
         window.parent.postMessage({
           type: "VC_LANDMARKS_REPORT",
@@ -1318,7 +1332,7 @@
   function sendDiffCandidatesReport() {
     if (!isFramed || !window.parent) return;
     try {
-      const diffCandidates = extractDiffCandidates();
+      const diffCandidates = extractDiffCandidates({ includeAll: true });
       window.parent.postMessage({
         type: "VC_DIFF_CANDIDATES_REPORT",
         paneId,
@@ -1360,7 +1374,7 @@
     return false;
   }
 
-  function extractDiffCandidates() {
+  function extractDiffCandidates(options = {}) {
     const candidates = [];
     const scrollY = window.scrollY || window.pageYOffset || 0;
     const scrollX = window.scrollX || window.pageXOffset || 0;
@@ -1386,6 +1400,7 @@
     const seenElements = new Set();
     try {
       document.querySelectorAll(selector).forEach(el => {
+        if (candidates.length >= 600) return;
         if (seenElements.has(el)) return;
         if (el.classList.contains('vc-hazard-stripe-spacer') || el.id === 'vc-ghost-pointer' || el.classList.contains('vc-red-diff-badge')) return;
 
@@ -1417,7 +1432,9 @@
         const inViewport = (rect.bottom >= -40 && rect.top <= vh + 40 && rect.right >= -40 && rect.left <= vw + 40);
 
         // Viewport-only filtering: strictly only process elements in or near the viewport (or sticky headers)
-        if (!inViewport && !isSticky) return;
+        if (!options?.includeAll && !inViewport && !isSticky) {
+          if (!inViewport && !isSticky) return;
+        }
 
         seenElements.add(el);
 
@@ -1589,7 +1606,26 @@
     let targetEl = null;
     if (targetSelector) {
       try {
-        targetEl = document.querySelector(targetSelector);
+        const matches = document.querySelectorAll(targetSelector);
+        if (matches.length === 1 && targetY === undefined) {
+          targetEl = matches[0];
+        } else if (matches.length > 0) {
+          if (targetY !== undefined) {
+            let bestDist = Infinity;
+            for (const el of matches) {
+              if (el.classList.contains("vc-hazard-stripe-spacer")) continue;
+              const r = el.getBoundingClientRect();
+              const y = r.top + (window.scrollY || 0);
+              const dist = Math.abs(y - targetY);
+              if (dist < bestDist) {
+                bestDist = dist;
+                targetEl = el;
+              }
+            }
+          } else {
+            targetEl = matches[0];
+          }
+        }
       } catch (e) {}
     }
 
@@ -1602,7 +1638,7 @@
         const r = el.getBoundingClientRect();
         const y = r.top + (window.scrollY || 0);
         const dist = Math.abs(y - targetY);
-        if (dist < minDistance && dist < 200) {
+        if (dist < minDistance && dist < 500) {
           minDistance = dist;
           closestEl = el;
         }
