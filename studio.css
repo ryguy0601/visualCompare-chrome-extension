@@ -450,21 +450,29 @@ header.studio-header {
    2. SECONDARY TOOLBAR (MODES & SYNC)
    ---------------------------------------------------- */
 .secondary-toolbar {
+  height: 44px;
   min-height: 44px;
-  height: auto;
+  max-height: 44px;
   background-color: var(--bg-toolbar);
   background: linear-gradient(180deg, #10182b 0%, #0c1222 100%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 16px;
-  gap: 8px 14px;
+  justify-content: flex-start;
+  padding: 0 16px;
+  gap: 12px;
   flex-shrink: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap !important;
   z-index: 90;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
   transition: all 0.2s ease;
+}
+
+.secondary-toolbar::-webkit-scrollbar {
+  display: none;
 }
 
 .mode-toggles {
@@ -520,17 +528,26 @@ header.studio-header {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   min-width: fit-content;
-  flex-wrap: wrap;
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
 }
 
 .flicker-controls, .overlay-controls {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 11px;
   color: var(--text-muted);
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+.overlay-controls label {
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
 }
 
 .side-controls,
@@ -641,30 +658,37 @@ header.studio-header {
 }
 
 .studio-slider {
-  width: 90px;
+  width: 72px;
   height: 4px;
   cursor: pointer;
   accent-color: var(--accent-magenta);
+  flex-shrink: 0;
 }
 
 .slider-val {
-  min-width: 30px;
+  width: 32px;
+  min-width: 32px;
+  text-align: right;
   font-family: monospace;
+  font-variant-numeric: tabular-nums;
   font-size: 11px;
   color: var(--accent-magenta);
   font-weight: bold;
+  flex-shrink: 0;
 }
 
 .metric-badge {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   background: rgba(244, 63, 94, 0.15);
   border: 1px solid rgba(244, 63, 94, 0.45);
   padding: 3px 8px;
   border-radius: 6px;
   font-size: 11px;
-  white-space: nowrap;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  font-variant-numeric: tabular-nums;
 }
 
 .metric-badge .badge-label {
@@ -679,11 +703,13 @@ header.studio-header {
   color: #f43f5e;
   font-weight: 800;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 .metric-badge#metric-diff-badge {
   cursor: pointer;
   transition: all 0.15s ease;
+  min-width: 90px;
 }
 
 .metric-badge#metric-diff-badge:hover {
@@ -696,6 +722,8 @@ header.studio-header {
 .metric-badge.metric-shift-badge {
   background: rgba(250, 204, 21, 0.15);
   border: 1px solid rgba(250, 204, 21, 0.45);
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
 }
 
 .metric-badge.metric-shift-badge .badge-value {
@@ -1462,11 +1490,18 @@ footer.studio-footer {
   }
 
   .secondary-toolbar {
-    height: auto;
+    height: 44px;
     min-height: 44px;
-    padding: 6px 14px;
-    flex-wrap: wrap;
-    gap: 8px 12px;
+    max-height: 44px;
+    padding: 0 14px;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    gap: 10px;
+  }
+  .secondary-toolbar::-webkit-scrollbar {
+    display: none;
   }
   .mode-toggles {
     order: 1;
@@ -1474,13 +1509,16 @@ footer.studio-footer {
   }
   .mode-controls-area {
     order: 2;
-    flex: 1 1 auto;
+    flex: 0 0 auto;
     justify-content: flex-start;
-    flex-wrap: wrap;
+    flex-wrap: nowrap !important;
+    white-space: nowrap !important;
   }
   .sync-toggles-bar {
     order: 3;
-    width: 100%;
+    flex: 1 1 auto;
+    width: auto;
+    max-width: 100%;
     overflow-x: auto;
     display: flex;
     flex-wrap: nowrap;
@@ -1550,20 +1588,29 @@ footer.studio-footer {
 
   /* Secondary Toolbar on Mobile */
   .secondary-toolbar {
-    padding: 6px 10px;
+    height: 44px;
+    min-height: 44px;
+    max-height: 44px;
+    padding: 0 10px;
     gap: 6px;
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .secondary-toolbar::-webkit-scrollbar {
+    display: none;
   }
 
   /* 4-Tab Mode Segmented Bar */
   .mode-toggles {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    flex: 0 0 auto;
+    display: inline-flex;
     padding: 2px;
     gap: 2px;
   }
   .mode-btn {
-    padding: 5px 2px;
+    padding: 4px 6px;
     font-size: 10px;
     justify-content: center;
     gap: 3px;
@@ -1574,11 +1621,12 @@ footer.studio-footer {
 
   /* Mode Controls Area */
   .mode-controls-area {
-    width: 100%;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap;
+    flex-wrap: nowrap !important;
+    white-space: nowrap !important;
+    flex: 0 0 auto;
+    min-width: fit-content;
     gap: 6px;
   }
 

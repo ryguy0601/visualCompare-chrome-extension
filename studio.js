@@ -1373,6 +1373,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let shiftCount = 0;
     let prevProdBot = 0;
     let prevStgBot = 0;
+    let currAlignedY = 0;
 
     for (let idx = 0; idx < pairs.length; idx++) {
       const pSec = pairs[idx].prod;
@@ -1383,12 +1384,17 @@ document.addEventListener("DOMContentLoaded", () => {
       const sGap = Math.max(0, sSec.box.y - prevStgBot);
       const gapDiff = Math.abs(pGap - sGap);
 
+      // Advance aligned coordinate by common baseline gap
+      const commonGap = Math.min(pGap, sGap);
+      currAlignedY += commonGap;
+
       if (gapDiff > 4) {
         totalShiftDelta += gapDiff;
         shiftCount++;
         const gapSpacerId = `vc-spacer-gap-${idx}`;
-        const y = Math.min(pSec.box.y, sSec.box.y);
+        const y = currAlignedY;
         activeShiftRegions.push({ y, h: gapDiff, label: `+${gapDiff}px (inserted space)` });
+        currAlignedY += gapDiff;
 
         if (pGap < sGap) {
           // Extra space / section inserted in Staging before this section!
@@ -1426,15 +1432,19 @@ document.addEventListener("DOMContentLoaded", () => {
       const pH = pSec.box.height;
       const sH = sSec.box.height;
       const secDiff = Math.abs(pH - sH);
+      const overlapH = Math.min(pH, sH);
+
+      // Both sections share overlapH height
+      currAlignedY += overlapH;
 
       // ONLY show yellow if one section is larger than the other page's same section!
       if (secDiff > 4) {
         totalShiftDelta += secDiff;
         shiftCount++;
         const secSpacerId = `vc-spacer-sec-${idx}`;
-        const overlapH = Math.min(pH, sH);
-        const y = Math.min(pSec.box.y, sSec.box.y) + overlapH;
+        const y = currAlignedY;
         activeShiftRegions.push({ y, h: secDiff, label: `+${secDiff}px ("${pSec.heading || pSec.tag || sSec.heading || sSec.tag}" is larger)` });
+        currAlignedY += secDiff;
 
         if (pH < sH) {
           // Staging's section is larger by secDiff!
@@ -2277,38 +2287,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // 3. Calculate non-height visual & content regressions
     computeAndApplyRedDifferences(true);
 
-    // 4. Extract exact shift regions for diff heatmap and column/swipe diff overlays
-    activeShiftRegions = [];
-    let totalShiftDelta = 0;
-    if (lastProdLandmarks && lastStgLandmarks) {
-      const pairs = matchLandmarks(lastProdLandmarks.landmarks, lastStgLandmarks.landmarks);
-      let prevP = 0, prevS = 0;
-
-      pairs.forEach((pair) => {
-        const pSec = pair.prod;
-        const sSec = pair.stg;
-
-        const pGap = Math.max(0, pSec.box.y - prevP);
-        const sGap = Math.max(0, sSec.box.y - prevS);
-        const gapDiff = Math.abs(pGap - sGap);
-        if (gapDiff > 4) {
-          totalShiftDelta += gapDiff;
-          const y = Math.min(pSec.box.y, sSec.box.y);
-          activeShiftRegions.push({ y, h: gapDiff, label: `+${gapDiff}px (inserted space)` });
-        }
-
-        const secDiff = Math.abs(pSec.box.height - sSec.box.height);
-        if (secDiff > 4) {
-          totalShiftDelta += secDiff;
-          const overlapH = Math.min(pSec.box.height, sSec.box.height);
-          const y = Math.min(pSec.box.y, sSec.box.y) + overlapH;
-          activeShiftRegions.push({ y, h: secDiff, label: `+${secDiff}px ("${pSec.heading || pSec.tag}" is larger)` });
-        }
-
-        prevP = pSec.box.y + pSec.box.height;
-        prevS = sSec.box.y + sSec.box.height;
-      });
-    }
+    // 4. Use accurate shift regions computed by calculateAndApplyLayoutShifts
+    const totalShiftDelta = activeShiftRegions.reduce((sum, r) => sum + (r.h || 0), 0);
 
     // 4. Update active diff renderings ONLY if the corresponding view/mode is selected
     if (currentMode === "swipe") {
@@ -2448,7 +2428,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (shiftRegions && shiftRegions.length > 0) {
       shiftRegions.forEach(reg => {
         drawHazardStripes(ctx, 0, reg.y, width, reg.h, 12);
-        drawYellowHighlight(ctx, 0, reg.y, width, reg.h);
         drawCanvasShiftBadge(ctx, width, reg.y, reg.h, reg.label);
       });
     }
@@ -3032,7 +3011,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (regY + reg.h < -10 || regY > swH + 10) return;
 
         drawHazardStripes(offCtx, 0, regY, swW, reg.h, 14);
-        drawYellowHighlight(offCtx, 0, regY, swW, reg.h);
       });
     }
 
@@ -3300,7 +3278,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (regY + reg.h < -10 || regY > height + 10) return;
 
         drawHazardStripes(offCtx, 0, regY, width, reg.h, 14);
-        drawYellowHighlight(offCtx, 0, regY, width, reg.h);
       });
     }
 

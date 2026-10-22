@@ -409,97 +409,58 @@
   }
 
   // ----------------------------------------------------
-  // 5. FULL-PAGE SLICING & VISUAL PDF BUILDERS
+  // 5. GOFULLPAGE CONTINUOUS FULL-PAGE PDF BUILDERS
+  // (Zero stats, zero headers, zero footers, single continuous 1-page PDF)
   // ----------------------------------------------------
 
   /**
-   * Builds a high-resolution, paginated visual PDF of an entire full-height webpage canvas.
-   * Seamlessly divides long scrolls across printable Letter pages without squishing or distortion.
+   * Builds a continuous 1-page full-length PDF matching GoFullPage.
+   * Shows the full website page as one big PDF with zero headers, footers, margins, or stat overlays.
    */
-  function buildFullPageVisualPdf(title, url, type, canvas, meta = {}) {
+  function buildGoFullPagePdf(canvas) {
     const doc = new SimplePdf();
-
-    // Fallback if canvas is not supplied
     if (!canvas || !canvas.width || !canvas.height) {
-      return buildSinglePagePdf(title, url, type, (type === "STG" ? meta.redDiffs : []));
+      doc.addPage(612, 792);
+      return doc.build();
     }
 
     const W = canvas.width;
     const H = canvas.height;
 
-    // Standard Letter (612 x 792 pt)
-    const pageW = 612;
-    const pageH = 792;
-    const marginSide = 36;
-    const marginTop = 58;
-    const marginBottom = 34;
+    // Standard 72 pt/in vs 96 CSS px/in (72/96 = 0.75)
+    const ptWidth = Math.max(1, Math.round(W * 0.75));
+    const ptHeight = Math.max(1, Math.round(H * 0.75));
 
-    const printableW = pageW - (2 * marginSide); // 540 pt
-    const printableH = pageH - marginTop - marginBottom; // 700 pt
+    const page = doc.addPage(ptWidth, ptHeight);
+    const jpegBytes = canvasToJpegBytes(canvas, 0.92);
 
-    const scale = printableW / W;
-    const slicePixelsH = Math.max(100, Math.floor(printableH / scale));
-    const totalPages = Math.max(1, Math.ceil(H / slicePixelsH));
-
-    const bannerColor = type === "PROD" 
-      ? [0.07, 0.25, 0.55] 
-      : (type === "STG" ? [0.30, 0.14, 0.52] : [0.72, 0.10, 0.22]);
-
-    for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
-      const sy = pageIdx * slicePixelsH;
-      const sh = Math.min(slicePixelsH, H - sy);
-
-      // Create slice canvas
-      let jpegBytes = null;
-      if (typeof document !== "undefined" && typeof document.createElement === "function") {
-        const sliceCanvas = document.createElement("canvas");
-        sliceCanvas.width = W;
-        sliceCanvas.height = sh;
-        const sCtx = sliceCanvas.getContext("2d");
-        sCtx.drawImage(canvas, 0, sy, W, sh, 0, 0, W, sh);
-        jpegBytes = canvasToJpegBytes(sliceCanvas, 0.90);
-      }
-
-      const p = doc.addPage(pageW, pageH);
-
-      // Top Header Banner
-      doc.drawRect(p, 0, pageH - 46, pageW, 46, bannerColor);
-      doc.drawText(p, `VISUALCOMPARE LIVE - ${title.toUpperCase()}`, marginSide, pageH - 24, 11, true, [1, 1, 1]);
-      doc.drawText(p, `URL: ${truncate(url, 60)}  |  Captured: ${meta.timestamp || new Date().toLocaleString()}  |  Page ${pageIdx + 1} of ${totalPages}`, marginSide, pageH - 38, 8, false, [0.85, 0.92, 1.0]);
-
-      // Embed image slice
-      const dispW = printableW;
-      const dispH = sh * scale;
-      const dispX = marginSide;
-      const dispY = pageH - marginTop - dispH;
-
-      if (jpegBytes) {
-        const imgObj = doc.addImage(jpegBytes, W, sh);
-        doc.drawImage(p, imgObj, dispX, dispY, dispW, dispH);
-      } else {
-        // Fallback plate rectangle
-        doc.drawRect(p, dispX, dispY, dispW, dispH, [0.95, 0.96, 0.98], [0.8, 0.85, 0.9], 1);
-        doc.drawText(p, `Full Page Slice ${pageIdx + 1} of ${totalPages} (${W} × ${sh} px)`, dispX + 20, dispY + dispH / 2, 11, true, [0.3, 0.4, 0.5]);
-      }
-
-      // Image border
-      doc.drawRect(p, dispX, dispY, dispW, dispH, null, [0.85, 0.88, 0.92], 0.5);
-
-      // Footer
-      doc.drawRect(p, marginSide, marginBottom, printableW, 0.5, null, [0.85, 0.88, 0.92]);
-      doc.drawText(p, `VisualCompare Live Full-Page Audit • ${type} • ${meta.device || "Desktop"} (${W} × ${H}px)`, marginSide, marginBottom - 15, 7.5, false, [0.5, 0.55, 0.65]);
-      doc.drawText(p, `Page ${pageIdx + 1} of ${totalPages}`, pageW - marginSide - 60, marginBottom - 15, 8, true, [0.35, 0.4, 0.5]);
+    if (jpegBytes) {
+      const imgObj = doc.addImage(jpegBytes, W, H);
+      doc.drawImage(page, imgObj, 0, 0, ptWidth, ptHeight);
     }
 
     return doc.build();
   }
 
   /**
-   * Builds the comprehensive Visual Differences Full-Page PDF with red highlights and hazard stripes.
+   * Builds a visual PDF of an entire full-height webpage canvas matching GoFullPage.
+   * Shows the full website page as one big continuous PDF without any stat scorecards, margins, headers, or footers.
+   */
+  function buildFullPageVisualPdf(title, url, type, canvas, meta = {}) {
+    if (canvas && canvas.width && canvas.height) {
+      return buildGoFullPagePdf(canvas);
+    }
+    return buildSinglePagePdf(title, url, type, (type === "STG" ? meta.redDiffs : []));
+  }
+
+  /**
+   * Builds the comprehensive Visual Differences Full-Page PDF matching GoFullPage.
+   * Shows the full website page with visual differences as one big continuous PDF without stat scorecards.
    */
   function buildFullPageDiffPdf(meta, canvasDiff, canvasProd, canvasStg) {
-    if (canvasDiff && canvasDiff.width && canvasDiff.height) {
-      return buildFullPageVisualPdf("Visual Differences & Alignment", meta.stgUrl, "DIFF", canvasDiff, meta);
+    const target = canvasDiff || meta.canvasDiff || canvasStg || meta.canvasStg || canvasProd || meta.canvasProd;
+    if (target && target.width && target.height) {
+      return buildGoFullPagePdf(target);
     }
     return buildVisualDiffReportPdf(meta);
   }
@@ -842,7 +803,14 @@
       pdfBytes = buildFullPageDiffPdf(meta, meta.canvasDiff, meta.canvasProd, meta.canvasStg);
       filename = `visualcompare-diff-fullpage-${dateStr}.pdf`;
     } else {
-      pdfBytes = buildComprehensiveReportPdf(meta, meta.canvasDiff, meta.canvasProd, meta.canvasStg);
+      // type === "master" or general PDF export
+      // Per user request: "work like gofull page where it just shows the one websiete page as one big pdf, i dont need any of that stat stuff"
+      const targetCanvas = meta.canvasDiff || meta.canvasStg || meta.canvasProd;
+      if (targetCanvas && targetCanvas.width && targetCanvas.height) {
+        pdfBytes = buildGoFullPagePdf(targetCanvas);
+      } else {
+        pdfBytes = buildComprehensiveReportPdf(meta, meta.canvasDiff, meta.canvasProd, meta.canvasStg);
+      }
       filename = `visualcompare-master-report-${dateStr}.pdf`;
     }
 
@@ -1017,6 +985,7 @@ Click the "Import ZIP" button in the studio toolbar and select this zip file!
     exportComparisonZip,
     importComparisonZip,
     exportSinglePdf,
+    buildGoFullPagePdf,
     buildFullPageVisualPdf,
     buildFullPageDiffPdf,
     buildComprehensiveReportPdf,

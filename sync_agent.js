@@ -1403,6 +1403,8 @@
         display: block !important;
         width: 100% !important;
         box-sizing: border-box !important;
+        flex: 0 0 auto !important;
+        clear: both !important;
         background-color: #facc15 !important;
         background-image: repeating-linear-gradient(
           -45deg,
@@ -1492,20 +1494,28 @@
 
     if (!targetEl && targetY !== undefined) {
       const all = document.querySelectorAll(LANDMARK_SELECTORS);
+      let closestEl = null;
+      let minDistance = Infinity;
       for (const el of all) {
         if (el.classList.contains("vc-hazard-stripe-spacer")) continue;
         const r = el.getBoundingClientRect();
         const y = r.top + (window.scrollY || 0);
-        if (y > 0 && y >= targetY - 10) {
-          targetEl = el;
-          break;
+        const dist = Math.abs(y - targetY);
+        if (dist < minDistance && dist < 200) {
+          minDistance = dist;
+          closestEl = el;
         }
       }
+      if (closestEl) targetEl = closestEl;
     }
 
     let spacer = document.querySelector(`.vc-hazard-stripe-spacer[data-spacer-id="${spacerId}"]`);
     if (spacer) {
-      spacer.style.height = `${height}px`;
+      spacer.style.setProperty("height", `${height}px`, "important");
+      spacer.style.setProperty("min-height", `${height}px`, "important");
+      spacer.style.setProperty("max-height", `${height}px`, "important");
+      spacer.style.setProperty("flex", `0 0 ${height}px`, "important");
+      spacer.style.setProperty("clear", "both", "important");
       // If spacer was previously appended to document.body (e.g., when frame was hidden or target not yet ready),
       // relocate it directly to target element now that targetEl is found
       if (spacer.parentElement === document.body && targetEl && targetEl.parentNode && targetEl !== document.body) {
@@ -1521,7 +1531,11 @@
     spacer = document.createElement("div");
     spacer.className = "vc-hazard-stripe-spacer";
     spacer.dataset.spacerId = spacerId;
-    spacer.style.height = `${height}px`;
+    spacer.style.setProperty("height", `${height}px`, "important");
+    spacer.style.setProperty("min-height", `${height}px`, "important");
+    spacer.style.setProperty("max-height", `${height}px`, "important");
+    spacer.style.setProperty("flex", `0 0 ${height}px`, "important");
+    spacer.style.setProperty("clear", "both", "important");
 
     const badge = document.createElement("div");
     badge.className = "vc-hazard-badge";
