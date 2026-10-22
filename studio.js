@@ -2534,17 +2534,15 @@ document.addEventListener("DOMContentLoaded", () => {
     if (currentMode === "swipe") {
       setSwipeCompareMode("diff");
       renderSwipeDiffCanvas((swipeRedDiffs && swipeRedDiffs.length > 0) ? swipeRedDiffs : activeRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+      scheduleLivePixelDiffCapture();
     } else if (currentMode === "side-by-side") {
-      if (isColDiffActive) {
-        if (paneColDiff) paneColDiff.style.display = "flex";
-        const viewSide = document.getElementById("view-side-by-side");
-        if (viewSide) viewSide.classList.add("mode-view-pixel-diff");
-        renderPixelDiffColumn3(colRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
-      } else {
-        if (paneColDiff) paneColDiff.style.display = "none";
-        const viewSide = document.getElementById("view-side-by-side");
-        if (viewSide) viewSide.classList.remove("mode-view-pixel-diff");
-      }
+      isColDiffActive = true;
+      if (btnToggleColDiff) btnToggleColDiff.classList.add("active");
+      if (paneColDiff) paneColDiff.style.display = "flex";
+      const viewSide = document.getElementById("view-side-by-side");
+      if (viewSide) viewSide.classList.add("mode-view-pixel-diff");
+      renderPixelDiffColumn3(colRedDiffs, activeShiftRegions, lastScrollState.scrollY || 0, lastScrollState.scrollX || 0);
+      scheduleLivePixelDiffCapture();
     } else if (currentMode === "overlay") {
       renderDiffCanvasHeatmap(activeRedDiffs, activeShiftRegions);
     }
@@ -2884,6 +2882,50 @@ document.addEventListener("DOMContentLoaded", () => {
     return scratchCanvasDiff;
   }
 
+  function applyCanvasBackground(ctx, bgStr, w, h, radius = 0) {
+    if (!bgStr || bgStr === "transparent" || bgStr === "rgba(0, 0, 0, 0)") return;
+    ctx.save();
+    if (radius > 0 && typeof ctx.roundRect === "function") {
+      ctx.beginPath();
+      ctx.roundRect(0, 0, w, h, radius);
+      ctx.clip();
+    }
+    if (bgStr.includes("gradient")) {
+      try {
+        let grad = null;
+        if (bgStr.includes("to right")) {
+          grad = ctx.createLinearGradient(0, 0, w, 0);
+        } else if (bgStr.includes("to bottom")) {
+          grad = ctx.createLinearGradient(0, 0, 0, h);
+        } else {
+          grad = ctx.createLinearGradient(0, 0, w, h);
+        }
+        const colorMatches = bgStr.match(/(rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}|[a-zA-Z]+)/g);
+        const validColors = (colorMatches || []).filter(c => !c.includes("gradient") && !c.includes("deg") && !c.includes("to"));
+        if (validColors.length >= 2) {
+          validColors.forEach((col, idx) => {
+            grad.addColorStop(idx / (validColors.length - 1), col);
+          });
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, w, h);
+          ctx.restore();
+          return;
+        }
+      } catch (e) {}
+    }
+    try {
+      ctx.fillStyle = bgStr;
+      if (radius > 0 && typeof ctx.roundRect === "function") {
+        ctx.beginPath();
+        ctx.roundRect(0, 0, w, h, radius);
+        ctx.fill();
+      } else {
+        ctx.fillRect(0, 0, w, h);
+      }
+    } catch (e) {}
+    ctx.restore();
+  }
+
   function renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame = null, liveFallbackFrame = null) {
     if (!item) return false;
     const elW = Math.max(4, Math.min(Math.round(drawW), 2400));
@@ -2941,16 +2983,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const isTextDiff = (item.diffType === "typography" || item.diffType === "text" || (pText && sText && pText !== sText));
 
     // 1. Draw Prod on ctxP
-    if (!isTextDiff && pBg && pBg !== "rgba(0, 0, 0, 0)" && pBg !== "transparent") {
-      ctxP.fillStyle = pBg;
+    if (!isTextDiff && pBg) {
       const rVal = parseFloat(pStyle.radius) || 0;
-      if (rVal > 0 && typeof ctxP.roundRect === "function") {
-        ctxP.beginPath();
-        ctxP.roundRect(0, 0, elW, elH, rVal);
-        ctxP.fill();
-      } else {
-        ctxP.fillRect(0, 0, elW, elH);
-      }
+      applyCanvasBackground(ctxP, pBg, elW, elH, rVal);
+    }
+    if (fallbackEl && (fallbackEl.tagName === "IMG" || fallbackEl instanceof Image)) {
+      try {
+        if (fallbackEl.complete && fallbackEl.naturalWidth > 0) {
+          ctxP.drawImage(fallbackEl, 0, 0, elW, elH);
+        }
+      } catch (e) {}
     }
     if (!isTextDiff && pStyle.borderColor && pStyle.borderColor !== "rgba(0, 0, 0, 0)" && parseFloat(pStyle.borderWidth) > 0) {
       ctxP.fillStyle = pStyle.borderColor;
@@ -2979,16 +3021,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // 2. Draw Staging on ctxS
-    if (!isTextDiff && sBg && sBg !== "rgba(0, 0, 0, 0)" && sBg !== "transparent") {
-      ctxS.fillStyle = sBg;
+    if (!isTextDiff && sBg) {
       const rVal = parseFloat(sStyle.radius) || 0;
-      if (rVal > 0 && typeof ctxS.roundRect === "function") {
-        ctxS.beginPath();
-        ctxS.roundRect(0, 0, elW, elH, rVal);
-        ctxS.fill();
-      } else {
-        ctxS.fillRect(0, 0, elW, elH);
-      }
+      applyCanvasBackground(ctxS, sBg, elW, elH, rVal);
+    }
+    if (targetEl && (targetEl.tagName === "IMG" || targetEl instanceof Image)) {
+      try {
+        if (targetEl.complete && targetEl.naturalWidth > 0) {
+          ctxS.drawImage(targetEl, 0, 0, elW, elH);
+        }
+      } catch (e) {}
     }
     if (!isTextDiff && sStyle.borderColor && sStyle.borderColor !== "rgba(0, 0, 0, 0)" && parseFloat(sStyle.borderWidth) > 0) {
       ctxS.fillStyle = sStyle.borderColor;
@@ -3059,11 +3101,11 @@ document.addEventListener("DOMContentLoaded", () => {
     let drawnCapturedDiff = false;
     if (lastCapturedDiffCanvas && !isUserScrolling) {
       if (Math.abs(lastCapturedDiffCanvas.width - swW) < 5) {
-        if (Math.abs((lastScrollState.scrollY || 0) - lastCapturedScrollY) < 5) {
-          offCtx.drawImage(lastCapturedDiffCanvas, 0, 0, swW, swH);
+        const deltaY = (currentScrollY - (lastCapturedScrollY || 0));
+        const deltaX = (currentScrollX - (lastCapturedScrollX || 0));
+        if (Math.abs(deltaY) < swH && Math.abs(deltaX) < swW) {
+          offCtx.drawImage(lastCapturedDiffCanvas, -deltaX, -deltaY);
           drawnCapturedDiff = true;
-        } else {
-          lastCapturedDiffCanvas = null;
         }
       } else {
         // Mismatched aspect ratio or width (e.g. from 3-column view) - drop stale canvas so it never warps!
@@ -3214,7 +3256,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   range.selectNodeContents(targetEl);
                   const rects = Array.from(range.getClientRects());
                   if (rects.length > 0) {
-                    renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame, liveFallbackFrame);
+                    renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, activeRenderFrame || liveTargetFrame, liveFallbackFrame);
                     const ALLOW_SOLID_BOX_DIFF = false;
                     if (!renderedGlyphs && ALLOW_SOLID_BOX_DIFF) {
                       offCtx.fillStyle = "rgba(225, 29, 72, 0.86)";
@@ -3248,7 +3290,7 @@ document.addEventListener("DOMContentLoaded", () => {
               if (!renderedGlyphs) {
                 const rVal = parseFloat(compStyle.borderRadius) || (parseFloat(item.style?.radius) || 0);
                 offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
-                renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame, liveFallbackFrame);
+                renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, activeRenderFrame || liveTargetFrame, liveFallbackFrame);
                 if (!renderedGlyphs && ALLOW_SOLID_BOX_DIFF) {
                   offCtx.beginPath();
                   if (rVal > 0 && typeof offCtx.roundRect === "function") {
@@ -3404,21 +3446,23 @@ document.addEventListener("DOMContentLoaded", () => {
     let drawnCapturedDiff = false;
     if (lastCapturedDiffCanvas && !isUserScrolling) {
       if (Math.abs(lastCapturedDiffCanvas.width - width) < 5) {
-        if (Math.abs((lastScrollState.scrollY || 0) - lastCapturedScrollY) < 5) {
-          offCtx.drawImage(lastCapturedDiffCanvas, 0, 0, width, height);
+        const deltaY = (currentScrollY - (lastCapturedScrollY || 0));
+        const deltaX = (currentScrollX - (lastCapturedScrollX || 0));
+        if (Math.abs(deltaY) < height && Math.abs(deltaX) < width) {
+          offCtx.drawImage(lastCapturedDiffCanvas, -deltaX, -deltaY);
           drawnCapturedDiff = true;
-        } else {
-          lastCapturedDiffCanvas = null;
         }
       } else {
         lastCapturedDiffCanvas = null;
       }
     }
-    if (!drawnCapturedDiff) {
-      // Draw viewport-visible DOM diff boxes
+    if (!drawnCapturedDiff || Math.abs(currentScrollY - (lastCapturedScrollY || 0)) > 2) {
+      // Draw viewport-visible DOM diff boxes (fills in any regions not yet captured or while gliding)
       const effectiveDiffs = (diffList && diffList.length > 0) ? diffList : (colRedDiffs && colRedDiffs.length > 0 ? colRedDiffs : activeRedDiffs);
+      const isBlackCanvas = !isDiffBasePageVisible;
       const liveTargetFrame = iframeDiffBase || iframeStg;
       const liveFallbackFrame = iframeProd;
+      const activeRenderFrame = (!isBlackCanvas && iframeDiffBase) ? iframeDiffBase : (iframeStg || iframeProd);
       if (effectiveDiffs && effectiveDiffs.length > 0) {
         effectiveDiffs.forEach(item => {
           if (!item) return;
@@ -3441,7 +3485,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (item.selector) {
             try {
               let el = null;
-              if (iframeDiffBase && iframeDiffBase.contentDocument) {
+              if (!isBlackCanvas && iframeDiffBase && iframeDiffBase.contentDocument) {
                 el = iframeDiffBase.contentDocument.querySelector(item.selector);
               }
               if (!el && iframeStg && iframeStg.contentDocument) {
@@ -3449,6 +3493,9 @@ document.addEventListener("DOMContentLoaded", () => {
               }
               if (!el && iframeProd && iframeProd.contentDocument) {
                 el = iframeProd.contentDocument.querySelector(item.selector);
+              }
+              if (!el && iframeDiffBase && iframeDiffBase.contentDocument) {
+                el = iframeDiffBase.contentDocument.querySelector(item.selector);
               }
               if (el) {
                 const r = el.getBoundingClientRect();
@@ -3541,11 +3588,11 @@ document.addEventListener("DOMContentLoaded", () => {
           offCtx.save();
           let renderedGlyphs = false;
           try {
-            const targetEl = (iframeDiffBase && iframeDiffBase.contentDocument)
+            const targetEl = (!isBlackCanvas && iframeDiffBase && iframeDiffBase.contentDocument)
               ? iframeDiffBase.contentDocument.querySelector(item.selector)
-              : ((iframeStg && iframeStg.contentDocument) ? iframeStg.contentDocument.querySelector(item.selector) : null);
-            if (targetEl && (iframeDiffBase?.contentWindow || iframeStg?.contentWindow)) {
-              const win = iframeDiffBase?.contentWindow || iframeStg?.contentWindow;
+              : ((iframeStg && iframeStg.contentDocument) ? iframeStg.contentDocument.querySelector(item.selector) : iframeProd?.contentDocument?.querySelector(item.selector));
+            if (targetEl && (liveTargetFrame?.contentWindow || liveFallbackFrame?.contentWindow)) {
+              const win = liveTargetFrame?.contentWindow || liveFallbackFrame?.contentWindow;
               const compStyle = win.getComputedStyle(targetEl);
               const tag = targetEl.tagName.toLowerCase();
               const isContainer = (item.selector && (item.selector.includes("card") || item.selector.includes("section") || item.selector.includes("container") || item.selector.includes("table") || item.selector.includes("site-header") || item.selector.includes("hero-section") || item.selector.includes("cta-section"))) || drawH > 90 || tag === "section" || tag === "div" || tag === "table" || tag === "header" || tag === "nav" || tag === "footer";
@@ -3560,7 +3607,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   range.selectNodeContents(targetEl);
                   const rects = Array.from(range.getClientRects());
                   if (rects.length > 0) {
-                    renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame, liveFallbackFrame);
+                    renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, activeRenderFrame || liveTargetFrame, liveFallbackFrame);
                     const ALLOW_SOLID_BOX_DIFF = false;
                     if (!renderedGlyphs && ALLOW_SOLID_BOX_DIFF) {
                       offCtx.fillStyle = "rgba(225, 29, 72, 0.86)";
@@ -3594,7 +3641,7 @@ document.addEventListener("DOMContentLoaded", () => {
               if (!renderedGlyphs) {
                 const rVal = parseFloat(compStyle.borderRadius) || (parseFloat(item.style?.radius) || 0);
                 offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
-                renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame, liveFallbackFrame);
+                renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, activeRenderFrame || liveTargetFrame, liveFallbackFrame);
                 if (!renderedGlyphs && ALLOW_SOLID_BOX_DIFF) {
                   offCtx.beginPath();
                   if (rVal > 0 && typeof offCtx.roundRect === "function") {
@@ -3650,11 +3697,14 @@ document.addEventListener("DOMContentLoaded", () => {
         let regY = Math.round(reg.y - currentScrollY);
         try {
           const spacerSelector = reg.spacerId ? `.vc-hazard-stripe-spacer[data-spacer-id="${reg.spacerId}"]` : ".vc-hazard-stripe-spacer";
-          const domSpacer = (iframeDiffBase?.contentDocument?.querySelector?.(spacerSelector) || iframeStg?.contentDocument?.querySelector?.(spacerSelector) || iframeProd?.contentDocument?.querySelector?.(spacerSelector));
+          const domSpacer = (!isBlackCanvas && iframeDiffBase?.contentDocument?.querySelector?.(spacerSelector))
+            || iframeStg?.contentDocument?.querySelector?.(spacerSelector)
+            || iframeProd?.contentDocument?.querySelector?.(spacerSelector)
+            || iframeDiffBase?.contentDocument?.querySelector?.(spacerSelector);
           if (domSpacer) {
             const r = domSpacer.getBoundingClientRect();
             if (r.height > 0) {
-              const fWin = (domSpacer.ownerDocument?.defaultView) || iframeDiffBase?.contentWindow;
+              const fWin = (domSpacer.ownerDocument?.defaultView) || liveTargetFrame?.contentWindow;
               const fScrollY = fWin ? (fWin.scrollY || fWin.pageYOffset || 0) : currentScrollY;
               regY = Math.round((r.top + fScrollY) - currentScrollY);
             }
@@ -3820,8 +3870,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const dpr = img.width / Math.max(1, window.innerWidth);
-        const cropW = Math.round(rProd.width * dpr);
-        const cropH = Math.round(rProd.height * dpr);
+        const cropW = Math.max(1, Math.min(Math.round(rProd.width * dpr), Math.round(rStg.width * dpr)));
+        const cropH = Math.max(1, Math.min(Math.round(rProd.height * dpr), Math.round(rStg.height * dpr)));
 
         const canvasP = document.createElement("canvas");
         canvasP.width = cropW;
@@ -3838,9 +3888,12 @@ document.addEventListener("DOMContentLoaded", () => {
         const dataP = ctxP.getImageData(0, 0, cropW, cropH).data;
         const dataS = ctxS.getImageData(0, 0, cropW, cropH).data;
 
+        const targetW = wrapFrameDiff?.clientWidth || iframeProd?.clientWidth || Math.round(rProd.width);
+        const targetH = wrapFrameDiff?.clientHeight || iframeProd?.clientHeight || Math.round(rProd.height);
+
         const outCanvas = document.createElement("canvas");
-        outCanvas.width = Math.round(rProd.width);
-        outCanvas.height = Math.round(rProd.height);
+        outCanvas.width = targetW;
+        outCanvas.height = targetH;
         const outCtx = outCanvas.getContext("2d");
 
         // Sensitive delta matching diff_engine.py make_diff_mask_subpixel
@@ -4268,6 +4321,7 @@ document.addEventListener("DOMContentLoaded", () => {
       dispatchToPane("PROD", { type: "VC_REQUEST_DIFF_CANDIDATES" });
       dispatchToPane("STG", { type: "VC_REQUEST_DIFF_CANDIDATES" });
       runVisualDiffCalculation(true);
+      scheduleLivePixelDiffCapture();
     });
   }
 
@@ -4277,6 +4331,7 @@ document.addEventListener("DOMContentLoaded", () => {
       updateDiffBaseVisibility(!isDiffBasePageVisible);
       logAction(`3rd Column diff base page visibility toggled: ${isDiffBasePageVisible ? "Show Page" : "Black Canvas"}`);
       renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions);
+      scheduleLivePixelDiffCapture();
     });
   }
 
