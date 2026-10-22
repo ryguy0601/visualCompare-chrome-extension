@@ -75,6 +75,41 @@ document.addEventListener("DOMContentLoaded", () => {
   const pixelDiffViewport = document.getElementById("pixel-diff-viewport");
   const iframeDiffBase = document.getElementById("iframe-diff-base");
   const pixelDiffCanvas = document.getElementById("pixel-diff-canvas");
+  const btnColDiffBase = document.getElementById("btn-col-diff-base");
+  let isDiffBasePageVisible = false; // Default: black page with red spots for differing pixels
+
+  function updateDiffBaseVisibility(visible = isDiffBasePageVisible) {
+    isDiffBasePageVisible = visible;
+    if (btnColDiffBase) {
+      if (!isDiffBasePageVisible) {
+        btnColDiffBase.classList.add("active");
+        btnColDiffBase.title = "Current: Black Canvas (Differing Pixels Only). Click to show underlaid page.";
+        const iconSpan = btnColDiffBase.querySelector(".btn-diff-base-icon");
+        const textSpan = btnColDiffBase.querySelector(".btn-diff-base-text");
+        if (iconSpan) iconSpan.textContent = "⬛";
+        if (textSpan) textSpan.textContent = "Black Canvas";
+      } else {
+        btnColDiffBase.classList.remove("active");
+        btnColDiffBase.title = "Current: Underlaid Page visible. Click to show black canvas only.";
+        const iconSpan = btnColDiffBase.querySelector(".btn-diff-base-icon");
+        const textSpan = btnColDiffBase.querySelector(".btn-diff-base-text");
+        if (iconSpan) iconSpan.textContent = "📄";
+        if (textSpan) textSpan.textContent = "Show Page";
+      }
+    }
+    if (pixelDiffViewport) {
+      if (!isDiffBasePageVisible) {
+        pixelDiffViewport.classList.add("black-page");
+        pixelDiffViewport.style.backgroundColor = "#000000";
+      } else {
+        pixelDiffViewport.classList.remove("black-page");
+        pixelDiffViewport.style.backgroundColor = "";
+      }
+    }
+    if (iframeDiffBase) {
+      iframeDiffBase.style.display = isDiffBasePageVisible ? "block" : "none";
+    }
+  }
 
   // Swipe Mode Controls
   const swipeControls = document.getElementById("swipe-controls");
@@ -188,7 +223,11 @@ document.addEventListener("DOMContentLoaded", () => {
   prodUrlInput.value = initialProd;
   stgUrlInput.value = initialStg;
 
-  if (params.get("device")) viewportSelect.value = params.get("device");
+  if (params.get("device")) {
+    viewportSelect.value = params.get("device");
+  } else if (viewportSelect) {
+    viewportSelect.value = "1920x1080";
+  }
   if (params.get("syncHazard") !== null) checkSyncHazard.checked = params.get("syncHazard") === "true";
   if (params.get("syncRedDiff") !== null) {
     checkSyncRedDiff.checked = params.get("syncRedDiff") === "true";
@@ -201,6 +240,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if (params.get("syncInputs") !== null) checkSyncInputs.checked = params.get("syncInputs") === "true";
 
   updateSyncChipStyles();
+  updateDiffBaseVisibility(false);
 
   // Load iframes
   loadAllFrames(initialProd, initialStg);
@@ -2879,11 +2919,11 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (e) {}
     }
 
-    const pStyle = item.prodStyle || fallbackStyle || item.style || {};
-    const sStyle = item.stgStyle || compStyle || item.style || {};
+    const pStyle = item.diffType === "added" ? {} : (item.prodStyle || fallbackStyle || item.style || {});
+    const sStyle = item.diffType === "removed" ? {} : (item.stgStyle || compStyle || item.style || {});
 
-    let pText = (item.prodText !== undefined ? item.prodText : (fallbackEl?.innerText || item.text || "")).trim();
-    let sText = (item.stgText !== undefined ? item.stgText : (targetEl?.innerText || item.text || "")).trim();
+    let pText = item.diffType === "added" ? "" : (item.prodText !== undefined ? item.prodText : (fallbackEl?.innerText || item.text || "")).trim();
+    let sText = item.diffType === "removed" ? "" : (item.stgText !== undefined ? item.stgText : (targetEl?.innerText || item.text || "")).trim();
 
     // Font metrics calculation
     const fontSize = compStyle?.fontSize || sStyle.fontSize || pStyle.fontSize || "16px";
@@ -2895,8 +2935,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const pColor = pStyle.color || "#000000";
     const sColor = sStyle.color || compStyle?.color || "#000000";
 
-    const pBg = pStyle.bg;
-    const sBg = sStyle.bg;
+    const pBg = item.diffType === "added" ? null : pStyle.bg;
+    const sBg = item.diffType === "removed" ? null : sStyle.bg;
 
     const isTextDiff = (item.diffType === "typography" || item.diffType === "text" || (pText && sText && pText !== sText));
 
@@ -2920,12 +2960,22 @@ document.addEventListener("DOMContentLoaded", () => {
       ctxP.fillRect(0, 0, bW, elH);
       ctxP.fillRect(elW - bW, 0, bW, elH);
     }
-    if (pText) {
+    const padL = parseFloat(compStyle?.paddingLeft || pStyle.paddingLeft || pStyle.padding) || 4;
+    const padT = parseFloat(compStyle?.paddingTop || pStyle.paddingTop || pStyle.padding) || 0;
+    const pLines = pText ? pText.split("\n") : [];
+    const sLines = sText ? sText.split("\n") : [];
+    const parsedLineH = parseFloat(compStyle?.lineHeight || sStyle.lineHeight || pStyle.lineHeight);
+    const lineH = (!isNaN(parsedLineH) && parsedLineH > 0) ? parsedLineH : (parseFloat(fontSize) * 1.25 || 20);
+    const startY = padT > 0 ? padT + (lineH / 2) : (pLines.length <= 1 && sLines.length <= 1 ? (elH / 2) : (lineH / 2));
+
+    if (pLines.length > 0) {
       ctxP.font = fontStr;
       ctxP.fillStyle = pColor;
       ctxP.textBaseline = "middle";
-      const padL = parseFloat(compStyle?.paddingLeft || pStyle.paddingLeft || pStyle.padding) || 4;
-      ctxP.fillText(pText, padL, elH / 2);
+      pLines.forEach((line, i) => {
+        const y = startY + (i * lineH);
+        if (y < elH + lineH) ctxP.fillText(line, padL, y);
+      });
     }
 
     // 2. Draw Staging on ctxS
@@ -2948,12 +2998,14 @@ document.addEventListener("DOMContentLoaded", () => {
       ctxS.fillRect(0, 0, bW, elH);
       ctxS.fillRect(elW - bW, 0, bW, elH);
     }
-    if (sText) {
+    if (sLines.length > 0) {
       ctxS.font = fontStr;
       ctxS.fillStyle = sColor;
       ctxS.textBaseline = "middle";
-      const padL = parseFloat(compStyle?.paddingLeft || sStyle.paddingLeft || sStyle.padding) || 4;
-      ctxS.fillText(sText, padL, elH / 2);
+      sLines.forEach((line, i) => {
+        const y = startY + (i * lineH);
+        if (y < elH + lineH) ctxS.fillText(line, padL, y);
+      });
     }
 
     // 3. Compute subpixel pixel difference
@@ -3163,7 +3215,8 @@ document.addEventListener("DOMContentLoaded", () => {
                   const rects = Array.from(range.getClientRects());
                   if (rects.length > 0) {
                     renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame, liveFallbackFrame);
-                    if (!renderedGlyphs) {
+                    const ALLOW_SOLID_BOX_DIFF = false;
+                    if (!renderedGlyphs && ALLOW_SOLID_BOX_DIFF) {
                       offCtx.fillStyle = "rgba(225, 29, 72, 0.86)";
                       rects.forEach(r => {
                         const rx = Math.round((r.left + frameScrollX) - currentScrollX);
@@ -3196,7 +3249,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const rVal = parseFloat(compStyle.borderRadius) || (parseFloat(item.style?.radius) || 0);
                 offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
                 renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame, liveFallbackFrame);
-                if (!renderedGlyphs) {
+                if (!renderedGlyphs && ALLOW_SOLID_BOX_DIFF) {
                   offCtx.beginPath();
                   if (rVal > 0 && typeof offCtx.roundRect === "function") {
                     offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
@@ -3223,7 +3276,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const rVal = parseFloat(item.style?.radius) || (item.selector.includes("btn") || item.selector.includes("tab") ? 6 : 0);
             offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
             renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, null, null);
-            if (!renderedGlyphs) {
+            if (!renderedGlyphs && ALLOW_SOLID_BOX_DIFF) {
               offCtx.beginPath();
               if (rVal > 0 && typeof offCtx.roundRect === "function") {
                 offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
@@ -3296,6 +3349,21 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
+    // Enforce diff base page visibility state (Black Canvas vs Underlaid Page)
+    if (!isDiffBasePageVisible) {
+      if (iframeDiffBase) iframeDiffBase.style.display = "none";
+      if (pixelDiffViewport) {
+        pixelDiffViewport.classList.add("black-page");
+        pixelDiffViewport.style.backgroundColor = "#000000";
+      }
+    } else {
+      if (iframeDiffBase) iframeDiffBase.style.display = "block";
+      if (pixelDiffViewport) {
+        pixelDiffViewport.classList.remove("black-page");
+        pixelDiffViewport.style.backgroundColor = "";
+      }
+    }
+
     // Ensure diff base iframe src matches Staging (or Prod)
     const targetSrc = (stgUrlInput && stgUrlInput.value && stgUrlInput.value.trim() !== "about:blank")
       ? stgUrlInput.value.trim()
@@ -3349,6 +3417,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!drawnCapturedDiff) {
       // Draw viewport-visible DOM diff boxes
       const effectiveDiffs = (diffList && diffList.length > 0) ? diffList : (colRedDiffs && colRedDiffs.length > 0 ? colRedDiffs : activeRedDiffs);
+      const liveTargetFrame = iframeDiffBase || iframeStg;
+      const liveFallbackFrame = iframeProd;
       if (effectiveDiffs && effectiveDiffs.length > 0) {
         effectiveDiffs.forEach(item => {
           if (!item) return;
@@ -3491,7 +3561,8 @@ document.addEventListener("DOMContentLoaded", () => {
                   const rects = Array.from(range.getClientRects());
                   if (rects.length > 0) {
                     renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame, liveFallbackFrame);
-                    if (!renderedGlyphs) {
+                    const ALLOW_SOLID_BOX_DIFF = false;
+                    if (!renderedGlyphs && ALLOW_SOLID_BOX_DIFF) {
                       offCtx.fillStyle = "rgba(225, 29, 72, 0.86)";
                       rects.forEach(r => {
                         const rx = Math.round((r.left + frameScrollX) - currentScrollX);
@@ -3524,7 +3595,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const rVal = parseFloat(compStyle.borderRadius) || (parseFloat(item.style?.radius) || 0);
                 offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
                 renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame, liveFallbackFrame);
-                if (!renderedGlyphs) {
+                if (!renderedGlyphs && ALLOW_SOLID_BOX_DIFF) {
                   offCtx.beginPath();
                   if (rVal > 0 && typeof offCtx.roundRect === "function") {
                     offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
@@ -3551,7 +3622,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const rVal = parseFloat(item.style?.radius) || (item.selector.includes("btn") || item.selector.includes("tab") ? 6 : 0);
             offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
             renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, null, null);
-            if (!renderedGlyphs) {
+            if (!renderedGlyphs && ALLOW_SOLID_BOX_DIFF) {
               offCtx.beginPath();
               if (rVal > 0 && typeof offCtx.roundRect === "function") {
                 offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
@@ -4197,6 +4268,15 @@ document.addEventListener("DOMContentLoaded", () => {
       dispatchToPane("PROD", { type: "VC_REQUEST_DIFF_CANDIDATES" });
       dispatchToPane("STG", { type: "VC_REQUEST_DIFF_CANDIDATES" });
       runVisualDiffCalculation(true);
+    });
+  }
+
+  // 3rd Column Diff Base Toggle Button (Black Canvas vs Underlaid Page)
+  if (btnColDiffBase) {
+    btnColDiffBase.addEventListener("click", () => {
+      updateDiffBaseVisibility(!isDiffBasePageVisible);
+      logAction(`3rd Column diff base page visibility toggled: ${isDiffBasePageVisible ? "Show Page" : "Black Canvas"}`);
+      renderPixelDiffColumn3(activeRedDiffs, activeShiftRegions);
     });
   }
 

@@ -52,8 +52,8 @@
         <span class="control-prefix-icon" title="Device Viewport">🖥️</span>
         <label for="viewport-select" class="control-label">Device:</label>
         <select id="viewport-select" class="studio-select" title="Preset Device Viewport">
-          <option value="responsive" selected>Responsive (Fluid)</option>
-          <option value="1920x1080">Desktop (1920 × 1080)</option>
+          <option value="responsive">Responsive (Fluid)</option>
+          <option value="1920x1080" selected>Desktop (1920 × 1080)</option>
           <option value="1366x768">Laptop (1366 × 768)</option>
           <option value="768x1024">Tablet (768 × 1024)</option>
           <option value="440x956">Mobile (440 × 956)</option>
@@ -300,13 +300,17 @@
               <strong>Pixel Diff Overlay</strong>
             </div>
             <div class="pane-actions">
+              <button class="pane-btn btn-col-diff-base active" id="btn-col-diff-base" title="Toggle 3rd Column View: Black Canvas (Differing Pixels Only) vs Underlaid Page">
+                <span class="btn-diff-base-icon">⬛</span>
+                <span class="btn-diff-base-text">Black Canvas</span>
+              </button>
               <span class="diff-mismatch-pill" id="col-diff-pct">0.00% Diff</span>
               <button class="pane-btn" id="btn-col-diff-refresh" title="Re-run Pixel Diff">🔄</button>
             </div>
           </div>
           <div class="pane-frame-wrap pane-diff-wrap" id="wrap-frame-diff">
-            <div class="pixel-diff-viewport" id="pixel-diff-viewport">
-              <iframe id="iframe-diff-base" class="compare-iframe diff-base-iframe" src="about:blank"></iframe>
+            <div class="pixel-diff-viewport black-page" id="pixel-diff-viewport">
+              <iframe id="iframe-diff-base" class="compare-iframe diff-base-iframe" src="about:blank" style="display: none;"></iframe>
               <canvas id="pixel-diff-canvas" class="pixel-diff-canvas"></canvas>
             </div>
           </div>

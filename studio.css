@@ -976,6 +976,44 @@ main.studio-stage {
   background-color: #0b0f19;
 }
 
+.pixel-diff-viewport.black-page {
+  background-color: #000000 !important;
+}
+
+.pixel-diff-viewport.black-page .diff-base-iframe {
+  display: none !important;
+}
+
+.btn-col-diff-base {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  height: 22px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.btn-col-diff-base:hover {
+  background: #334155;
+  color: #f1f5f9;
+  border-color: #475569;
+}
+
+.btn-col-diff-base.active {
+  background: #000000;
+  color: #ef4444;
+  border-color: #ef4444;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.35);
+}
+
 .diff-base-iframe {
   position: absolute;
   top: 0;
