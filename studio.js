@@ -135,8 +135,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnGofullpageClose = document.getElementById("btn-gofullpage-close");
   const gofullpageBodyWrap = document.getElementById("gofullpage-body-wrap");
   const gofullpagePreviewCanvas = document.getElementById("gofullpage-preview-canvas");
-  const verticalFullscreenStage = document.getElementById("vertical-fullscreen-stage");
-  const verticalStageContent = document.getElementById("vertical-stage-content");
   const shortcutsModal = document.getElementById("shortcuts-modal");
   const btnCloseShortcutsModal = document.getElementById("btn-close-shortcuts-modal");
   const btnShowShortcuts = document.getElementById("btn-show-shortcuts");
@@ -4493,8 +4491,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /**
    * Captures the entire full-page canvas for Production, Staging, and Visual Diff.
-   * Priority 1: 100% Headless Chromium capture via background CDP (zero in-screen scrolling).
-   * Priority 2: Vertical Fullscreen Stage fallback (full-screens vertically 100vw x 100vh during capture).
+   * Full-screens the live page vertically (100vw x 100vh) during capture so all studio controls,
+   * toolbars, headers, and footers are hidden, capturing full vertical monitor slices with
+   * zero overlap tiling and zero black screens.
    */
   async function captureFullPageAuditCanvases(onProgress = () => {}) {
     isUserScrolling = true;
@@ -4502,311 +4501,266 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const prodUrl = prodUrlInput.value.trim();
     const stgUrl = stgUrlInput.value.trim();
-    const targetW = Math.max(1280, Math.min(1920, window.innerWidth));
+
+    lastCaptureReadyProd = null;
+    lastCaptureReadyStg = null;
+
+    // 1. Freeze animations & carousels matching Python browser.py
+    if (iframeProd && iframeProd.contentWindow) {
+      try { iframeProd.contentWindow.postMessage({ type: "VC_PREPARE_CAPTURE" }, "*"); } catch (e) {}
+    }
+    if (iframeStg && iframeStg.contentWindow) {
+      try { iframeStg.contentWindow.postMessage({ type: "VC_PREPARE_CAPTURE" }, "*"); } catch (e) {}
+    }
+
+    await waitAsync(350);
+
+    // 2. Measure document dimensions
+    const docHeightProd = lastCaptureReadyProd?.docHeight || lastProdLandmarks?.docHeight || iframeProd?.contentDocument?.documentElement?.scrollHeight || iframeProd?.clientHeight || 1200;
+    const docHeightStg = lastCaptureReadyStg?.docHeight || lastStgLandmarks?.docHeight || iframeStg?.contentDocument?.documentElement?.scrollHeight || iframeStg?.clientHeight || 1200;
+    let totalH = Math.max(docHeightProd, docHeightStg, 800);
+    totalH = Math.min(totalH, 14000);
+
+    const prevMode = currentMode;
+    const prevScrollY = lastScrollState.scrollY || 0;
+    const prevScrollX = lastScrollState.scrollX || 0;
+
+    const paneProd = document.getElementById("pane-col-prod");
+    const paneStg = document.getElementById("pane-col-stg");
+    const paneDiff = document.getElementById("pane-col-diff");
+
+    if (currentMode !== "side-by-side") {
+      switchMode("side-by-side");
+      await waitAsync(150);
+    }
+
+    // Hide container wrapper scrollbars during capture so no scrollbars appear on captured edges
+    if (wrapFrameProd) wrapFrameProd.style.overflow = "hidden";
+    if (wrapFrameStg) wrapFrameStg.style.overflow = "hidden";
+
+    // 3. Activate vertical fullscreen capture mode on body
+    // This hides studio header, url sync bar, controls bar, footer, and pane headers via CSS !important
+    document.body.classList.add("capture-fullscreen-vertical");
+
+    // Phase 1: Full-screen Production pane vertically and horizontally (100vw x 100vh)
+    if (paneStg) {
+      paneStg.style.display = "none";
+      paneStg.classList.remove("active-capture-pane");
+    }
+    if (paneDiff) paneDiff.style.display = "none";
+    if (paneProd) {
+      paneProd.style.display = "flex";
+      paneProd.style.flex = "1 1 100%";
+      paneProd.style.width = "100%";
+      paneProd.style.height = "100%";
+      paneProd.classList.add("active-capture-pane");
+    }
+
+    await waitAsync(80);
+
+    const rProd = iframeProd ? iframeProd.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+    const frameW = Math.max(800, Math.round(rProd.width));
+    const visibleH = Math.max(300, Math.round(rProd.height));
 
     const canvasProd = document.createElement("canvas");
+    canvasProd.width = frameW;
+    canvasProd.height = totalH;
     const ctxProd = canvasProd.getContext("2d");
+    ctxProd.fillStyle = "#ffffff";
+    ctxProd.fillRect(0, 0, frameW, totalH);
+
     const canvasStg = document.createElement("canvas");
+    canvasStg.width = frameW;
+    canvasStg.height = totalH;
     const ctxStg = canvasStg.getContext("2d");
+    ctxStg.fillStyle = "#ffffff";
+    ctxStg.fillRect(0, 0, frameW, totalH);
 
     let captureSucceeded = false;
-    let totalH = 1200;
-    let frameW = targetW;
 
-    // ----------------------------------------------------
-    // STRATEGY 1: 100% HEADLESS CHROMIUM CAPTURE (NO SCROLLING IN EXTENSION SCREEN)
-    // ----------------------------------------------------
-    const isHeadlessEligible = (url) => url && (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("file://"));
+    try {
+      // 4. Capture full-width Production vertical slices with zero overlap (non-overlapping tiles)
+      let curY = 0;
+      let sliceIdx = 0;
+      while (curY < totalH) {
+        const remainingH = totalH - curY;
+        const isLast = remainingH <= visibleH;
+        const targetScrollY = isLast ? Math.max(0, totalH - visibleH) : curY;
+        const pct = Math.round(10 + (Math.min(curY + visibleH, totalH) / (totalH * 2)) * 40);
+        onProgress({ percent: pct, status: `Capturing Production vertical slices (${Math.round((curY / totalH) * 100)}%)...` });
 
-    if (isHeadlessEligible(prodUrl) && isHeadlessEligible(stgUrl)) {
-      try {
-        onProgress({ percent: 12, status: "Capturing Production headlessly (zero in-screen scrolling)..." });
-        const headlessProd = await requestHeadlessCapture(prodUrl, targetW, "both");
-
-        if (headlessProd && headlessProd.pngDataUrl) {
-          onProgress({ percent: 45, status: "Capturing Staging headlessly (zero in-screen scrolling)..." });
-          const headlessStg = await requestHeadlessCapture(stgUrl, targetW, "both");
-
-          if (headlessStg && headlessStg.pngDataUrl) {
-            const imgP = await loadImageAsync(headlessProd.pngDataUrl);
-            const imgS = await loadImageAsync(headlessStg.pngDataUrl);
-
-            frameW = Math.max(imgP.width, imgS.width, 1200);
-            totalH = Math.max(imgP.height, imgS.height, 800);
-
-            canvasProd.width = frameW;
-            canvasProd.height = totalH;
-            ctxProd.fillStyle = "#ffffff";
-            ctxProd.fillRect(0, 0, frameW, totalH);
-            ctxProd.drawImage(imgP, 0, 0);
-
-            canvasStg.width = frameW;
-            canvasStg.height = totalH;
-            ctxStg.fillStyle = "#ffffff";
-            ctxStg.fillRect(0, 0, frameW, totalH);
-            ctxStg.drawImage(imgS, 0, 0);
-
-            captureSucceeded = true;
-          }
+        const scrollAction = {
+          type: "VC_MIRROR_ACTION",
+          action: { kind: "scroll", scrollY: targetScrollY, scrollX: 0 }
+        };
+        if (iframeProd && iframeProd.contentWindow) {
+          try {
+            iframeProd.contentWindow.postMessage({ type: "VC_CAPTURE_SLICE_START", sliceIndex: sliceIdx }, "*");
+            iframeProd.contentWindow.postMessage(scrollAction, "*");
+          } catch (e) {}
         }
-      } catch (e) {
-        console.warn("[VisualCompare Live] Headless strategy fallback note:", e);
+        if (wrapFrameProd) wrapFrameProd.scrollTop = targetScrollY;
+
+        await waitAsync(110);
+
+        if (captureProgressOverlay) captureProgressOverlay.style.visibility = "hidden";
+        await waitAsync(35);
+        const dataUrl = await captureActiveTabPng();
+        if (captureProgressOverlay) captureProgressOverlay.style.visibility = "visible";
+
+        if (dataUrl) {
+          captureSucceeded = true;
+          const img = await loadImageAsync(dataUrl);
+          const dpr = img.width / Math.max(1, window.innerWidth);
+
+          const cropProdLeft = Math.round(rProd.left * dpr);
+          const cropProdTop = Math.round(rProd.top * dpr);
+          const cropProdW = Math.round(rProd.width * dpr);
+
+          if (!isLast) {
+            const sliceDrawH = Math.min(visibleH, remainingH);
+            ctxProd.drawImage(img, cropProdLeft, cropProdTop, cropProdW, sliceDrawH * dpr, 0, curY, frameW, sliceDrawH);
+            curY += sliceDrawH;
+          } else {
+            // Final tile: crop ONLY the uncaptured remaining delta from the bottom of the visible frame!
+            const deltaH = remainingH;
+            const srcOffsetY = Math.round((visibleH - deltaH) * dpr);
+            ctxProd.drawImage(img, cropProdLeft, cropProdTop + srcOffsetY, cropProdW, deltaH * dpr, 0, curY, frameW, deltaH);
+            curY += deltaH;
+          }
+        } else {
+          curY += visibleH;
+        }
+        sliceIdx++;
+      }
+
+      // Phase 2: Full-screen Staging pane vertically and horizontally (100vw x 100vh)
+      if (paneProd) {
+        paneProd.style.display = "none";
+        paneProd.classList.remove("active-capture-pane");
+      }
+      if (paneStg) {
+        paneStg.style.display = "flex";
+        paneStg.style.flex = "1 1 100%";
+        paneStg.style.width = "100%";
+        paneStg.style.height = "100%";
+        paneStg.classList.add("active-capture-pane");
+      }
+      await waitAsync(80);
+      const rStg = iframeStg ? iframeStg.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+
+      curY = 0;
+      sliceIdx = 0;
+      while (curY < totalH) {
+        const remainingH = totalH - curY;
+        const isLast = remainingH <= visibleH;
+        const targetScrollY = isLast ? Math.max(0, totalH - visibleH) : curY;
+        const pct = Math.round(50 + (Math.min(curY + visibleH, totalH) / (totalH * 2)) * 35);
+        onProgress({ percent: pct, status: `Capturing Staging vertical slices (${Math.round((curY / totalH) * 100)}%)...` });
+
+        const scrollAction = {
+          type: "VC_MIRROR_ACTION",
+          action: { kind: "scroll", scrollY: targetScrollY, scrollX: 0 }
+        };
+        if (iframeStg && iframeStg.contentWindow) {
+          try {
+            iframeStg.contentWindow.postMessage({ type: "VC_CAPTURE_SLICE_START", sliceIndex: sliceIdx }, "*");
+            iframeStg.contentWindow.postMessage(scrollAction, "*");
+          } catch (e) {}
+        }
+        if (wrapFrameStg) wrapFrameStg.scrollTop = targetScrollY;
+
+        await waitAsync(110);
+
+        if (captureProgressOverlay) captureProgressOverlay.style.visibility = "hidden";
+        await waitAsync(35);
+        const dataUrl = await captureActiveTabPng();
+        if (captureProgressOverlay) captureProgressOverlay.style.visibility = "visible";
+
+        if (dataUrl) {
+          const img = await loadImageAsync(dataUrl);
+          const dpr = img.width / Math.max(1, window.innerWidth);
+
+          const cropStgLeft = Math.round(rStg.left * dpr);
+          const cropStgTop = Math.round(rStg.top * dpr);
+          const cropStgW = Math.round(rStg.width * dpr);
+
+          if (!isLast) {
+            const sliceDrawH = Math.min(visibleH, remainingH);
+            ctxStg.drawImage(img, cropStgLeft, cropStgTop, cropStgW, sliceDrawH * dpr, 0, curY, frameW, sliceDrawH);
+            curY += sliceDrawH;
+          } else {
+            // Final tile: crop ONLY the uncaptured remaining delta from the bottom of the visible frame!
+            const deltaH = remainingH;
+            const srcOffsetY = Math.round((visibleH - deltaH) * dpr);
+            ctxStg.drawImage(img, cropStgLeft, cropStgTop + srcOffsetY, cropStgW, deltaH * dpr, 0, curY, frameW, deltaH);
+            curY += deltaH;
+          }
+        } else {
+          curY += visibleH;
+        }
+        sliceIdx++;
+      }
+    } catch (err) {
+      console.warn("[VisualCompare Live] Vertical stage capture warning:", err);
+    } finally {
+      document.body.classList.remove("capture-fullscreen-vertical");
+      if (paneProd) {
+        paneProd.classList.remove("active-capture-pane");
+        paneProd.style.display = "";
+        paneProd.style.flex = "";
+        paneProd.style.width = "";
+        paneProd.style.height = "";
+      }
+      if (paneStg) {
+        paneStg.classList.remove("active-capture-pane");
+        paneStg.style.display = "";
+        paneStg.style.flex = "";
+        paneStg.style.width = "";
+        paneStg.style.height = "";
+      }
+      if (paneDiff) {
+        paneDiff.style.display = "";
+      }
+      if (wrapFrameProd) wrapFrameProd.style.overflow = "";
+      if (wrapFrameStg) wrapFrameStg.style.overflow = "";
+      if (captureProgressOverlay) {
+        captureProgressOverlay.style.visibility = "visible";
       }
     }
 
-    // ----------------------------------------------------
-    // STRATEGY 2: VERTICAL FULLSCREEN STAGE FALLBACK
-    // (Full-screens vertically 100vw x 100vh so studio controls are hidden)
-    // ----------------------------------------------------
+    // Fallback if browser screenshot API was unavailable
     if (!captureSucceeded) {
-      onProgress({ percent: 10, status: "Activating vertical fullscreen capture stage..." });
+      renderFallbackFullPageCanvas(ctxProd, "PRODUCTION REFERENCE", prodUrlInput.value.trim(), frameW, totalH, [0.08, 0.25, 0.55]);
+      renderFallbackFullPageCanvas(ctxStg, "STAGING CANDIDATE", stgUrlInput.value.trim(), frameW, totalH, [0.30, 0.14, 0.52]);
+    }
 
-      lastCaptureReadyProd = null;
-      lastCaptureReadyStg = null;
+    // Restore scroll and mode
+    const restoreAction = {
+      type: "VC_MIRROR_ACTION",
+      action: { kind: "scroll", scrollY: prevScrollY, scrollX: prevScrollX }
+    };
+    if (iframeProd && iframeProd.contentWindow) {
+      try { iframeProd.contentWindow.postMessage(restoreAction, "*"); } catch (e) {}
+    }
+    if (iframeStg && iframeStg.contentWindow) {
+      try { iframeStg.contentWindow.postMessage(restoreAction, "*"); } catch (e) {}
+    }
+    if (wrapFrameProd) wrapFrameProd.scrollTop = prevScrollY;
+    if (wrapFrameStg) wrapFrameStg.scrollTop = prevScrollY;
+    lastScrollState.scrollY = prevScrollY;
+    lastScrollState.scrollX = prevScrollX;
 
-      // 1. Freeze animations & carousels matching Python browser.py
-      if (iframeProd && iframeProd.contentWindow) {
-        try { iframeProd.contentWindow.postMessage({ type: "VC_PREPARE_CAPTURE" }, "*"); } catch (e) {}
-      }
-      if (iframeStg && iframeStg.contentWindow) {
-        try { iframeStg.contentWindow.postMessage({ type: "VC_PREPARE_CAPTURE" }, "*"); } catch (e) {}
-      }
+    if (prevMode !== "side-by-side") {
+      switchMode(prevMode);
+    }
 
-      await waitAsync(350);
-
-      // Measure document dimensions
-      const docHeightProd = lastCaptureReadyProd?.docHeight || lastProdLandmarks?.docHeight || iframeProd?.contentDocument?.documentElement?.scrollHeight || iframeProd?.clientHeight || 1200;
-      const docHeightStg = lastCaptureReadyStg?.docHeight || lastStgLandmarks?.docHeight || iframeStg?.contentDocument?.documentElement?.scrollHeight || iframeStg?.clientHeight || 1200;
-      totalH = Math.max(docHeightProd, docHeightStg, 800);
-      totalH = Math.min(totalH, 14000);
-
-      const prevMode = currentMode;
-      const prevScrollY = lastScrollState.scrollY || 0;
-      const prevScrollX = lastScrollState.scrollX || 0;
-
-      // Activate vertical fullscreen capture stage covering 100vw x 100vh
-      if (verticalFullscreenStage) {
-        verticalFullscreenStage.style.display = "flex";
-      }
-
-      const paneProd = document.getElementById("pane-col-prod");
-      const paneStg = document.getElementById("pane-col-stg");
-      const paneDiff = document.getElementById("pane-col-diff");
-
-      if (currentMode !== "side-by-side") {
-        switchMode("side-by-side");
-        await waitAsync(150);
-      }
-
-      // Hide container wrapper scrollbars during capture so no scrollbars appear on captured edges
-      if (wrapFrameProd) wrapFrameProd.style.overflow = "hidden";
-      if (wrapFrameStg) wrapFrameStg.style.overflow = "hidden";
-
-      // Expand Production vertically & horizontally to full viewport
-      if (paneStg) paneStg.style.display = "none";
-      if (paneDiff) paneDiff.style.display = "none";
-      if (paneProd) {
-        paneProd.style.display = "flex";
-        paneProd.style.flex = "1 1 100%";
-        paneProd.style.width = "100%";
-        paneProd.style.height = "100%";
-      }
-      await waitAsync(80);
-
-      const rProd = iframeProd.getBoundingClientRect();
-      frameW = Math.max(800, Math.round(rProd.width));
-      const visibleH = Math.max(300, Math.round(rProd.height));
-
-      canvasProd.width = frameW;
-      canvasProd.height = totalH;
-      ctxProd.fillStyle = "#ffffff";
-      ctxProd.fillRect(0, 0, frameW, totalH);
-
-      canvasStg.width = frameW;
-      canvasStg.height = totalH;
-      ctxStg.fillStyle = "#ffffff";
-      ctxStg.fillRect(0, 0, frameW, totalH);
-
-      try {
-        // 1. Capture full-width Production slices with zero overlap (non-overlapping tiles)
-        let curY = 0;
-        let sliceIdx = 0;
-        while (curY < totalH) {
-          const remainingH = totalH - curY;
-          const isLast = remainingH <= visibleH;
-          const targetScrollY = isLast ? Math.max(0, totalH - visibleH) : curY;
-          const pct = Math.round(15 + (Math.min(curY + visibleH, totalH) / (totalH * 2)) * 35);
-          onProgress({ percent: pct, status: `Capturing Production vertical slices (${Math.round((curY / totalH) * 100)}%)...` });
-
-          const scrollAction = {
-            type: "VC_MIRROR_ACTION",
-            action: { kind: "scroll", scrollY: targetScrollY, scrollX: 0 }
-          };
-          if (iframeProd && iframeProd.contentWindow) {
-            try {
-              iframeProd.contentWindow.postMessage({ type: "VC_CAPTURE_SLICE_START", sliceIndex: sliceIdx }, "*");
-              iframeProd.contentWindow.postMessage(scrollAction, "*");
-            } catch (e) {}
-          }
-          if (wrapFrameProd) wrapFrameProd.scrollTop = targetScrollY;
-
-          await waitAsync(110);
-
-          if (captureProgressOverlay) captureProgressOverlay.style.visibility = "hidden";
-          await waitAsync(35);
-          const dataUrl = await captureActiveTabPng();
-          if (captureProgressOverlay) captureProgressOverlay.style.visibility = "visible";
-
-          if (dataUrl) {
-            captureSucceeded = true;
-            const img = await loadImageAsync(dataUrl);
-            const dpr = img.width / Math.max(1, window.innerWidth);
-
-            const cropProdLeft = Math.round(rProd.left * dpr);
-            const cropProdTop = Math.round(rProd.top * dpr);
-            const cropProdW = Math.round(rProd.width * dpr);
-
-            if (!isLast) {
-              const sliceDrawH = Math.min(visibleH, remainingH);
-              ctxProd.drawImage(img, cropProdLeft, cropProdTop, cropProdW, sliceDrawH * dpr, 0, curY, frameW, sliceDrawH);
-              curY += sliceDrawH;
-            } else {
-              // Final tile: crop ONLY the uncaptured remaining delta from the bottom of the visible frame!
-              const deltaH = remainingH;
-              const srcOffsetY = Math.round((visibleH - deltaH) * dpr);
-              ctxProd.drawImage(img, cropProdLeft, cropProdTop + srcOffsetY, cropProdW, deltaH * dpr, 0, curY, frameW, deltaH);
-              curY += deltaH;
-            }
-          } else {
-            curY += visibleH;
-          }
-          sliceIdx++;
-        }
-
-        // 2. Expand Staging vertically & horizontally
-        if (paneProd) paneProd.style.display = "none";
-        if (paneStg) {
-          paneStg.style.display = "flex";
-          paneStg.style.flex = "1 1 100%";
-          paneStg.style.width = "100%";
-          paneStg.style.height = "100%";
-        }
-        await waitAsync(80);
-        const rStg = iframeStg.getBoundingClientRect();
-
-        curY = 0;
-        sliceIdx = 0;
-        while (curY < totalH) {
-          const remainingH = totalH - curY;
-          const isLast = remainingH <= visibleH;
-          const targetScrollY = isLast ? Math.max(0, totalH - visibleH) : curY;
-          const pct = Math.round(50 + (Math.min(curY + visibleH, totalH) / (totalH * 2)) * 35);
-          onProgress({ percent: pct, status: `Capturing Staging vertical slices (${Math.round((curY / totalH) * 100)}%)...` });
-
-          const scrollAction = {
-            type: "VC_MIRROR_ACTION",
-            action: { kind: "scroll", scrollY: targetScrollY, scrollX: 0 }
-          };
-          if (iframeStg && iframeStg.contentWindow) {
-            try {
-              iframeStg.contentWindow.postMessage({ type: "VC_CAPTURE_SLICE_START", sliceIndex: sliceIdx }, "*");
-              iframeStg.contentWindow.postMessage(scrollAction, "*");
-            } catch (e) {}
-          }
-          if (wrapFrameStg) wrapFrameStg.scrollTop = targetScrollY;
-
-          await waitAsync(110);
-
-          if (captureProgressOverlay) captureProgressOverlay.style.visibility = "hidden";
-          await waitAsync(35);
-          const dataUrl = await captureActiveTabPng();
-          if (captureProgressOverlay) captureProgressOverlay.style.visibility = "visible";
-
-          if (dataUrl) {
-            const img = await loadImageAsync(dataUrl);
-            const dpr = img.width / Math.max(1, window.innerWidth);
-
-            const cropStgLeft = Math.round(rStg.left * dpr);
-            const cropStgTop = Math.round(rStg.top * dpr);
-            const cropStgW = Math.round(rStg.width * dpr);
-
-            if (!isLast) {
-              const sliceDrawH = Math.min(visibleH, remainingH);
-              ctxStg.drawImage(img, cropStgLeft, cropStgTop, cropStgW, sliceDrawH * dpr, 0, curY, frameW, sliceDrawH);
-              curY += sliceDrawH;
-            } else {
-              // Final tile: crop ONLY the uncaptured remaining delta from the bottom of the visible frame!
-              const deltaH = remainingH;
-              const srcOffsetY = Math.round((visibleH - deltaH) * dpr);
-              ctxStg.drawImage(img, cropStgLeft, cropStgTop + srcOffsetY, cropStgW, deltaH * dpr, 0, curY, frameW, deltaH);
-              curY += deltaH;
-            }
-          } else {
-            curY += visibleH;
-          }
-          sliceIdx++;
-        }
-      } catch (err) {
-        console.warn("[VisualCompare Live] Vertical stage capture warning:", err);
-      } finally {
-        if (verticalFullscreenStage) {
-          verticalFullscreenStage.style.display = "none";
-        }
-        if (paneProd) {
-          paneProd.style.display = "";
-          paneProd.style.flex = "";
-          paneProd.style.width = "";
-          paneProd.style.height = "";
-        }
-        if (paneStg) {
-          paneStg.style.display = "";
-          paneStg.style.flex = "";
-          paneStg.style.width = "";
-          paneStg.style.height = "";
-        }
-        if (paneDiff) {
-          paneDiff.style.display = "";
-        }
-        if (wrapFrameProd) wrapFrameProd.style.overflow = "";
-        if (wrapFrameStg) wrapFrameStg.style.overflow = "";
-        if (captureProgressOverlay) {
-          captureProgressOverlay.style.visibility = "visible";
-        }
-      }
-
-      // Fallback if browser screenshot API was unavailable
-      if (!captureSucceeded) {
-        renderFallbackFullPageCanvas(ctxProd, "PRODUCTION REFERENCE", prodUrlInput.value.trim(), frameW, totalH, [0.08, 0.25, 0.55]);
-        renderFallbackFullPageCanvas(ctxStg, "STAGING CANDIDATE", stgUrlInput.value.trim(), frameW, totalH, [0.30, 0.14, 0.52]);
-      }
-
-      // Restore scroll and mode
-      const restoreAction = {
-        type: "VC_MIRROR_ACTION",
-        action: { kind: "scroll", scrollY: prevScrollY, scrollX: prevScrollX }
-      };
-      if (iframeProd && iframeProd.contentWindow) {
-        try { iframeProd.contentWindow.postMessage(restoreAction, "*"); } catch (e) {}
-      }
-      if (iframeStg && iframeStg.contentWindow) {
-        try { iframeStg.contentWindow.postMessage(restoreAction, "*"); } catch (e) {}
-      }
-      if (wrapFrameProd) wrapFrameProd.scrollTop = prevScrollY;
-      if (wrapFrameStg) wrapFrameStg.scrollTop = prevScrollY;
-      lastScrollState.scrollY = prevScrollY;
-      lastScrollState.scrollX = prevScrollX;
-
-      if (prevMode !== "side-by-side") {
-        switchMode(prevMode);
-      }
-
-      // Restore CSS animations
-      if (iframeProd && iframeProd.contentWindow) {
-        try { iframeProd.contentWindow.postMessage({ type: "VC_RESTORE_CAPTURE" }, "*"); } catch (e) {}
-      }
-      if (iframeStg && iframeStg.contentWindow) {
-        try { iframeStg.contentWindow.postMessage({ type: "VC_RESTORE_CAPTURE" }, "*"); } catch (e) {}
-      }
+    // Restore CSS animations
+    if (iframeProd && iframeProd.contentWindow) {
+      try { iframeProd.contentWindow.postMessage({ type: "VC_RESTORE_CAPTURE" }, "*"); } catch (e) {}
+    }
+    if (iframeStg && iframeStg.contentWindow) {
+      try { iframeStg.contentWindow.postMessage({ type: "VC_RESTORE_CAPTURE" }, "*"); } catch (e) {}
     }
 
     onProgress({ percent: 75, status: "Calculating full-page subpixel differences..." });

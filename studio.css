@@ -2289,32 +2289,76 @@ footer.studio-footer {
 
 /* ----------------------------------------------------
    VERTICAL FULLSCREEN CAPTURE STAGE
-   (Full-screens vertically 100vw x 100vh during fallback capture)
+   (Full-screens vertically 100vw x 100vh so studio controls are hidden)
    ---------------------------------------------------- */
-.vertical-fullscreen-stage {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 999998;
-  background: #090d16;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+body.capture-fullscreen-vertical header.studio-header,
+body.capture-fullscreen-vertical .url-sync-bar,
+body.capture-fullscreen-vertical .studio-controls-bar,
+body.capture-fullscreen-vertical footer.studio-footer,
+body.capture-fullscreen-vertical .pane-header,
+body.capture-fullscreen-vertical #pane-col-diff {
+  display: none !important;
 }
 
-.vertical-stage-content {
-  width: 100%;
-  height: 100%;
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-  position: relative;
+body.capture-fullscreen-vertical .studio-stage,
+body.capture-fullscreen-vertical .viewport-scaler,
+body.capture-fullscreen-vertical .stage-view,
+body.capture-fullscreen-vertical .stage-view.view-side-by-side {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: #ffffff !important;
+  z-index: 999990 !important;
+  overflow: hidden !important;
 }
 
-.vertical-stage-content iframe {
-  width: 100%;
-  height: 100%;
-  border: none;
-  display: block;
+body.capture-fullscreen-vertical .pane-column.active-capture-pane {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: #ffffff !important;
+  display: flex !important;
+  flex-direction: column !important;
+  z-index: 999999 !important;
+  overflow: hidden !important;
+}
+
+body.capture-fullscreen-vertical .pane-column.active-capture-pane .pane-wrapper {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: #ffffff !important;
+  overflow: hidden !important;
+}
+
+body.capture-fullscreen-vertical .pane-column.active-capture-pane iframe {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: 100vw !important;
+  max-height: 100vh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  display: block !important;
+  background: #ffffff !important;
 }
