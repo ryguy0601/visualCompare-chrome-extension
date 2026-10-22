@@ -4502,24 +4502,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const prodUrl = prodUrlInput.value.trim();
     const stgUrl = stgUrlInput.value.trim();
 
-    lastCaptureReadyProd = null;
-    lastCaptureReadyStg = null;
-
-    // 1. Freeze animations & carousels matching Python browser.py
-    if (iframeProd && iframeProd.contentWindow) {
-      try { iframeProd.contentWindow.postMessage({ type: "VC_PREPARE_CAPTURE" }, "*"); } catch (e) {}
+    // Determine target width and aspect ratio from selected device preset
+    const selectedPreset = viewportSelect ? viewportSelect.value : "responsive";
+    let presetW = 0;
+    let presetH = 0;
+    if (selectedPreset && selectedPreset !== "responsive" && selectedPreset.includes("x")) {
+      const [wStr, hStr] = selectedPreset.split("x");
+      presetW = parseInt(wStr, 10) || 0;
+      presetH = parseInt(hStr, 10) || 0;
     }
-    if (iframeStg && iframeStg.contentWindow) {
-      try { iframeStg.contentWindow.postMessage({ type: "VC_PREPARE_CAPTURE" }, "*"); } catch (e) {}
-    }
-
-    await waitAsync(350);
-
-    // 2. Measure document dimensions
-    const docHeightProd = lastCaptureReadyProd?.docHeight || lastProdLandmarks?.docHeight || iframeProd?.contentDocument?.documentElement?.scrollHeight || iframeProd?.clientHeight || 1200;
-    const docHeightStg = lastCaptureReadyStg?.docHeight || lastStgLandmarks?.docHeight || iframeStg?.contentDocument?.documentElement?.scrollHeight || iframeStg?.clientHeight || 1200;
-    let totalH = Math.max(docHeightProd, docHeightStg, 800);
-    totalH = Math.min(totalH, 14000);
 
     const prevMode = currentMode;
     const prevScrollY = lastScrollState.scrollY || 0;
@@ -4538,11 +4529,32 @@ document.addEventListener("DOMContentLoaded", () => {
     if (wrapFrameProd) wrapFrameProd.style.overflow = "hidden";
     if (wrapFrameStg) wrapFrameStg.style.overflow = "hidden";
 
-    // 3. Activate vertical fullscreen capture mode on body
+    // 1. Activate vertical fullscreen capture mode on body
     // This hides studio header, url sync bar, controls bar, footer, and pane headers via CSS !important
     document.body.classList.add("capture-fullscreen-vertical");
 
-    // Phase 1: Full-screen Production pane vertically and horizontally (100vw x 100vh)
+    // Configure pane width, scale, and aspect ratio based on selected device preset
+    let captureScale = 1;
+    if (presetW > 0) {
+      if (presetW > window.innerWidth) {
+        captureScale = window.innerWidth / presetW;
+        document.body.style.setProperty("--capture-pane-width", `${presetW}px`);
+        document.body.style.setProperty("--capture-pane-left", "0px");
+        document.body.style.setProperty("--capture-pane-transform", `scale(${captureScale})`);
+      } else {
+        captureScale = 1;
+        document.body.style.setProperty("--capture-pane-width", `${presetW}px`);
+        document.body.style.setProperty("--capture-pane-left", "0px");
+        document.body.style.removeProperty("--capture-pane-transform");
+      }
+    } else {
+      captureScale = 1;
+      document.body.style.removeProperty("--capture-pane-width");
+      document.body.style.removeProperty("--capture-pane-left");
+      document.body.style.removeProperty("--capture-pane-transform");
+    }
+
+    // Phase 1: Set Production pane active for initial dimension measurement and capture
     if (paneStg) {
       paneStg.style.display = "none";
       paneStg.classList.remove("active-capture-pane");
@@ -4558,9 +4570,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
     await waitAsync(80);
 
+    lastCaptureReadyProd = null;
+    lastCaptureReadyStg = null;
+
+    // 2. Freeze animations & carousels matching Python browser.py (evaluated at active aspect ratio)
+    if (iframeProd && iframeProd.contentWindow) {
+      try { iframeProd.contentWindow.postMessage({ type: "VC_PREPARE_CAPTURE" }, "*"); } catch (e) {}
+    }
+    if (iframeStg && iframeStg.contentWindow) {
+      try { iframeStg.contentWindow.postMessage({ type: "VC_PREPARE_CAPTURE" }, "*"); } catch (e) {}
+    }
+
+    await waitAsync(350);
+
+    // 3. Measure document dimensions accurately at the selected aspect ratio / device width
+    const docHeightProd = lastCaptureReadyProd?.docHeight || lastProdLandmarks?.docHeight || iframeProd?.contentDocument?.documentElement?.scrollHeight || iframeProd?.clientHeight || 1200;
+    const docHeightStg = lastCaptureReadyStg?.docHeight || lastStgLandmarks?.docHeight || iframeStg?.contentDocument?.documentElement?.scrollHeight || iframeStg?.clientHeight || 1200;
+    let totalH = Math.max(docHeightProd, docHeightStg, 800);
+    totalH = Math.min(totalH, 14000);
+
     const rProd = iframeProd ? iframeProd.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
-    const frameW = Math.max(800, Math.round(rProd.width));
-    const visibleH = Math.max(300, Math.round(rProd.height));
+    let frameW = Math.max(800, Math.round(rProd.width));
+    if (presetW > 0) {
+      frameW = presetW;
+    }
+
+    const visibleH = captureScale < 1
+      ? Math.max(300, Math.round(window.innerHeight / captureScale))
+      : Math.max(300, Math.round(window.innerHeight));
 
     const canvasProd = document.createElement("canvas");
     canvasProd.width = frameW;
@@ -4613,19 +4650,22 @@ document.addEventListener("DOMContentLoaded", () => {
           const img = await loadImageAsync(dataUrl);
           const dpr = img.width / Math.max(1, window.innerWidth);
 
-          const cropProdLeft = Math.round(rProd.left * dpr);
-          const cropProdTop = Math.round(rProd.top * dpr);
-          const cropProdW = Math.round(rProd.width * dpr);
+          const cropProdLeft = Math.round((rProd.left || 0) * dpr);
+          const cropProdTop = Math.round((rProd.top || 0) * dpr);
+          const cropProdW = Math.round(frameW * captureScale * dpr);
 
           if (!isLast) {
             const sliceDrawH = Math.min(visibleH, remainingH);
-            ctxProd.drawImage(img, cropProdLeft, cropProdTop, cropProdW, sliceDrawH * dpr, 0, curY, frameW, sliceDrawH);
+            const srcDrawH = Math.round(sliceDrawH * captureScale * dpr);
+            ctxProd.drawImage(img, cropProdLeft, cropProdTop, cropProdW, srcDrawH, 0, curY, frameW, sliceDrawH);
             curY += sliceDrawH;
           } else {
             // Final tile: crop ONLY the uncaptured remaining delta from the bottom of the visible frame!
             const deltaH = remainingH;
             const srcOffsetY = Math.round((visibleH - deltaH) * dpr);
-            ctxProd.drawImage(img, cropProdLeft, cropProdTop + srcOffsetY, cropProdW, deltaH * dpr, 0, curY, frameW, deltaH);
+            const scaledSrcOffsetY = captureScale < 1 ? Math.round(srcOffsetY * captureScale) : srcOffsetY;
+            const srcDrawH = Math.round(deltaH * captureScale * dpr);
+            ctxProd.drawImage(img, cropProdLeft, cropProdTop + scaledSrcOffsetY, cropProdW, srcDrawH, 0, curY, frameW, deltaH);
             curY += deltaH;
           }
         } else {
@@ -4634,7 +4674,7 @@ document.addEventListener("DOMContentLoaded", () => {
         sliceIdx++;
       }
 
-      // Phase 2: Full-screen Staging pane vertically and horizontally (100vw x 100vh)
+      // Phase 2: Full-screen Staging pane vertically and horizontally at the selected aspect ratio
       if (paneProd) {
         paneProd.style.display = "none";
         paneProd.classList.remove("active-capture-pane");
@@ -4681,19 +4721,22 @@ document.addEventListener("DOMContentLoaded", () => {
           const img = await loadImageAsync(dataUrl);
           const dpr = img.width / Math.max(1, window.innerWidth);
 
-          const cropStgLeft = Math.round(rStg.left * dpr);
-          const cropStgTop = Math.round(rStg.top * dpr);
-          const cropStgW = Math.round(rStg.width * dpr);
+          const cropStgLeft = Math.round((rStg.left || 0) * dpr);
+          const cropStgTop = Math.round((rStg.top || 0) * dpr);
+          const cropStgW = Math.round(frameW * captureScale * dpr);
 
           if (!isLast) {
             const sliceDrawH = Math.min(visibleH, remainingH);
-            ctxStg.drawImage(img, cropStgLeft, cropStgTop, cropStgW, sliceDrawH * dpr, 0, curY, frameW, sliceDrawH);
+            const srcDrawH = Math.round(sliceDrawH * captureScale * dpr);
+            ctxStg.drawImage(img, cropStgLeft, cropStgTop, cropStgW, srcDrawH, 0, curY, frameW, sliceDrawH);
             curY += sliceDrawH;
           } else {
             // Final tile: crop ONLY the uncaptured remaining delta from the bottom of the visible frame!
             const deltaH = remainingH;
             const srcOffsetY = Math.round((visibleH - deltaH) * dpr);
-            ctxStg.drawImage(img, cropStgLeft, cropStgTop + srcOffsetY, cropStgW, deltaH * dpr, 0, curY, frameW, deltaH);
+            const scaledSrcOffsetY = captureScale < 1 ? Math.round(srcOffsetY * captureScale) : srcOffsetY;
+            const srcDrawH = Math.round(deltaH * captureScale * dpr);
+            ctxStg.drawImage(img, cropStgLeft, cropStgTop + scaledSrcOffsetY, cropStgW, srcDrawH, 0, curY, frameW, deltaH);
             curY += deltaH;
           }
         } else {
@@ -4705,6 +4748,9 @@ document.addEventListener("DOMContentLoaded", () => {
       console.warn("[VisualCompare Live] Vertical stage capture warning:", err);
     } finally {
       document.body.classList.remove("capture-fullscreen-vertical");
+      document.body.style.removeProperty("--capture-pane-width");
+      document.body.style.removeProperty("--capture-pane-left");
+      document.body.style.removeProperty("--capture-pane-transform");
       if (paneProd) {
         paneProd.classList.remove("active-capture-pane");
         paneProd.style.display = "";
