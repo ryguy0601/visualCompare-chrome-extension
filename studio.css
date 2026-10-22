@@ -2286,3 +2286,35 @@ footer.studio-footer {
   max-width: 100%;
   height: auto;
 }
+
+/* ----------------------------------------------------
+   VERTICAL FULLSCREEN CAPTURE STAGE
+   (Full-screens vertically 100vw x 100vh during fallback capture)
+   ---------------------------------------------------- */
+.vertical-fullscreen-stage {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 999998;
+  background: #090d16;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.vertical-stage-content {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+.vertical-stage-content iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
