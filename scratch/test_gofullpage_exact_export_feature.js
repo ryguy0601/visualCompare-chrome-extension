@@ -1,16 +1,18 @@
 const assert = require("assert");
 const fs = require("fs");
+const path = require("path");
 const { execSync } = require("child_process");
 
 console.log("=================================================================");
 console.log("TESTING EXACT GOFULLPAGE EXPORT FEATURE VERIFICATION");
 console.log("=================================================================");
 
-const studioJs = fs.readFileSync("studio.js", "utf8");
-const studioHtml = fs.readFileSync("studio.html", "utf8");
-const studioCss = fs.readFileSync("studio.css", "utf8");
-const syncAgentJs = fs.readFileSync("sync_agent.js", "utf8");
-const zipExporterJs = fs.readFileSync("zip_exporter.js", "utf8");
+const baseDir = path.join(__dirname, "..");
+const studioJs = fs.readFileSync(path.join(baseDir, "studio.js"), "utf8");
+const studioHtml = fs.readFileSync(path.join(baseDir, "studio.html"), "utf8");
+const studioCss = fs.readFileSync(path.join(baseDir, "studio.css"), "utf8");
+const syncAgentJs = fs.readFileSync(path.join(baseDir, "sync_agent.js"), "utf8");
+const zipExporterJs = fs.readFileSync(path.join(baseDir, "zip_exporter.js"), "utf8");
 
 // 1. Verify GoFullPage UI Controls in studio.html
 console.log("\n1. Verifying GoFullPage UI Controls in studio.html...");
@@ -53,7 +55,7 @@ console.log("  ✓ Clicking 'Export PNG' immediately triggers full-page capture 
 console.log("\n4. Verifying Duplicate Fixed Header Elimination...");
 assert(syncAgentJs.includes('type === "VC_CAPTURE_SLICE_START"'), "sync_agent.js must handle VC_CAPTURE_SLICE_START");
 assert(syncAgentJs.includes("hideFixedHeadersForSlice"), "sync_agent.js must define hideFixedHeadersForSlice");
-assert(studioJs.includes('type: "VC_CAPTURE_SLICE_START", sliceIndex: s'), "studio.js must notify frames of sliceIndex");
+assert(studioJs.includes('type: "VC_CAPTURE_SLICE_START", sliceIndex: sliceIdx'), "studio.js must notify frames of sliceIndex");
 console.log("  ✓ Slices s > 0 hide fixed/sticky headers so headers are captured strictly once at top of page");
 
 // 5. Verify VisualCompareZip exportSinglePdf and exportSinglePng

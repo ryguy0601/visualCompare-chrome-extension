@@ -261,12 +261,21 @@ document.addEventListener("DOMContentLoaded", () => {
   attachFrameHandshake(iframeOverlayProd, "PROD");
   attachFrameHandshake(iframeOverlayStg, "STG");
 
+  let lastCaptureReadyProd = null;
+  let lastCaptureReadyStg = null;
+
   // ----------------------------------------------------
   // 3. CROSS-FRAME ACTION RELAY (THE CORE MIRROR ENGINE)
   // ----------------------------------------------------
   window.addEventListener("message", (event) => {
     const msg = event.data;
     if (!msg || typeof msg !== "object") return;
+
+    if (msg.type === "VC_CAPTURE_READY") {
+      if (msg.paneId === "PROD") lastCaptureReadyProd = msg;
+      if (msg.paneId === "STG") lastCaptureReadyStg = msg;
+      return;
+    }
 
     // Frame ping / initial handshake
     if (msg.type === "VC_FRAME_PING") {
@@ -4457,11 +4466,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   /**
    * Captures the entire full-page canvas for Production, Staging, and Visual Diff.
-   * Freezes animations, scrolls across document height, extracts slices, and stitches 1:1.
+   * Freezes animations, scrolls across document height, extracts non-overlapping tiles, and stitches 1:1.
    */
   async function captureFullPageAuditCanvases(onProgress = () => {}) {
     isUserScrolling = true;
-    onProgress({ percent: 5, status: "Preparing pages and freezing animations..." });
+    onProgress({ percent: 5, status: "Preparing pages and freezing animations (Python engine)..." });
+
+    lastCaptureReadyProd = null;
+    lastCaptureReadyStg = null;
 
     // 1. Freeze animations & carousels matching Python browser.py
     if (iframeProd && iframeProd.contentWindow) {
@@ -4471,11 +4483,14 @@ document.addEventListener("DOMContentLoaded", () => {
       try { iframeStg.contentWindow.postMessage({ type: "VC_PREPARE_CAPTURE" }, "*"); } catch (e) {}
     }
 
+    // Await content script font readiness, image decodes, and height measurement
+    await waitAsync(350);
+
     // 2. Measure document dimensions
-    const docHeightProd = lastProdLandmarks?.docHeight || iframeProd?.contentDocument?.documentElement?.scrollHeight || iframeProd?.clientHeight || 1200;
-    const docHeightStg = lastStgLandmarks?.docHeight || iframeStg?.contentDocument?.documentElement?.scrollHeight || iframeStg?.clientHeight || 1200;
+    const docHeightProd = lastCaptureReadyProd?.docHeight || lastProdLandmarks?.docHeight || iframeProd?.contentDocument?.documentElement?.scrollHeight || iframeProd?.clientHeight || 1200;
+    const docHeightStg = lastCaptureReadyStg?.docHeight || lastStgLandmarks?.docHeight || iframeStg?.contentDocument?.documentElement?.scrollHeight || iframeStg?.clientHeight || 1200;
     let totalH = Math.max(docHeightProd, docHeightStg, 800);
-    totalH = Math.min(totalH, 12000);
+    totalH = Math.min(totalH, 14000);
 
     // 3. Save current state
     const prevMode = currentMode;
@@ -4490,6 +4505,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const paneProd = document.getElementById("pane-col-prod");
     const paneStg = document.getElementById("pane-col-stg");
     const paneDiff = document.getElementById("pane-col-diff");
+
+    // Hide container wrapper scrollbars during capture so no scrollbars appear on captured edges
+    if (wrapFrameProd) wrapFrameProd.style.overflow = "hidden";
+    if (wrapFrameStg) wrapFrameStg.style.overflow = "hidden";
 
     // Phase 1: Expand Production to full stage width (e.g. 1200px+)
     if (paneStg) paneStg.style.display = "none";
@@ -4519,30 +4538,31 @@ document.addEventListener("DOMContentLoaded", () => {
     ctxStg.fillStyle = "#ffffff";
     ctxStg.fillRect(0, 0, frameW, totalH);
 
-    const stepH = Math.max(200, visibleH - 24);
-    const numSlices = Math.max(1, Math.ceil(totalH / stepH));
-
     let captureSucceeded = false;
 
     try {
-      // 1. Capture full-width Production slices
-      for (let s = 0; s < numSlices; s++) {
-        const targetY = Math.min(s * stepH, Math.max(0, totalH - visibleH));
-        const pct = Math.round(10 + ((s + 1) / (numSlices * 2)) * 40);
-        onProgress({ percent: pct, status: `Capturing Production full-page slices (${s + 1} of ${numSlices})...` });
+      // 1. Capture full-width Production slices with zero overlap (non-overlapping tiles)
+      let curY = 0;
+      let sliceIdx = 0;
+      while (curY < totalH) {
+        const remainingH = totalH - curY;
+        const isLast = remainingH <= visibleH;
+        const targetScrollY = isLast ? Math.max(0, totalH - visibleH) : curY;
+        const pct = Math.round(10 + (Math.min(curY + visibleH, totalH) / (totalH * 2)) * 40);
+        onProgress({ percent: pct, status: `Capturing Production full-page slices (${Math.round((curY / totalH) * 100)}%)...` });
 
         // Scroll Production frame & notify frame of slice index to hide duplicate fixed headers
         const scrollAction = {
           type: "VC_MIRROR_ACTION",
-          action: { kind: "scroll", scrollY: targetY, scrollX: 0 }
+          action: { kind: "scroll", scrollY: targetScrollY, scrollX: 0 }
         };
         if (iframeProd && iframeProd.contentWindow) {
           try {
-            iframeProd.contentWindow.postMessage({ type: "VC_CAPTURE_SLICE_START", sliceIndex: s }, "*");
+            iframeProd.contentWindow.postMessage({ type: "VC_CAPTURE_SLICE_START", sliceIndex: sliceIdx }, "*");
             iframeProd.contentWindow.postMessage(scrollAction, "*");
           } catch (e) {}
         }
-        if (wrapFrameProd) wrapFrameProd.scrollTop = targetY;
+        if (wrapFrameProd) wrapFrameProd.scrollTop = targetScrollY;
 
         await waitAsync(110);
 
@@ -4560,10 +4580,22 @@ document.addEventListener("DOMContentLoaded", () => {
           const cropProdLeft = Math.round(rProd.left * dpr);
           const cropProdTop = Math.round(rProd.top * dpr);
           const cropProdW = Math.round(rProd.width * dpr);
-          const cropProdH = Math.round(rProd.height * dpr);
 
-          ctxProd.drawImage(img, cropProdLeft, cropProdTop, cropProdW, cropProdH, 0, targetY, frameW, visibleH);
+          if (!isLast) {
+            const sliceDrawH = Math.min(visibleH, remainingH);
+            ctxProd.drawImage(img, cropProdLeft, cropProdTop, cropProdW, sliceDrawH * dpr, 0, curY, frameW, sliceDrawH);
+            curY += sliceDrawH;
+          } else {
+            // Final tile: crop ONLY the uncaptured remaining delta from the bottom of the visible frame!
+            const deltaH = remainingH;
+            const srcOffsetY = Math.round((visibleH - deltaH) * dpr);
+            ctxProd.drawImage(img, cropProdLeft, cropProdTop + srcOffsetY, cropProdW, deltaH * dpr, 0, curY, frameW, deltaH);
+            curY += deltaH;
+          }
+        } else {
+          curY += visibleH;
         }
+        sliceIdx++;
       }
 
       // 2. Expand Staging to full stage width (e.g. 1200px+)
@@ -4576,24 +4608,28 @@ document.addEventListener("DOMContentLoaded", () => {
       await waitAsync(80);
       const rStg = iframeStg.getBoundingClientRect();
 
-      // Capture full-width Staging slices
-      for (let s = 0; s < numSlices; s++) {
-        const targetY = Math.min(s * stepH, Math.max(0, totalH - visibleH));
-        const pct = Math.round(50 + ((s + 1) / (numSlices * 2)) * 35);
-        onProgress({ percent: pct, status: `Capturing Staging full-page slices (${s + 1} of ${numSlices})...` });
+      // Capture full-width Staging slices with zero overlap (non-overlapping tiles)
+      curY = 0;
+      sliceIdx = 0;
+      while (curY < totalH) {
+        const remainingH = totalH - curY;
+        const isLast = remainingH <= visibleH;
+        const targetScrollY = isLast ? Math.max(0, totalH - visibleH) : curY;
+        const pct = Math.round(50 + (Math.min(curY + visibleH, totalH) / (totalH * 2)) * 35);
+        onProgress({ percent: pct, status: `Capturing Staging full-page slices (${Math.round((curY / totalH) * 100)}%)...` });
 
         // Scroll Staging frame & notify frame of slice index to hide duplicate fixed headers
         const scrollAction = {
           type: "VC_MIRROR_ACTION",
-          action: { kind: "scroll", scrollY: targetY, scrollX: 0 }
+          action: { kind: "scroll", scrollY: targetScrollY, scrollX: 0 }
         };
         if (iframeStg && iframeStg.contentWindow) {
           try {
-            iframeStg.contentWindow.postMessage({ type: "VC_CAPTURE_SLICE_START", sliceIndex: s }, "*");
+            iframeStg.contentWindow.postMessage({ type: "VC_CAPTURE_SLICE_START", sliceIndex: sliceIdx }, "*");
             iframeStg.contentWindow.postMessage(scrollAction, "*");
           } catch (e) {}
         }
-        if (wrapFrameStg) wrapFrameStg.scrollTop = targetY;
+        if (wrapFrameStg) wrapFrameStg.scrollTop = targetScrollY;
 
         await waitAsync(110);
 
@@ -4610,10 +4646,22 @@ document.addEventListener("DOMContentLoaded", () => {
           const cropStgLeft = Math.round(rStg.left * dpr);
           const cropStgTop = Math.round(rStg.top * dpr);
           const cropStgW = Math.round(rStg.width * dpr);
-          const cropStgH = Math.round(rStg.height * dpr);
 
-          ctxStg.drawImage(img, cropStgLeft, cropStgTop, cropStgW, cropStgH, 0, targetY, frameW, visibleH);
+          if (!isLast) {
+            const sliceDrawH = Math.min(visibleH, remainingH);
+            ctxStg.drawImage(img, cropStgLeft, cropStgTop, cropStgW, sliceDrawH * dpr, 0, curY, frameW, sliceDrawH);
+            curY += sliceDrawH;
+          } else {
+            // Final tile: crop ONLY the uncaptured remaining delta from the bottom of the visible frame!
+            const deltaH = remainingH;
+            const srcOffsetY = Math.round((visibleH - deltaH) * dpr);
+            ctxStg.drawImage(img, cropStgLeft, cropStgTop + srcOffsetY, cropStgW, deltaH * dpr, 0, curY, frameW, deltaH);
+            curY += deltaH;
+          }
+        } else {
+          curY += visibleH;
         }
+        sliceIdx++;
       }
     } catch (err) {
       console.warn("[VisualCompare Live] Scroll slice capture warning:", err);
@@ -4631,6 +4679,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (paneDiff) {
         paneDiff.style.display = "";
       }
+      if (wrapFrameProd) wrapFrameProd.style.overflow = "";
+      if (wrapFrameStg) wrapFrameStg.style.overflow = "";
       if (captureProgressOverlay) {
         captureProgressOverlay.style.visibility = "visible";
       }
@@ -4788,37 +4838,34 @@ document.addEventListener("DOMContentLoaded", () => {
       const activeView = (currentMode === "diff" || isDiffActive) ? "diff" : "stg";
 
       if (autoDownloadFormat === "pdf") {
-        showCaptureProgress("Generating GoFullPage PDF", "Building continuous 1-page PDF document...", 94);
+        showCaptureProgress("Generating Full-Page PDF", "Building continuous 1-page PDF document...", 94);
         await waitAsync(60);
         const res = window.VisualCompareZip.exportSinglePdf(meta, activeView === "diff" ? "diff" : (activeView === "prod" ? "prod" : "stg"));
-        logAction(`[GOFULLPAGE] Downloaded continuous 1-page PDF: ${res.filename}`);
-        showToast("GoFullPage PDF Downloaded", `Saved ${res.filename} (1 continuous page).`);
+        logAction(`[EXPORT] Downloaded continuous 1-page PDF: ${res.filename}`);
+        showToast("PDF Exported Successfully", `Saved ${res.filename} (1 continuous page).`);
       } else if (autoDownloadFormat === "png") {
-        showCaptureProgress("Generating GoFullPage PNG", "Encoding lossless PNG image...", 94);
+        showCaptureProgress("Generating Full-Page PNG", "Encoding lossless PNG image...", 94);
         await waitAsync(60);
         const targetCanvas = (activeView === "diff" ? audit.canvasDiff : (activeView === "prod" ? audit.canvasProd : audit.canvasStg)) || audit.canvasStg;
-        const res = window.VisualCompareZip.exportSinglePng(targetCanvas, `gofullpage-${activeView}-${dateStr}.png`);
-        logAction(`[GOFULLPAGE] Downloaded full-page PNG: ${res.filename}`);
-        showToast("GoFullPage PNG Downloaded", `Saved ${res.filename} (high-res PNG).`);
+        const res = window.VisualCompareZip.exportSinglePng(targetCanvas, `visualcompare-${activeView}-${dateStr}.png`);
+        logAction(`[EXPORT] Downloaded full-page PNG: ${res.filename}`);
+        showToast("PNG Downloaded Successfully", `Saved ${res.filename} (lossless PNG).`);
       }
 
       hideCaptureProgress();
-
-      // Open GoFullPage Result Viewer exactly like GoFullPage
       if (gofullpageViewerModal) {
-        gofullpageViewerModal.style.display = "flex";
-        renderGoFullPagePreview(activeView);
-        if (gofullpageBodyWrap) gofullpageBodyWrap.scrollTop = 0;
+        gofullpageViewerModal.style.display = "none";
       }
     } catch (err) {
       hideCaptureProgress();
-      console.error("GoFullPage Export error:", err);
+      console.error("Export error:", err);
       alert("Failed to export: " + err.message);
     }
   }
 
   async function handleExportPdfFlow(type = "master") {
     if (pdfExportModal) pdfExportModal.style.display = "none";
+    if (gofullpageViewerModal) gofullpageViewerModal.style.display = "none";
     if (!window.VisualCompareZip || typeof window.VisualCompareZip.exportSinglePdf !== "function") {
       alert("PDF export engine initializing, please try again in a moment.");
       return;
@@ -4831,7 +4878,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       lastGoFullPageAudit = audit;
 
-      showCaptureProgress("Compiling PDF Document", "Generating vector-aligned PDF-1.4 file...", 92);
+      showCaptureProgress("Compiling PDF Document", "Generating clean continuous full-page PDF...", 92);
       await waitAsync(80);
 
       const meta = {
@@ -4852,12 +4899,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = window.VisualCompareZip.exportSinglePdf(meta, type);
       hideCaptureProgress();
       logAction(`[EXPORT] Downloaded Full-Page PDF: ${res.filename} (${Math.round(res.size / 1024)} KB)`);
-      showToast("PDF Exported Successfully", `Saved ${res.filename} (${Math.round(res.size / 1024)} KB).`);
+      showToast("PDF Exported Successfully", `Saved ${res.filename} (1 continuous page).`);
 
       if (gofullpageViewerModal) {
-        gofullpageViewerModal.style.display = "flex";
-        renderGoFullPagePreview(type === "prod" ? "prod" : (type === "diff" ? "diff" : "stg"));
-        if (gofullpageBodyWrap) gofullpageBodyWrap.scrollTop = 0;
+        gofullpageViewerModal.style.display = "none";
       }
     } catch (err) {
       hideCaptureProgress();

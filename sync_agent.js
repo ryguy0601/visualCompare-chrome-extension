@@ -104,14 +104,18 @@
     });
   }
 
-  function prepareForCapture() {
+  async function prepareForCapture() {
     hideFixedHeadersForSlice(false);
+
+    // 1. FREEZE_ANIMATIONS_JS & hide_overlays.css matching Python browser.py
     if (!captureFreezeStyle) {
       captureFreezeStyle = document.createElement("style");
       captureFreezeStyle.id = "vc-capture-freeze";
       captureFreezeStyle.textContent = `
         html, body {
           scroll-behavior: auto !important;
+          overflow-x: hidden !important;
+          scrollbar-width: none !important;
         }
         *, *::before, *::after {
           animation-duration: 0s !important;
@@ -123,20 +127,88 @@
           scroll-behavior: auto !important;
         }
         video, audio { opacity: 0 !important; visibility: hidden !important; }
+        ::-webkit-scrollbar {
+          display: none !important;
+          width: 0px !important;
+          height: 0px !important;
+        }
       `;
       (document.head || document.documentElement).appendChild(captureFreezeStyle);
     }
 
-    // Pause carousels matching Python visualCompare browser.py
+    // 2. PAUSE_CAROUSELS_JS matching Python visualCompare browser.py
     document.querySelectorAll(".carousel").forEach((el) => {
       try {
         if (window.bootstrap && window.bootstrap.Carousel) {
-          window.bootstrap.Carousel.getOrCreateInstance(el).pause();
+          const c = window.bootstrap.Carousel.getOrCreateInstance(el);
+          c.pause();
+          if (typeof c.to === "function") c.to(0);
         } else if (window.jQuery && window.jQuery.fn && window.jQuery.fn.carousel) {
           window.jQuery(el).carousel("pause");
+          if (typeof window.jQuery(el).carousel === "function") window.jQuery(el).carousel(0);
         }
       } catch (e) {}
     });
+
+    // 3. HIDE_FLOATING_JS matching Python browser.py (hides sticky banners, floating trays, ISI overlays)
+    const isiToken = /(^|[-_])isi($|[-_])/;
+    document.querySelectorAll("*").forEach((el) => {
+      try {
+        const style = window.getComputedStyle(el);
+        if (style.position !== "fixed" && style.position !== "sticky") return;
+        const cls = (el.getAttribute("class") || "").toLowerCase();
+        const id = (el.id || "").toLowerCase();
+        const tag = el.tagName.toLowerCase();
+        if (tag === "footer" || cls.includes("footer") || id.includes("footer")) return;
+        const tokens = cls.split(/\s+/).filter(Boolean);
+        const hit = tokens.some(t => isiToken.test(t)) || isiToken.test(id)
+                    || cls.includes("sticky-banner") || cls.includes("floating-tray");
+        if (hit) {
+          if (!el.dataset.vcOrigDisp) el.dataset.vcOrigDisp = el.style.display || "";
+          el.style.setProperty("display", "none", "important");
+        }
+      } catch (e) {}
+    });
+
+    // 4. Await document fonts ready
+    if (document.fonts && document.fonts.ready) {
+      try { await document.fonts.ready; } catch (e) {}
+    }
+
+    // 5. Await image decoding
+    try {
+      await Promise.all(
+        Array.from(document.images).map(img => {
+          if (img.complete) return img.decode ? img.decode().catch(() => {}) : Promise.resolve();
+          return new Promise(res => { img.onload = img.onerror = res; setTimeout(res, 1500); });
+        })
+      );
+    } catch (e) {}
+
+    // 6. Hard-clamp scroll to absolute origin (0, 0)
+    window.scrollTo(0, 0);
+    if (document.documentElement) document.documentElement.scrollTop = 0;
+    if (document.body) document.body.scrollTop = 0;
+
+    // 7. Measure exact stable document height and report back
+    const docH = Math.max(
+      document.body ? document.body.scrollHeight : 0,
+      document.documentElement ? document.documentElement.scrollHeight : 0,
+      document.body ? document.body.offsetHeight : 0,
+      document.documentElement ? document.documentElement.offsetHeight : 0
+    );
+
+    if (window.parent && isFramed) {
+      window.parent.postMessage({
+        type: "VC_CAPTURE_READY",
+        paneId,
+        docHeight: docH,
+        docWidth: Math.max(
+          document.body ? document.body.scrollWidth : 0,
+          document.documentElement ? document.documentElement.scrollWidth : 0
+        )
+      }, "*");
+    }
   }
 
   function restoreAfterCapture() {
@@ -145,6 +217,11 @@
       captureFreezeStyle.remove();
       captureFreezeStyle = null;
     }
+    // Restore hidden floating trays
+    document.querySelectorAll("[data-vc-orig-disp]").forEach(el => {
+      el.style.display = el.dataset.vcOrigDisp;
+      delete el.dataset.vcOrigDisp;
+    });
   }
 
   // If in frame, notify parent immediately in case parent is waiting
