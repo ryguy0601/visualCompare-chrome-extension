@@ -1385,6 +1385,7 @@
       'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
       'p', 'li', 'th', 'td', 'img', 'svg',
       'span', 'label', 'b', 'strong', 'em', 'i', 'small', 'code', 'mark',
+      'figure', 'figcaption', 'picture', 'time', 'details', 'summary', 'blockquote', 'cite', 'q', 'video', 'canvas',
       '[role="button"]', '[role="link"]', '[role="tab"]', '[role="heading"]',
       // Class patterns commonly used across modern websites
       '.btn', '.btn-primary', '.btn-secondary', '[class*="btn-"]', '[class*="button"]',
@@ -1394,13 +1395,19 @@
       '[class*="logo"]', '[class*="brand"]', '[class*="title"]', '[class*="heading"]',
       '[class*="nav"]', '[class*="tab"]',
       '[class*="banner"]', '[class*="alert"]',
-      '[class*="bg-"]', '[class*="text-"]', '[class*="border"]'
+      '[class*="bg-"]', '[class*="text-"]', '[class*="border"]',
+      '[class*="content"]', '[class*="desc"]', '[class*="description"]', '[class*="info"]',
+      '[class*="box"]', '[class*="panel"]', '[class*="feature"]', '[class*="stat"]',
+      '[class*="val"]', '[class*="value"]', '[class*="icon"]', '[class*="row"]',
+      '[class*="col"]', '[class*="grid"]', '[class*="plan"]', '[class*="cta"]',
+      '[class*="wrapper"]', '[class*="tile"]', '[class*="widget"]', '[class*="block"]',
+      'div[class]', 'div[id]'
     ].join(',');
 
     const seenElements = new Set();
     try {
       document.querySelectorAll(selector).forEach(el => {
-        if (candidates.length >= 600) return;
+        if (candidates.length >= 2500) return;
         if (seenElements.has(el)) return;
         if (el.classList.contains('vc-hazard-stripe-spacer') || el.id === 'vc-ghost-pointer' || el.classList.contains('vc-red-diff-badge')) return;
 

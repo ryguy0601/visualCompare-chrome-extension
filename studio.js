@@ -1792,6 +1792,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       const usedIndices = new Map();
+      const matchedStgCandidates = new Set();
 
       prodCandidates.forEach(p => {
         let list = stgMap.get(p.selector);
@@ -1822,10 +1823,39 @@ document.addEventListener("DOMContentLoaded", () => {
           if (spatialMatch) list = [spatialMatch];
         }
 
-        if (!list || list.length === 0) return;
+        if (!list || list.length === 0) {
+          // Unmatched Prod element (removed in Staging)
+          const isContainerTag = p.tag === "section" || p.tag === "header" || p.tag === "nav" || 
+                                 p.tag === "footer" || p.tag === "main" || p.tag === "article" || 
+                                 p.tag === "body" || p.tag === "form";
+          const isBroadContainer = isContainerTag || 
+                                   (p.selector && (p.selector.includes("container") || 
+                                                   p.selector.includes("hero-section") || 
+                                                   p.selector.includes("site-header") || 
+                                                   p.selector.includes("cta-section")));
+          if (!isBroadContainer && p.box && (p.box.width > 0 && p.box.height > 0)) {
+            const isItemFixed = Boolean(p.isFixed);
+            const isItemSticky = Boolean(p.isSticky || isItemFixed);
+            addDiffIfMissing(diffList, {
+              selector: p.selector,
+              label: p.text ? `🗑️ Removed Content: "${p.text.slice(0, 24)}"` : `🗑️ Removed Content: Prod ${p.tag} element`,
+              diffType: "removed",
+              box: p.box,
+              prodBox: p.box,
+              prodText: p.text || "",
+              prodStyle: p.style || {},
+              text: p.text || "",
+              style: p.style || {},
+              isFixed: isItemFixed,
+              isSticky: isItemSticky
+            });
+          }
+          return;
+        }
         const idx = usedIndices.get(p.selector) || 0;
         const s = list[idx < list.length ? idx : list.length - 1];
         usedIndices.set(p.selector, idx + 1);
+        if (s) matchedStgCandidates.add(s);
 
         if (s) {
           // Dynamic document-wide visual regression detection (viewport clipping occurs dynamically during render)
@@ -1837,6 +1867,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           // Media comparison
           const srcMatches = !p.src || !s.src || p.src === s.src;
+          const srcChanged = (p.src || s.src) && p.src !== s.src;
 
           // Clean style comparisons with subpixel color accuracy
           const bgDifferent = areColorsDifferent(p.style?.bg, s.style?.bg, 12);
@@ -1850,9 +1881,17 @@ document.addEventListener("DOMContentLoaded", () => {
           const borderMatches = !borderDifferent;
           const radiusMatches = !p.style?.radius || !s.style?.radius || p.style.radius === s.style.radius;
           const shadowMatches = (p.style?.boxShadow || "none") === (s.style?.boxShadow || "none");
+          const fontSizeMatches = !p.style?.fontSize || !s.style?.fontSize || p.style.fontSize === s.style.fontSize;
+          const fontWeightMatches = !p.style?.fontWeight || !s.style?.fontWeight || p.style.fontWeight === s.style.fontWeight;
+          const pOp = parseFloat(p.style?.opacity !== undefined ? p.style.opacity : 1);
+          const sOp = parseFloat(s.style?.opacity !== undefined ? s.style.opacity : 1);
+          const opacityMatches = isNaN(pOp) || isNaN(sOp) || Math.abs(pOp - sOp) <= 0.15;
+          const widthDelta = Math.abs((p.box?.width || 0) - (s.box?.width || 0));
+          const heightDelta = Math.abs((p.box?.height || 0) - (s.box?.height || 0));
+          const sizeMatches = (widthDelta <= 15 && heightDelta <= 15) || !p.box?.width || !s.box?.width;
 
           // If identical visually in text, media, and styling, do NOT flag!
-          if (textMatches && srcMatches && bgMatches && bgImageMatches && colorMatches && borderMatches && radiusMatches && shadowMatches) {
+          if (textMatches && srcMatches && !srcChanged && bgMatches && bgImageMatches && colorMatches && borderMatches && radiusMatches && shadowMatches && fontSizeMatches && fontWeightMatches && opacityMatches && sizeMatches) {
             return;
           }
 
@@ -1882,7 +1921,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const diffStyle = Object.assign({}, p.style || {}, s.style || {});
 
           // 1. Visual background gradient & shading check (catches CTA Card shading, Brand Logo, Nav Tab gradients!)
-          if (!bgImageMatches && p.style?.bgImage && s.style?.bgImage && p.style.bgImage !== "none" && s.style.bgImage !== "none") {
+          if (!bgImageMatches && ((p.style?.bgImage && p.style.bgImage !== "none") || (s.style?.bgImage && s.style.bgImage !== "none"))) {
             const label = isCardOrContainer ? "🎨 Visual Gradient: Card Shading & Border Accent" : "🎨 Visual Gradient: Background styling changed";
             addDiffIfMissing(diffList, {
               selector: p.selector,
@@ -1903,7 +1942,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           // 2. Visual border color / accent check
-          if (!borderMatches && p.style?.borderColor && s.style?.borderColor) {
+          if (!borderMatches && (p.style?.borderColor || s.style?.borderColor)) {
             addDiffIfMissing(diffList, {
               selector: p.selector,
               label: "🎨 Visual Border: Border accent color changed",
@@ -1923,7 +1962,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           // 3. Visual image/media regression check
-          if (!srcMatches && p.src && s.src) {
+          if ((!srcMatches && p.src && s.src) || (srcChanged && (p.tag === "img" || s.tag === "img" || p.src || s.src))) {
             addDiffIfMissing(diffList, {
               selector: p.selector,
               label: "🖼️ Visual Image: Asset source modified",
@@ -1943,10 +1982,10 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           // 4. Visual background color check
-          if (!bgMatches && p.style?.bg && s.style?.bg) {
+          if (!bgMatches && (p.style?.bg || s.style?.bg)) {
             addDiffIfMissing(diffList, {
               selector: p.selector,
-              label: `🎨 Visual Style: Color regression (${p.style.bg} → ${s.style.bg})`,
+              label: `🎨 Visual Style: Color regression (${p.style?.bg || "none"} → ${s.style?.bg || "none"})`,
               diffType: "style",
               box: s.box || p.box,
               stgBox: s.box,
@@ -1967,7 +2006,9 @@ document.addEventListener("DOMContentLoaded", () => {
                             p.tag === "h5" || p.tag === "h6" || p.tag === "p" || p.tag === "span" || 
                             p.tag === "label" || p.tag === "strong" || p.tag === "em" || 
                             p.tag === "th" || p.tag === "td" || p.tag === "a" || p.tag === "button" || 
-                            p.tag === "li";
+                            p.tag === "li" || p.tag === "b" || p.tag === "i" || p.tag === "small" || 
+                            p.tag === "code" || p.tag === "mark" || p.tag === "time" ||
+                            (p.tag === "div" && (!p.isContainer && (!p.selector.includes("card") || pText.length < 60)));
           if (!textMatches && pText && sText && isTextTag && !p.selector.includes(".env-badge")) {
             const hasDuplicatePrefix = pText.slice(0, 24) === sText.slice(0, 24);
             if (!isCardOrContainer || !hasDuplicatePrefix) {
@@ -1990,6 +2031,24 @@ document.addEventListener("DOMContentLoaded", () => {
                 isSticky: isItemSticky
               });
             }
+          }
+          if (!textMatches && (!pText || !sText) && (pText || sText) && isTextTag && !p.selector.includes(".env-badge")) {
+            addDiffIfMissing(diffList, {
+              selector: p.selector,
+              label: `🔤 Visual Text: "${pText.slice(0, 24)}" → "${sText.slice(0, 24)}"`,
+              diffType: "typography",
+              box: s.box || p.box,
+              stgBox: s.box,
+              prodBox: p.box,
+              prodText: pText,
+              stgText: sText,
+              prodStyle: p.style,
+              stgStyle: s.style,
+              text: sText || pText,
+              style: diffStyle,
+              isFixed: isItemFixed,
+              isSticky: isItemSticky
+            });
           }
 
           // 6. Visual text color check
@@ -2027,7 +2086,96 @@ document.addEventListener("DOMContentLoaded", () => {
               isSticky: isItemSticky
             });
           }
+
+          // 8. Visual font size or font weight check
+          if ((!fontSizeMatches || !fontWeightMatches) && isTextTag && !isCardOrContainer) {
+            addDiffIfMissing(diffList, {
+              selector: p.selector,
+              label: !fontSizeMatches 
+                ? `🎨 Visual Typography: Font size (${p.style?.fontSize} → ${s.style?.fontSize})`
+                : `🎨 Visual Typography: Font weight (${p.style?.fontWeight} → ${s.style?.fontWeight})`,
+              diffType: "typography",
+              box: s.box || p.box,
+              stgBox: s.box,
+              prodBox: p.box,
+              prodText: pText,
+              stgText: sText,
+              prodStyle: p.style,
+              stgStyle: s.style,
+              text: diffText,
+              style: diffStyle,
+              isFixed: isItemFixed,
+              isSticky: isItemSticky
+            });
+          }
+
+          // 9. Visual opacity check
+          if (!opacityMatches) {
+            addDiffIfMissing(diffList, {
+              selector: p.selector,
+              label: `🎨 Visual Style: Opacity delta (${pOp} → ${sOp})`,
+              diffType: "style",
+              box: s.box || p.box,
+              stgBox: s.box,
+              prodBox: p.box,
+              text: diffText,
+              style: diffStyle,
+              isFixed: isItemFixed,
+              isSticky: isItemSticky
+            });
+          }
+
+          // 10. Visual size discrepancy check
+          if (!sizeMatches && !isCardOrContainer) {
+            addDiffIfMissing(diffList, {
+              selector: p.selector,
+              label: `📐 Visual Geometry: Dimension discrepancy (${p.box?.width}x${p.box?.height} → ${s.box?.width}x${s.box?.height})`,
+              diffType: "geometry",
+              box: s.box || p.box,
+              stgBox: s.box,
+              prodBox: p.box,
+              prodText: pText,
+              stgText: sText,
+              prodStyle: p.style,
+              stgStyle: s.style,
+              text: diffText,
+              style: diffStyle,
+              isFixed: isItemFixed,
+              isSticky: isItemSticky
+            });
+          }
         }
+      });
+
+      // Reverse pass: Catch newly added or modified elements in Staging that have no counterpart in Prod!
+      stgCandidates.forEach(s => {
+        if (!s || matchedStgCandidates.has(s)) return;
+        const isContainerTag = s.tag === "section" || s.tag === "header" || s.tag === "nav" || 
+                               s.tag === "footer" || s.tag === "main" || s.tag === "article" || 
+                               s.tag === "body" || s.tag === "form";
+        const isBroadContainer = isContainerTag || 
+                                 (s.selector && (s.selector.includes("container") || 
+                                                 s.selector.includes("hero-section") || 
+                                                 s.selector.includes("site-header") || 
+                                                 s.selector.includes("cta-section")));
+        if (isBroadContainer) return;
+        if (!s.box || (s.box.width === 0 && s.box.height === 0)) return;
+
+        const isItemFixed = Boolean(s.isFixed);
+        const isItemSticky = Boolean(s.isSticky || isItemFixed);
+        addDiffIfMissing(diffList, {
+          selector: s.selector,
+          label: s.text ? `✨ Added Content: "${s.text.slice(0, 24)}"` : `✨ Added Content: New ${s.tag} element`,
+          diffType: "added",
+          box: s.box,
+          stgBox: s.box,
+          stgText: s.text || "",
+          stgStyle: s.style || {},
+          text: s.text || "",
+          style: s.style || {},
+          isFixed: isItemFixed,
+          isSticky: isItemSticky
+        });
       });
     }
 
@@ -2170,7 +2318,19 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!diffItem || !diffItem.selector) return;
     const exists = list.some(d => {
       if (d.selector === diffItem.selector) return true;
-      if (d.label && diffItem.label && d.label.trim() === diffItem.label.trim()) return true;
+      if (d.label && diffItem.label && d.label.trim() === diffItem.label.trim()) {
+        if (d.box && diffItem.box) {
+          const isSamePos = Math.abs((d.box.y || 0) - (diffItem.box.y || 0)) < 15 && 
+                            Math.abs((d.box.x || 0) - (diffItem.box.x || 0)) < 15;
+          if (isSamePos) return true;
+          return false;
+        }
+        const sharesSelector = d.selector.split(",").some(s1 => 
+          diffItem.selector.split(",").some(s2 => s1.trim() === s2.trim())
+        );
+        if (sharesSelector) return true;
+        if (typeof isDemoSite !== "undefined" && isDemoSite) return true;
+      }
       // Disambiguate overlapping selectors for the metric card
       if (d.selector.includes("metric-card") && diffItem.selector.includes("metric-card")) {
         const dFirst = d.selector.includes(":first-child") || d.selector.includes(":nth-of-type(1)");
@@ -2876,6 +3036,13 @@ document.addEventListener("DOMContentLoaded", () => {
         let drawH = 0;
         let hasExactBox = false;
 
+        const itemTag = (item.tag || "").toLowerCase();
+        const isTextNode = (itemTag === "h1" || itemTag === "h2" || itemTag === "h3" || itemTag === "h4" || 
+                            itemTag === "h5" || itemTag === "h6" || itemTag === "p" || itemTag === "span" || 
+                            itemTag === "label" || itemTag === "strong" || itemTag === "em" || 
+                            itemTag === "th" || itemTag === "td" || itemTag === "b" || itemTag === "i" || 
+                            item.diffType === "typography" || item.diffType === "text");
+
         const liveTargetWin = liveTargetFrame?.contentWindow;
         const liveFallbackWin = liveFallbackFrame?.contentWindow;
         const frameScrollY = liveTargetWin ? (liveTargetWin.scrollY || liveTargetWin.pageYOffset || 0) : (liveFallbackWin ? (liveFallbackWin.scrollY || liveFallbackWin.pageYOffset || 0) : currentScrollY);
@@ -3156,6 +3323,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     pixelDiffCanvas.style.width = width + "px";
     pixelDiffCanvas.style.height = height + "px";
+    pixelDiffCanvas.style.opacity = (colDiffOpacitySlider ? colDiffOpacitySlider.value / 100 : 0.85).toString();
 
     // 1. RENDER ONTO OFFSCREEN BUFFER FIRST (Double Buffering to kill all flickering)
     const offCanvas = getOffscreenCanvas(width, height);
@@ -3187,6 +3355,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
           let drawX = 0, drawY = 0, drawW = 0, drawH = 0;
           let hasExactBox = false;
+
+          const itemTag = (item.tag || "").toLowerCase();
+          const isTextNode = (itemTag === "h1" || itemTag === "h2" || itemTag === "h3" || itemTag === "h4" || 
+                              itemTag === "h5" || itemTag === "h6" || itemTag === "p" || itemTag === "span" || 
+                              itemTag === "label" || itemTag === "strong" || itemTag === "em" || 
+                              itemTag === "th" || itemTag === "td" || itemTag === "b" || itemTag === "i" || 
+                              item.diffType === "typography" || item.diffType === "text");
 
           const frameWin = (iframeDiffBase?.contentWindow || iframeStg?.contentWindow || iframeProd?.contentWindow);
           const frameScrollY = frameWin ? (frameWin.scrollY || frameWin.pageYOffset || 0) : currentScrollY;
@@ -3231,7 +3406,7 @@ document.addEventListener("DOMContentLoaded", () => {
           }
 
           if (!hasExactBox) {
-            const box = item.stgBox || item.box;
+            const box = item.stgBox || item.box || item.prodBox;
             const isBoxFromWide = box && box.measuredWidth && box.measuredWidth > 800 && width <= 600;
             if (isBoxFromWide) {
               const prodHref = (prodUrlInput?.value || "").toLowerCase();
@@ -3248,7 +3423,14 @@ document.addEventListener("DOMContentLoaded", () => {
                   return;
                 }
               } else {
-                return;
+                const scaleX = (box.measuredWidth && box.measuredWidth > 0 && Math.abs(box.measuredWidth - width) > 30) ? (width / box.measuredWidth) : 1;
+                const isFixed = Boolean(item.isFixed || box.isFixed);
+                const isSticky = Boolean(item.isSticky || box.isSticky);
+                drawX = Math.round((isFixed ? (box.viewportX !== undefined ? box.viewportX : box.x) : (box.x - currentScrollX)) * scaleX);
+                drawY = (isFixed || (isSticky && currentScrollY > (box.y || 0))) ? (box.viewportY !== undefined ? box.viewportY : box.y) : (box.y - currentScrollY);
+                drawW = Math.round(box.width * scaleX);
+                drawH = box.height;
+                hasExactBox = true;
               }
             } else if (!box || (box.width === 0 && box.height === 0)) {
               const prodHref = (prodUrlInput?.value || "").toLowerCase();
@@ -3268,12 +3450,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
               }
             } else {
+              const scaleX = (box.measuredWidth && box.measuredWidth > 0 && Math.abs(box.measuredWidth - width) > 30) ? (width / box.measuredWidth) : 1;
               const isFixed = Boolean(item.isFixed || box.isFixed);
               const isSticky = Boolean(item.isSticky || box.isSticky);
-              drawX = isFixed ? (box.viewportX !== undefined ? box.viewportX : box.x) : (box.x - currentScrollX);
+              drawX = Math.round((isFixed ? (box.viewportX !== undefined ? box.viewportX : box.x) : (box.x - currentScrollX)) * scaleX);
               drawY = (isFixed || (isSticky && currentScrollY > (box.y || 0))) ? (box.viewportY !== undefined ? box.viewportY : box.y) : (box.y - currentScrollY);
-              drawW = box.width;
+              drawW = Math.round(box.width * scaleX);
               drawH = box.height;
+              hasExactBox = true;
             }
           }
 
@@ -3340,12 +3524,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 const rVal = parseFloat(compStyle.borderRadius) || (parseFloat(item.style?.radius) || 0);
                 offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
                 renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, liveTargetFrame, liveFallbackFrame);
-                if (!renderedGlyphs && !isTextNode) {
+                if (!renderedGlyphs) {
                   offCtx.beginPath();
                   if (rVal > 0 && typeof offCtx.roundRect === "function") {
                     offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
                   } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("button") || item.selector.includes("tab") || item.selector.includes("badge"))) {
                     offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
+                  } else if (typeof offCtx.roundRect === "function" && isTextNode) {
+                    offCtx.roundRect(drawX, drawY, drawW, drawH, 4);
+                  } else {
+                    offCtx.rect(drawX, drawY, drawW, drawH);
                   }
                   offCtx.fill();
                   renderedGlyphs = true;
@@ -3363,12 +3551,16 @@ document.addEventListener("DOMContentLoaded", () => {
             const rVal = parseFloat(item.style?.radius) || (item.selector.includes("btn") || item.selector.includes("tab") ? 6 : 0);
             offCtx.fillStyle = isCardOrContainer ? "rgba(239, 68, 68, 0.2)" : "rgba(239, 68, 68, 0.45)";
             renderedGlyphs = renderElementSubpixelDiff(offCtx, item, drawX, drawY, drawW, drawH, null, null);
-            if (!renderedGlyphs && !isTextNode) {
+            if (!renderedGlyphs) {
               offCtx.beginPath();
               if (rVal > 0 && typeof offCtx.roundRect === "function") {
                 offCtx.roundRect(drawX, drawY, drawW, drawH, rVal);
-              } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("tab"))) {
+              } else if (typeof offCtx.roundRect === "function" && (item.selector.includes("btn") || item.selector.includes("tab") || item.selector.includes("button") || item.selector.includes("badge"))) {
                 offCtx.roundRect(drawX, drawY, drawW, drawH, 6);
+              } else if (typeof offCtx.roundRect === "function" && isTextNode) {
+                offCtx.roundRect(drawX, drawY, drawW, drawH, 4);
+              } else {
+                offCtx.rect(drawX, drawY, drawW, drawH);
               }
               offCtx.fill();
             }

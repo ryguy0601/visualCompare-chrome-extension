@@ -201,6 +201,14 @@
         </select>
       </div>
 
+      <!-- Diff Opacity Slider (Red Visual Diff Opacity - Unscaled Fixed UI) -->
+      <div class="control-group diff-opacity-toolbar-group" id="diff-opacity-toolbar-group" title="Adjust red visual difference overlay opacity">
+        <span class="control-prefix-icon">🔴</span>
+        <label for="col-diff-opacity-slider" class="control-label">Diff Opacity:</label>
+        <input type="range" min="0" max="100" value="85" class="studio-slider diff-opacity-slider" id="col-diff-opacity-slider">
+        <span class="diff-opacity-val" id="col-diff-opacity-val">85%</span>
+      </div>
+
       <div class="metric-badge metric-red-badge" id="metric-red-badge" style="display: none !important;">
         <span class="badge-label">🔴 Visual Diffs:</span>
         <span class="badge-value" id="metric-red-val">0</span>
@@ -292,11 +300,6 @@
               <strong>Pixel Diff Overlay</strong>
             </div>
             <div class="pane-actions">
-              <div class="diff-slider-wrap">
-                <label for="col-diff-opacity-slider">Diff:</label>
-                <input type="range" min="0" max="100" value="85" class="diff-opacity-slider" id="col-diff-opacity-slider">
-                <span class="diff-opacity-val" id="col-diff-opacity-val">85%</span>
-              </div>
               <span class="diff-mismatch-pill" id="col-diff-pct">0.00% Diff</span>
               <button class="pane-btn" id="btn-col-diff-refresh" title="Re-run Pixel Diff">🔄</button>
             </div>

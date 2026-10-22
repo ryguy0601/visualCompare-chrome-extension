@@ -1865,6 +1865,38 @@ footer.studio-footer {
   border-radius: 6px;
 }
 
+.diff-opacity-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #111827;
+  border: 1px solid #1f2937;
+  padding: 4px 8px;
+  border-radius: 6px;
+  user-select: none;
+}
+
+.diff-opacity-toolbar-group .control-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary, #94a3b8);
+  white-space: nowrap;
+}
+
+.diff-opacity-toolbar-group .diff-opacity-slider {
+  width: 72px;
+  height: 5px;
+  cursor: pointer;
+  accent-color: #ef4444;
+}
+
+.diff-opacity-toolbar-group .diff-opacity-val {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ef4444;
+  min-width: 30px;
+}
+
 /* ----------------------------------------------------
    FULL-PAGE CAPTURE PROGRESS OVERLAY
    ---------------------------------------------------- */
