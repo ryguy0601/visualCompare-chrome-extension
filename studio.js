@@ -204,6 +204,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Load iframes
   loadAllFrames(initialProd, initialStg);
+  setTimeout(() => {
+    if (typeof applyViewportPresetAndZoom === "function" && viewportSelect && viewportSelect.value !== "responsive") {
+      applyViewportPresetAndZoom(true);
+    }
+  }, 150);
 
   // ----------------------------------------------------
   // 2. FRAME LOADING & LIFECYCLE
@@ -891,6 +896,10 @@ document.addEventListener("DOMContentLoaded", () => {
       setTimeout(() => {
         renderDiffCanvasHeatmap(activeRedDiffs, activeShiftRegions);
       }, 100);
+    }
+
+    if (typeof applyViewportPresetAndZoom === "function" && viewportSelect && viewportSelect.value !== "responsive") {
+      applyViewportPresetAndZoom(zoomSelect ? zoomSelect.value === "auto" : true);
     }
   }
 
@@ -3667,17 +3676,101 @@ document.addEventListener("DOMContentLoaded", () => {
   // ----------------------------------------------------
   // 8. DEVICE VIEWPORT & ZOOM SCALER
   // ----------------------------------------------------
-  viewportSelect.addEventListener("change", (e) => {
-    const val = e.target.value;
+  function applyViewportPresetAndZoom(forceAutoScale = true) {
+    if (!viewportScaler || !viewportSelect) return;
+    const val = viewportSelect.value || "responsive";
+
     if (val === "responsive") {
       viewportScaler.style.width = "100%";
       viewportScaler.style.height = "100%";
-    } else {
-      const [w, h] = val.split("x");
-      viewportScaler.style.width = `${w}px`;
-      viewportScaler.style.height = `${h}px`;
+      viewportScaler.style.transform = "";
+      viewportScaler.style.transformOrigin = "";
+      viewportScaler.style.marginBottom = "";
+      viewportScaler.style.marginLeft = "";
+      viewportScaler.style.marginRight = "";
+
+      if (zoomSelect) {
+        const autoOpt = (zoomSelect.options && typeof zoomSelect.options[Symbol.iterator] === "function")
+          ? Array.from(zoomSelect.options).find(o => o.value === "auto")
+          : (zoomSelect.options && zoomSelect.options.length ? Array.prototype.find.call(zoomSelect.options, o => o.value === "auto") : null);
+        if (autoOpt) autoOpt.textContent = "Auto (Fit)";
+        if (forceAutoScale) zoomSelect.value = "auto";
+      }
+      return;
     }
-    logAction(`Device viewport updated: ${val}`);
+
+    const [wStr, hStr] = val.split("x");
+    const presetW = parseInt(wStr, 10) || 1280;
+    const presetH = parseInt(hStr, 10) || 800;
+
+    let targetScalerW = presetW;
+    let targetScalerH = presetH;
+
+    if (currentMode === "side-by-side") {
+      const numCols = isColDiffActive ? 3 : 2;
+      const colGap = 10;
+      targetScalerW = (presetW * numCols) + (colGap * (numCols - 1));
+    }
+
+    viewportScaler.style.width = `${targetScalerW}px`;
+    viewportScaler.style.height = `${targetScalerH}px`;
+
+    // Compute automatic zoom-out scale so the site fits the stage perfectly
+    const stage = document.getElementById("studio-stage");
+    const stageW = stage && stage.clientWidth > 100 ? (stage.clientWidth - 28) : (window.innerWidth - 30);
+    const stageH = stage && stage.clientHeight > 100 ? (stage.clientHeight - 28) : (window.innerHeight - 150);
+
+    const scaleX = stageW / targetScalerW;
+    const scaleY = stageH / targetScalerH;
+    let autoScale = Math.min(scaleX, scaleY);
+
+    // Zoom out so it fits within the viewport; clamp max at 1.0 (100%) and min at 0.15 (15%)
+    autoScale = Math.min(1, autoScale);
+    autoScale = Math.max(0.15, Math.floor(autoScale * 100) / 100);
+
+    let activeScale = autoScale;
+    if (!forceAutoScale && zoomSelect && zoomSelect.value !== "auto") {
+      activeScale = parseFloat(zoomSelect.value) || autoScale;
+    }
+
+    viewportScaler.style.transform = `scale(${activeScale})`;
+    viewportScaler.style.transformOrigin = "top center";
+
+    // Counteract layout bounding box overflow when scaled down
+    if (activeScale < 1) {
+      const marginB = Math.round(targetScalerH * (1 - activeScale));
+      const marginX = Math.round((targetScalerW * (1 - activeScale)) / 2);
+      viewportScaler.style.marginBottom = `-${marginB}px`;
+      viewportScaler.style.marginLeft = `-${marginX}px`;
+      viewportScaler.style.marginRight = `-${marginX}px`;
+    } else {
+      viewportScaler.style.marginBottom = "";
+      viewportScaler.style.marginLeft = "";
+      viewportScaler.style.marginRight = "";
+    }
+
+    // Update zoomSelect dropdown UI
+    if (zoomSelect) {
+      let autoOption = (zoomSelect.options && typeof zoomSelect.options[Symbol.iterator] === "function")
+        ? Array.from(zoomSelect.options).find(o => o.value === "auto")
+        : (zoomSelect.options && zoomSelect.options.length ? Array.prototype.find.call(zoomSelect.options, o => o.value === "auto") : null);
+      if (!autoOption && typeof zoomSelect.insertBefore === "function") {
+        autoOption = document.createElement("option");
+        autoOption.value = "auto";
+        zoomSelect.insertBefore(autoOption, zoomSelect.firstChild);
+      }
+      if (autoOption) {
+        autoOption.textContent = `Auto (${Math.round(activeScale * 100)}%)`;
+      }
+      if (forceAutoScale) {
+        zoomSelect.value = "auto";
+      }
+    }
+  }
+
+  viewportSelect.addEventListener("change", (e) => {
+    applyViewportPresetAndZoom(true);
+    logAction(`Device viewport updated: ${e.target.value}`);
 
     setTimeout(() => {
       if (checkSyncHazard && checkSyncHazard.checked) {
@@ -3689,6 +3782,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.addEventListener("resize", () => {
     clearTimeout(studioResizeTimer);
     studioResizeTimer = setTimeout(() => {
+      applyViewportPresetAndZoom(zoomSelect ? zoomSelect.value === "auto" : true);
       lastCapturedDiffCanvas = null;
       if (currentMode === "swipe") {
         if (iframeSwipeProd && iframeSwipeProd.contentWindow) {
@@ -3710,8 +3804,11 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   zoomSelect.addEventListener("change", (e) => {
-    const scale = parseFloat(e.target.value) || 1;
-    viewportScaler.style.transform = `scale(${scale})`;
+    if (e.target.value === "auto") {
+      applyViewportPresetAndZoom(true);
+    } else {
+      applyViewportPresetAndZoom(false);
+    }
   });
 
   // ----------------------------------------------------
@@ -4101,6 +4198,9 @@ document.addEventListener("DOMContentLoaded", () => {
         clearAllRedDiffs(true);
         updateAllDiffPercentDisplays("0.00%");
         logAction("3rd Column Pixel Diff toggled OFF (2-column side-by-side view)");
+      }
+      if (typeof applyViewportPresetAndZoom === "function" && viewportSelect && viewportSelect.value !== "responsive") {
+        applyViewportPresetAndZoom(zoomSelect ? zoomSelect.value === "auto" : true);
       }
     });
   }
@@ -4772,6 +4872,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (wrapFrameStg) wrapFrameStg.style.overflow = "";
       if (captureProgressOverlay) {
         captureProgressOverlay.style.visibility = "visible";
+      }
+      if (typeof applyViewportPresetAndZoom === "function" && viewportSelect && viewportSelect.value !== "responsive") {
+        applyViewportPresetAndZoom(false);
       }
     }
 
