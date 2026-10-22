@@ -86,6 +86,11 @@
 
       <!-- Archive / Package Tools -->
       <div class="header-tools-group">
+        <button id="btn-export-pdf" class="btn-diff-action btn-export-pdf" title="Export full-page visual PDFs of Production, Staging, and Differences">
+          <span class="btn-label-full">📄 Export PDF</span>
+          <span class="btn-label-short">📄 PDF</span>
+        </button>
+
         <button id="btn-export-zip" class="btn-diff-action btn-export-zip" title="Export comparison report, links, and PDFs of both pages with differences into a ZIP package">
           <span class="btn-label-full">📦 Export ZIP</span>
           <span class="btn-label-short">📦 ZIP</span>
@@ -176,6 +181,18 @@
       <div class="metric-badge metric-shift-badge" id="metric-shift-badge" style="display: none;" title="Total layout shift height compensated by yellow hazard spacers">
         <span class="badge-label">⚠️ Shift Pad:</span>
         <span class="badge-value" id="metric-shift-val">+0px</span>
+      </div>
+
+      <!-- Diff Sensitivity / Tolerance Control -->
+      <div class="control-group diff-tolerance-group" id="diff-tolerance-group" title="Adjust pixel mismatch sensitivity threshold">
+        <span class="control-prefix-icon">🎯</span>
+        <label for="diff-tolerance-select" class="control-label">Sensitivity:</label>
+        <select id="diff-tolerance-select" class="studio-select-small">
+          <option value="10">High (10 - Strict)</option>
+          <option value="20" selected>Normal (20 - Balanced)</option>
+          <option value="35">Low (35 - Permissive)</option>
+          <option value="50">Loose (50 - Coarse)</option>
+        </select>
       </div>
 
       <div class="metric-badge metric-red-badge" id="metric-red-badge" style="display: none !important;">
@@ -364,6 +381,7 @@
     <div class="footer-right">
       <span class="connection-tag" id="tag-conn-prod">Prod: <span class="status-ok">Connected</span></span>
       <span class="connection-tag" id="tag-conn-stg">Stg: <span class="status-ok">Connected</span></span>
+      <button id="btn-show-shortcuts" class="btn-micro-text" title="Keyboard Shortcuts Cheat Sheet">⌨️ Hotkeys</button>
       <button id="btn-toggle-event-log" class="btn-micro-text">Clear Log</button>
     </div>
   </footer>
@@ -377,6 +395,113 @@
         <p id="toast-desc">Restored comparison session.</p>
       </div>
       <button id="btn-close-toast" class="toast-close" title="Dismiss notification">✕</button>
+    </div>
+  </div>
+
+  <!-- Full-Page Visual Capture Progress Indicator Overlay -->
+  <div id="capture-progress-overlay" class="capture-overlay" style="display: none;">
+    <div class="capture-modal">
+      <div class="capture-spinner"></div>
+      <h3 id="capture-progress-title">Capturing Full-Page Visual Audit</h3>
+      <p id="capture-progress-status">Scanning document dimensions and scrolling frames...</p>
+      <div class="capture-bar-track">
+        <div id="capture-progress-bar" class="capture-bar-fill" style="width: 0%;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PDF Export Options Modal -->
+  <div id="pdf-export-modal" class="studio-modal-backdrop" style="display: none;">
+    <div class="studio-modal-content">
+      <div class="modal-header">
+        <div class="modal-title-row">
+          <span class="modal-icon">📄</span>
+          <div>
+            <h3>Export Full-Page Visual PDF</h3>
+            <p class="modal-sub">Generate high-resolution full-page PDFs matching the Python engine</p>
+          </div>
+        </div>
+        <button id="btn-close-pdf-modal" class="btn-modal-close" title="Close dialog">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-intro">Choose an export option below to capture both pages from top to bottom and download high-resolution PDFs:</p>
+        <div class="export-options-grid">
+          <button id="btn-download-pdf-master" class="export-option-card active">
+            <div class="option-icon">📑</div>
+            <div class="option-info">
+              <strong>Master Comparison Report (PDF)</strong>
+              <span>Executive Audit Summary + Paginated High-Res Visual Diff Plates</span>
+            </div>
+            <span class="option-badge">Recommended</span>
+          </button>
+
+          <button id="btn-download-pdf-diff" class="export-option-card">
+            <div class="option-icon">🔴</div>
+            <div class="option-info">
+              <strong>Visual Differences Full Page (PDF)</strong>
+              <span>Full-length pixel mismatch overlay and yellow layout shift hazard stripes</span>
+            </div>
+            <span class="option-action-tag">Diff PDF &rarr;</span>
+          </button>
+
+          <button id="btn-download-pdf-prod" class="export-option-card">
+            <div class="option-icon">🟦</div>
+            <div class="option-info">
+              <strong>Production Reference Full Page (PDF)</strong>
+              <span>Clean, complete top-to-bottom rendering of the Production page</span>
+            </div>
+            <span class="option-action-tag">Prod PDF &rarr;</span>
+          </button>
+
+          <button id="btn-download-pdf-stg" class="export-option-card">
+            <div class="option-icon">🟪</div>
+            <div class="option-info">
+              <strong>Staging Candidate Full Page (PDF)</strong>
+              <span>Clean, complete top-to-bottom rendering of the Staging page</span>
+            </div>
+            <span class="option-action-tag">Staging PDF &rarr;</span>
+          </button>
+
+          <button id="btn-download-all-zip" class="export-option-card special-card">
+            <div class="option-icon">📦</div>
+            <div class="option-info">
+              <strong>Complete Package (ZIP)</strong>
+              <span>All 4 PDFs + Full-Size PNG Screenshots + JSON + Offline Interactive HTML Report</span>
+            </div>
+            <span class="option-action-tag">ZIP Package &rarr;</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Keyboard Shortcuts Modal -->
+  <div id="shortcuts-modal" class="studio-modal-backdrop" style="display: none;">
+    <div class="studio-modal-content">
+      <div class="modal-header">
+        <div class="modal-title-row">
+          <span class="modal-icon">⌨️</span>
+          <div>
+            <h3>Studio Keyboard Shortcuts</h3>
+            <p class="modal-sub">Quick navigation and comparison hotkeys</p>
+          </div>
+        </div>
+        <button id="btn-close-shortcuts-modal" class="btn-modal-close" title="Close dialog">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="shortcuts-grid">
+          <div class="shortcut-row"><kbd>1</kbd><span>Side-by-Side View Mode</span></div>
+          <div class="shortcut-row"><kbd>2</kbd><span>Swipe Curtain Slider Mode</span></div>
+          <div class="shortcut-row"><kbd>3</kbd><span>Flicker Rapid Toggle Mode</span></div>
+          <div class="shortcut-row"><kbd>4</kbd><span>Diff Ghost Overlay Mode</span></div>
+          <div class="shortcut-row"><kbd>D</kbd><span>Toggle Differences Overlay</span></div>
+          <div class="shortcut-row"><kbd>S</kbd><span>Swap Prod &amp; Staging URLs</span></div>
+          <div class="shortcut-row"><kbd>R</kbd><span>Reload Both Panes</span></div>
+          <div class="shortcut-row"><kbd>Space</kbd><span>Toggle Flicker (in Flicker mode)</span></div>
+          <div class="shortcut-row"><kbd>E</kbd><span>Open PDF / ZIP Export Menu</span></div>
+          <div class="shortcut-row"><kbd>?</kbd><span>Show / Hide Shortcuts</span></div>
+        </div>
+      </div>
     </div>
   </div>
 

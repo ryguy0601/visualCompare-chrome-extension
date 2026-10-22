@@ -73,8 +73,55 @@
       removeRedDiffs();
     } else if (data.type === "VC_REQUEST_DIFF_CANDIDATES") {
       sendDiffCandidatesReport();
+    } else if (data.type === "VC_PREPARE_CAPTURE") {
+      prepareForCapture();
+    } else if (data.type === "VC_RESTORE_CAPTURE") {
+      restoreAfterCapture();
     }
   });
+
+  let captureFreezeStyle = null;
+
+  function prepareForCapture() {
+    if (!captureFreezeStyle) {
+      captureFreezeStyle = document.createElement("style");
+      captureFreezeStyle.id = "vc-capture-freeze";
+      captureFreezeStyle.textContent = `
+        html, body {
+          scroll-behavior: auto !important;
+        }
+        *, *::before, *::after {
+          animation-duration: 0s !important;
+          animation-delay: 0s !important;
+          animation-iteration-count: 1 !important;
+          transition-duration: 0s !important;
+          transition-delay: 0s !important;
+          caret-color: transparent !important;
+          scroll-behavior: auto !important;
+        }
+        video, audio { opacity: 0 !important; visibility: hidden !important; }
+      `;
+      (document.head || document.documentElement).appendChild(captureFreezeStyle);
+    }
+
+    // Pause carousels matching Python visualCompare browser.py
+    document.querySelectorAll(".carousel").forEach((el) => {
+      try {
+        if (window.bootstrap && window.bootstrap.Carousel) {
+          window.bootstrap.Carousel.getOrCreateInstance(el).pause();
+        } else if (window.jQuery && window.jQuery.fn && window.jQuery.fn.carousel) {
+          window.jQuery(el).carousel("pause");
+        }
+      } catch (e) {}
+    });
+  }
+
+  function restoreAfterCapture() {
+    if (captureFreezeStyle) {
+      captureFreezeStyle.remove();
+      captureFreezeStyle = null;
+    }
+  }
 
   // If in frame, notify parent immediately in case parent is waiting
   if (isFramed && window.parent) {

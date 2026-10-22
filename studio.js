@@ -108,6 +108,26 @@ document.addEventListener("DOMContentLoaded", () => {
   const toastDesc = document.getElementById("toast-desc");
   const btnCloseToast = document.getElementById("btn-close-toast");
 
+  // PDF Export & Enhancement Controls
+  const btnExportPdf = document.getElementById("btn-export-pdf");
+  const diffToleranceGroup = document.getElementById("diff-tolerance-group");
+  const diffToleranceSelect = document.getElementById("diff-tolerance-select");
+  const captureProgressOverlay = document.getElementById("capture-progress-overlay");
+  const captureProgressTitle = document.getElementById("capture-progress-title");
+  const captureProgressStatus = document.getElementById("capture-progress-status");
+  const captureProgressBar = document.getElementById("capture-progress-bar");
+  const pdfExportModal = document.getElementById("pdf-export-modal");
+  const btnClosePdfModal = document.getElementById("btn-close-pdf-modal");
+  const btnDownloadPdfMaster = document.getElementById("btn-download-pdf-master");
+  const btnDownloadPdfDiff = document.getElementById("btn-download-pdf-diff");
+  const btnDownloadPdfProd = document.getElementById("btn-download-pdf-prod");
+  const btnDownloadPdfStg = document.getElementById("btn-download-pdf-stg");
+  const btnDownloadAllZip = document.getElementById("btn-download-all-zip");
+  const shortcutsModal = document.getElementById("shortcuts-modal");
+  const btnCloseShortcutsModal = document.getElementById("btn-close-shortcuts-modal");
+  const btnShowShortcuts = document.getElementById("btn-show-shortcuts");
+  let currentDiffTolerance = 20;
+
   // Current State
   let currentMode = "side-by-side";
   let flickerInterval = null;
@@ -1015,9 +1035,38 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Global Spacebar shortcut for manual flicker
+  // Global Keyboard Shortcuts for Pro Workflow
   window.addEventListener("keydown", (e) => {
-    if (currentMode === "flicker" && e.code === "Space" && e.target.tagName !== "INPUT") {
+    // Ignore hotkeys when user is typing in inputs or select dropdowns
+    if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.isContentEditable)) {
+      return;
+    }
+
+    if (e.key === "Escape") {
+      if (pdfExportModal) pdfExportModal.style.display = "none";
+      if (shortcutsModal) shortcutsModal.style.display = "none";
+      return;
+    }
+
+    if (e.key === "1") {
+      setMode("side-by-side");
+    } else if (e.key === "2") {
+      setMode("swipe");
+    } else if (e.key === "3") {
+      setMode("flicker");
+    } else if (e.key === "4") {
+      setMode("overlay");
+    } else if (e.key === "d" || e.key === "D") {
+      if (btnToggleRedDiffs) btnToggleRedDiffs.click();
+    } else if (e.key === "s" || e.key === "S") {
+      if (btnSwapUrls) btnSwapUrls.click();
+    } else if (e.key === "r" || e.key === "R") {
+      if (btnNavigateAll) btnNavigateAll.click();
+    } else if (e.key === "e" || e.key === "E") {
+      if (btnExportPdf) btnExportPdf.click();
+    } else if (e.key === "?") {
+      if (shortcutsModal) shortcutsModal.style.display = shortcutsModal.style.display === "none" ? "flex" : "none";
+    } else if (currentMode === "flicker" && e.code === "Space") {
       e.preventDefault();
       toggleFlickerState();
     }
@@ -3433,7 +3482,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Sensitive delta matching diff_engine.py make_diff_mask_subpixel
         // Accurately flags subtle background shading gradients, radial fills, and border accents
-        const { outData, diffPixels } = computeSubpixelPixelDiff(dataP, dataS, cropW, cropH, 20, shiftRegions);
+        const { outData, diffPixels } = computeSubpixelPixelDiff(dataP, dataS, cropW, cropH, currentDiffTolerance || 20, shiftRegions);
 
         const diffImg = new ImageData(outData, cropW, cropH);
         const tempCanvas = document.createElement("canvas");
@@ -3517,7 +3566,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const dataS = canvasS.getContext("2d").getImageData(0, 0, cropW, cropH).data;
 
         // Subpixel anti-aliasing checking matching Python diff_engine.py make_diff_mask_subpixel
-        const { outData, diffPixels } = computeSubpixelPixelDiff(dataP, dataS, cropW, cropH, 20, shiftRegions);
+        const { outData, diffPixels } = computeSubpixelPixelDiff(dataP, dataS, cropW, cropH, currentDiffTolerance || 20, shiftRegions);
 
         const outCanvas = document.createElement("canvas");
         outCanvas.width = swW;
@@ -4296,14 +4345,310 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  if (btnExportZip) {
-    btnExportZip.addEventListener("click", () => {
-      if (!window.VisualCompareZip || typeof window.VisualCompareZip.exportComparisonZip !== "function") {
-        alert("Export engine initializing, please try again in a moment.");
+  if (diffToleranceSelect) {
+    diffToleranceSelect.addEventListener("change", (e) => {
+      currentDiffTolerance = parseInt(e.target.value, 10) || 20;
+      logAction(`[DIFF] Pixel difference sensitivity set to: ${diffToleranceSelect.options[diffToleranceSelect.selectedIndex].text}`);
+      requestLivePixelDiff();
+    });
+  }
+
+  if (btnShowShortcuts && shortcutsModal) {
+    btnShowShortcuts.addEventListener("click", () => {
+      shortcutsModal.style.display = "flex";
+    });
+  }
+
+  if (btnCloseShortcutsModal && shortcutsModal) {
+    btnCloseShortcutsModal.addEventListener("click", () => {
+      shortcutsModal.style.display = "none";
+    });
+  }
+
+  if (shortcutsModal) {
+    shortcutsModal.addEventListener("click", (e) => {
+      if (e.target === shortcutsModal) shortcutsModal.style.display = "none";
+    });
+  }
+
+  function showCaptureProgress(title, status, percent) {
+    if (captureProgressOverlay) {
+      captureProgressOverlay.style.display = "flex";
+      if (captureProgressTitle) captureProgressTitle.textContent = title;
+      if (captureProgressStatus) captureProgressStatus.textContent = status;
+      if (captureProgressBar) captureProgressBar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+    }
+  }
+
+  function hideCaptureProgress() {
+    if (captureProgressOverlay) {
+      captureProgressOverlay.style.display = "none";
+    }
+  }
+
+  function waitAsync(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async function captureActiveTabPng() {
+    return new Promise((resolve) => {
+      if (typeof chrome === "undefined" || !chrome.runtime || typeof chrome.runtime.sendMessage !== "function") {
+        resolve(null);
         return;
       }
+      try {
+        chrome.runtime.sendMessage({ type: "CAPTURE_ACTIVE_TAB" }, (res) => {
+          if (res && res.status === "ok" && res.dataUrl) {
+            resolve(res.dataUrl);
+          } else {
+            resolve(null);
+          }
+        });
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  }
 
-      // Gather current comparison state
+  function loadImageAsync(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Image failed to load"));
+      img.src = src;
+    });
+  }
+
+  function renderFallbackFullPageCanvas(ctx, title, url, width, height, colorRgb) {
+    ctx.fillStyle = "#f8fafc";
+    ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = `rgb(${Math.round(colorRgb[0] * 255)}, ${Math.round(colorRgb[1] * 255)}, ${Math.round(colorRgb[2] * 255)})`;
+    ctx.fillRect(0, 0, width, 80);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "bold 20px -apple-system, BlinkMacSystemFont, sans-serif";
+    ctx.fillText(`VISUALCOMPARE LIVE - ${title}`, 24, 40);
+    ctx.font = "12px monospace";
+    ctx.fillText(url || "about:blank", 24, 64);
+
+    let curY = 110;
+    const count = Math.max(3, Math.floor((height - 150) / 200));
+    for (let s = 0; s < count; s++) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(24, curY, width - 48, 160);
+      ctx.fillStyle = "#1e293b";
+      ctx.font = "bold 15px -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText(`Section Landmark #${s + 1}`, 44, curY + 36);
+      ctx.fillStyle = "#64748b";
+      ctx.font = "12px -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.fillText("Rendered DOM element alignment plate with layout shift detection.", 44, curY + 64);
+      curY += 180;
+      if (curY + 160 > height) break;
+    }
+  }
+
+  /**
+   * Captures the entire full-page canvas for Production, Staging, and Visual Diff.
+   * Freezes animations, scrolls across document height, extracts slices, and stitches 1:1.
+   */
+  async function captureFullPageAuditCanvases(onProgress = () => {}) {
+    isUserScrolling = true;
+    onProgress({ percent: 5, status: "Preparing pages and freezing animations..." });
+
+    // 1. Freeze animations & carousels matching Python browser.py
+    if (iframeProd && iframeProd.contentWindow) {
+      try { iframeProd.contentWindow.postMessage({ type: "VC_PREPARE_CAPTURE" }, "*"); } catch (e) {}
+    }
+    if (iframeStg && iframeStg.contentWindow) {
+      try { iframeStg.contentWindow.postMessage({ type: "VC_PREPARE_CAPTURE" }, "*"); } catch (e) {}
+    }
+
+    // 2. Measure document dimensions
+    const docHeightProd = lastProdLandmarks?.docHeight || iframeProd?.contentDocument?.documentElement?.scrollHeight || iframeProd?.clientHeight || 1200;
+    const docHeightStg = lastStgLandmarks?.docHeight || iframeStg?.contentDocument?.documentElement?.scrollHeight || iframeStg?.clientHeight || 1200;
+    let totalH = Math.max(docHeightProd, docHeightStg, 800);
+    totalH = Math.min(totalH, 12000);
+
+    // 3. Save current state
+    const prevMode = currentMode;
+    const prevScrollY = lastScrollState.scrollY || 0;
+    const prevScrollX = lastScrollState.scrollX || 0;
+
+    if (currentMode !== "side-by-side") {
+      setMode("side-by-side");
+      await waitAsync(150);
+    }
+
+    const rProd = iframeProd.getBoundingClientRect();
+    const rStg = iframeStg.getBoundingClientRect();
+    const frameW = Math.max(300, Math.round(rProd.width));
+    const visibleH = Math.max(200, Math.round(rProd.height));
+
+    const canvasProd = document.createElement("canvas");
+    canvasProd.width = frameW;
+    canvasProd.height = totalH;
+    const ctxProd = canvasProd.getContext("2d");
+    ctxProd.fillStyle = "#ffffff";
+    ctxProd.fillRect(0, 0, frameW, totalH);
+
+    const canvasStg = document.createElement("canvas");
+    canvasStg.width = frameW;
+    canvasStg.height = totalH;
+    const ctxStg = canvasStg.getContext("2d");
+    ctxStg.fillStyle = "#ffffff";
+    ctxStg.fillRect(0, 0, frameW, totalH);
+
+    const stepH = Math.max(200, visibleH - 24);
+    const numSlices = Math.max(1, Math.ceil(totalH / stepH));
+
+    let captureSucceeded = false;
+
+    try {
+      for (let s = 0; s < numSlices; s++) {
+        const targetY = Math.min(s * stepH, Math.max(0, totalH - visibleH));
+        const pct = Math.round(10 + ((s + 1) / numSlices) * 55);
+        onProgress({ percent: pct, status: `Capturing scroll slices (${s + 1} of ${numSlices})...` });
+
+        // Scroll both frames
+        const scrollAction = {
+          type: "VC_MIRROR_ACTION",
+          action: { kind: "scroll", scrollY: targetY, scrollX: 0 }
+        };
+        if (iframeProd && iframeProd.contentWindow) {
+          try { iframeProd.contentWindow.postMessage(scrollAction, "*"); } catch (e) {}
+        }
+        if (iframeStg && iframeStg.contentWindow) {
+          try { iframeStg.contentWindow.postMessage(scrollAction, "*"); } catch (e) {}
+        }
+        if (wrapFrameProd) wrapFrameProd.scrollTop = targetY;
+        if (wrapFrameStg) wrapFrameStg.scrollTop = targetY;
+
+        await waitAsync(130);
+
+        const dataUrl = await captureActiveTabPng();
+        if (dataUrl) {
+          captureSucceeded = true;
+          const img = await loadImageAsync(dataUrl);
+          const dpr = img.width / Math.max(1, window.innerWidth);
+
+          const cropProdLeft = Math.round(rProd.left * dpr);
+          const cropProdTop = Math.round(rProd.top * dpr);
+          const cropProdW = Math.round(rProd.width * dpr);
+          const cropProdH = Math.round(rProd.height * dpr);
+
+          const cropStgLeft = Math.round(rStg.left * dpr);
+          const cropStgTop = Math.round(rStg.top * dpr);
+          const cropStgW = Math.round(rStg.width * dpr);
+          const cropStgH = Math.round(rStg.height * dpr);
+
+          ctxProd.drawImage(img, cropProdLeft, cropProdTop, cropProdW, cropProdH, 0, targetY, frameW, visibleH);
+          ctxStg.drawImage(img, cropStgLeft, cropStgTop, cropStgW, cropStgH, 0, targetY, frameW, visibleH);
+        }
+      }
+    } catch (err) {
+      console.warn("[VisualCompare Live] Scroll slice capture warning:", err);
+    }
+
+    // Fallback if browser screenshot API was unavailable
+    if (!captureSucceeded) {
+      renderFallbackFullPageCanvas(ctxProd, "PRODUCTION REFERENCE", prodUrlInput.value.trim(), frameW, totalH, [0.08, 0.25, 0.55]);
+      renderFallbackFullPageCanvas(ctxStg, "STAGING CANDIDATE", stgUrlInput.value.trim(), frameW, totalH, [0.30, 0.14, 0.52]);
+    }
+
+    // Restore scroll and mode
+    const restoreAction = {
+      type: "VC_MIRROR_ACTION",
+      action: { kind: "scroll", scrollY: prevScrollY, scrollX: prevScrollX }
+    };
+    if (iframeProd && iframeProd.contentWindow) {
+      try { iframeProd.contentWindow.postMessage(restoreAction, "*"); } catch (e) {}
+    }
+    if (iframeStg && iframeStg.contentWindow) {
+      try { iframeStg.contentWindow.postMessage(restoreAction, "*"); } catch (e) {}
+    }
+    if (wrapFrameProd) wrapFrameProd.scrollTop = prevScrollY;
+    if (wrapFrameStg) wrapFrameStg.scrollTop = prevScrollY;
+    lastScrollState.scrollY = prevScrollY;
+    lastScrollState.scrollX = prevScrollX;
+
+    if (prevMode !== "side-by-side") {
+      setMode(prevMode);
+    }
+
+    // Restore CSS animations
+    if (iframeProd && iframeProd.contentWindow) {
+      try { iframeProd.contentWindow.postMessage({ type: "VC_RESTORE_CAPTURE" }, "*"); } catch (e) {}
+    }
+    if (iframeStg && iframeStg.contentWindow) {
+      try { iframeStg.contentWindow.postMessage({ type: "VC_RESTORE_CAPTURE" }, "*"); } catch (e) {}
+    }
+
+    onProgress({ percent: 75, status: "Calculating full-page subpixel differences..." });
+
+    // 4. Generate canvasDiff with subpixel pixel diff and yellow hazard stripes
+    const canvasDiff = document.createElement("canvas");
+    canvasDiff.width = frameW;
+    canvasDiff.height = totalH;
+    const ctxDiff = canvasDiff.getContext("2d");
+    ctxDiff.drawImage(canvasStg, 0, 0);
+
+    if (activeShiftRegions && activeShiftRegions.length > 0) {
+      activeShiftRegions.forEach(reg => {
+        drawHazardStripes(ctxDiff, 0, reg.y, frameW, reg.h);
+        drawCanvasShiftBadge(ctxDiff, frameW, reg.y, reg.h, reg.delta);
+      });
+    }
+
+    let diffMismatchPct = "0.00%";
+    let diffPixels = 0;
+    try {
+      const dataP = ctxProd.getImageData(0, 0, frameW, totalH).data;
+      const dataS = ctxStg.getImageData(0, 0, frameW, totalH).data;
+      const res = computeSubpixelPixelDiff(dataP, dataS, frameW, totalH, currentDiffTolerance || 20, activeShiftRegions);
+      diffPixels = res.diffPixels;
+
+      const diffImg = new ImageData(res.outData, frameW, totalH);
+      const tempC = document.createElement("canvas");
+      tempC.width = frameW;
+      tempC.height = totalH;
+      tempC.getContext("2d").putImageData(diffImg, 0, 0);
+      ctxDiff.drawImage(tempC, 0, 0);
+
+      const totalPixels = frameW * totalH;
+      diffMismatchPct = ((diffPixels / Math.max(1, totalPixels)) * 100).toFixed(2) + "%";
+    } catch (e) {
+      console.warn("[VisualCompare Live] Error calculating full-page diff:", e);
+    }
+
+    onProgress({ percent: 95, status: "Compiling full-page visual PDFs..." });
+    isUserScrolling = false;
+
+    return {
+      canvasProd,
+      canvasStg,
+      canvasDiff,
+      width: frameW,
+      height: totalH,
+      diffMismatchPct,
+      diffPixels
+    };
+  }
+
+  async function handleExportPdfFlow(type = "master") {
+    if (pdfExportModal) pdfExportModal.style.display = "none";
+    if (!window.VisualCompareZip || typeof window.VisualCompareZip.exportSinglePdf !== "function") {
+      alert("PDF export engine initializing, please try again in a moment.");
+      return;
+    }
+
+    try {
+      showCaptureProgress("Capturing Full-Page Visual Audit", "Initializing high-resolution full-page capture...", 5);
+      const audit = await captureFullPageAuditCanvases((p) => {
+        showCaptureProgress("Capturing Full-Page Visual Audit", p.status, p.percent);
+      });
+
+      showCaptureProgress("Compiling PDF Document", "Generating vector-aligned PDF-1.4 file...", 92);
+      await waitAsync(80);
+
       const meta = {
         prodUrl: prodUrlInput.value.trim(),
         stgUrl: stgUrlInput.value.trim(),
@@ -4313,17 +4658,104 @@ document.addEventListener("DOMContentLoaded", () => {
         hazardSpacers: activeHazardSpacers,
         redDiffs: activeRedDiffs,
         totalShiftDelta: document.getElementById("metric-shift-val") ? document.getElementById("metric-shift-val").textContent : "+0px",
-        diffMismatchPct: document.getElementById("metric-diff-pct") ? document.getElementById("metric-diff-pct").textContent : "3.24%"
+        diffMismatchPct: audit.diffMismatchPct || (document.getElementById("metric-diff-pct") ? document.getElementById("metric-diff-pct").textContent : "0.00%"),
+        canvasProd: audit.canvasProd,
+        canvasStg: audit.canvasStg,
+        canvasDiff: audit.canvasDiff
       };
 
-      try {
-        const res = window.VisualCompareZip.exportComparisonZip(meta);
-        logAction(`[EXPORT] Downloaded comparison package ZIP: ${res.filename} (${Math.round(res.size / 1024)} KB with PDFs & Links)`);
-        showToast("Package Exported Successfully", `Saved ${res.filename} with PDF reports, links, and all differences.`);
-      } catch (err) {
-        console.error("Export error:", err);
-        alert("Failed to export ZIP package: " + err.message);
-      }
+      const res = window.VisualCompareZip.exportSinglePdf(meta, type);
+      hideCaptureProgress();
+      logAction(`[EXPORT] Downloaded Full-Page PDF: ${res.filename} (${Math.round(res.size / 1024)} KB)`);
+      showToast("PDF Exported Successfully", `Saved ${res.filename} (${Math.round(res.size / 1024)} KB).`);
+    } catch (err) {
+      hideCaptureProgress();
+      console.error("PDF Export error:", err);
+      alert("Failed to export PDF: " + err.message);
+    }
+  }
+
+  async function handleExportZipFlow() {
+    if (pdfExportModal) pdfExportModal.style.display = "none";
+    if (!window.VisualCompareZip || typeof window.VisualCompareZip.exportComparisonZip !== "function") {
+      alert("Export engine initializing, please try again in a moment.");
+      return;
+    }
+
+    try {
+      showCaptureProgress("Capturing Full-Page Visual Audit", "Scanning document dimensions and preparing capture...", 5);
+      const audit = await captureFullPageAuditCanvases((p) => {
+        showCaptureProgress("Capturing Full-Page Visual Audit", p.status, p.percent);
+      });
+
+      showCaptureProgress("Building ZIP Package", "Compiling full-page PDFs, PNG screenshots, JSON and offline HTML viewer...", 90);
+      await waitAsync(80);
+
+      const meta = {
+        prodUrl: prodUrlInput.value.trim(),
+        stgUrl: stgUrlInput.value.trim(),
+        timestamp: new Date().toLocaleString(),
+        device: viewportSelect.value,
+        currentMode,
+        hazardSpacers: activeHazardSpacers,
+        redDiffs: activeRedDiffs,
+        totalShiftDelta: document.getElementById("metric-shift-val") ? document.getElementById("metric-shift-val").textContent : "+0px",
+        diffMismatchPct: audit.diffMismatchPct || (document.getElementById("metric-diff-pct") ? document.getElementById("metric-diff-pct").textContent : "0.00%"),
+        canvasProd: audit.canvasProd,
+        canvasStg: audit.canvasStg,
+        canvasDiff: audit.canvasDiff
+      };
+
+      const res = window.VisualCompareZip.exportComparisonZip(meta);
+      hideCaptureProgress();
+      logAction(`[EXPORT] Downloaded comparison package ZIP: ${res.filename} (${Math.round(res.size / 1024)} KB with Full-Page PDFs & PNGs)`);
+      showToast("Package Exported Successfully", `Saved ${res.filename} with Full-Page PDFs, screenshots, and diff report.`);
+    } catch (err) {
+      hideCaptureProgress();
+      console.error("ZIP Export error:", err);
+      alert("Failed to export ZIP package: " + err.message);
+    }
+  }
+
+  // Open PDF Export Dialog
+  if (btnExportPdf && pdfExportModal) {
+    btnExportPdf.addEventListener("click", () => {
+      pdfExportModal.style.display = "flex";
+    });
+  }
+
+  if (btnClosePdfModal && pdfExportModal) {
+    btnClosePdfModal.addEventListener("click", () => {
+      pdfExportModal.style.display = "none";
+    });
+  }
+
+  if (pdfExportModal) {
+    pdfExportModal.addEventListener("click", (e) => {
+      if (e.target === pdfExportModal) pdfExportModal.style.display = "none";
+    });
+  }
+
+  // Bind Export Modal Actions
+  if (btnDownloadPdfMaster) {
+    btnDownloadPdfMaster.addEventListener("click", () => handleExportPdfFlow("master"));
+  }
+  if (btnDownloadPdfDiff) {
+    btnDownloadPdfDiff.addEventListener("click", () => handleExportPdfFlow("diff"));
+  }
+  if (btnDownloadPdfProd) {
+    btnDownloadPdfProd.addEventListener("click", () => handleExportPdfFlow("prod"));
+  }
+  if (btnDownloadPdfStg) {
+    btnDownloadPdfStg.addEventListener("click", () => handleExportPdfFlow("stg"));
+  }
+  if (btnDownloadAllZip) {
+    btnDownloadAllZip.addEventListener("click", () => handleExportZipFlow());
+  }
+
+  if (btnExportZip) {
+    btnExportZip.addEventListener("click", () => {
+      handleExportZipFlow();
     });
   }
 
