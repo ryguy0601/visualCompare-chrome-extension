@@ -5,14 +5,14 @@ const path = require("path");
 
 console.log("TEST: Validating Page Loading, Syntax Integrity & TDZ-Free Frame Initialization...");
 
-const studioJs = fs.readFileSync(path.join(__dirname, "../studio.js"), "utf8");
+const studioJs = require("./helpers").readStudioJs();
 const syncAgentJs = fs.readFileSync(path.join(__dirname, "../sync_agent.js"), "utf8");
 
 // 1. Verify that activeShiftRegions is declared BEFORE loadAllFrames/clearAllHazardSpacers runs (no TDZ error)
 const declIndex = studioJs.indexOf("let activeShiftRegions = [];");
-const loadCallIndex = studioJs.indexOf("loadAllFrames(initialProd, initialStg);");
+const loadCallIndex = studioJs.indexOf("navigateWithAccess(initialProd, initialStg);");
 assert(declIndex !== -1, "studio.js must declare activeShiftRegions at top level");
-assert(loadCallIndex !== -1, "studio.js must call loadAllFrames on initialization");
+assert(loadCallIndex !== -1, "studio.js must start the first load (navigateWithAccess, which calls loadAllFrames) on initialization");
 assert(declIndex < loadCallIndex, "activeShiftRegions must be declared BEFORE loadAllFrames is called to prevent Temporal Dead Zone ReferenceError!");
 console.log("PASS 1: activeShiftRegions is initialized before initial loadAllFrames call.");
 

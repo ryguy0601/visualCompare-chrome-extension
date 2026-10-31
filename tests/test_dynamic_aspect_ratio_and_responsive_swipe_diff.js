@@ -3,7 +3,7 @@ const assert = require('assert');
 
 console.log("TEST: Comprehensive Verification of Dynamic Aspect Ratio & Responsive Swipe Diff...");
 
-const studioJs = fs.readFileSync('studio.js', 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 const syncAgentJs = fs.readFileSync('sync_agent.js', 'utf8');
 
 // 1. Verify State Isolation: Independent candidate & diff storage per mode

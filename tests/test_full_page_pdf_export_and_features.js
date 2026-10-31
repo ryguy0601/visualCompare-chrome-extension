@@ -9,7 +9,7 @@ console.log("TESTING FULL-PAGE PDF EXPORT, SCREENSHOTS & EXTENSION ENHANCEMENTS"
 console.log("=================================================================\n");
 
 const baseDir = path.join(__dirname, "..");
-const studioJs = fs.readFileSync(path.join(baseDir, "studio.js"), "utf8");
+const studioJs = require("./helpers").readStudioJs();
 const studioHtml = fs.readFileSync(path.join(baseDir, "studio.html"), "utf8");
 const syncAgentJs = fs.readFileSync(path.join(baseDir, "sync_agent.js"), "utf8");
 

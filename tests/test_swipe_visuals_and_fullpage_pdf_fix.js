@@ -7,7 +7,7 @@ console.log("TESTING SWIPE DIFFERENCE & OFFSET VISUALS + FULL-WIDTH PDF FIX");
 console.log("=================================================================");
 
 // Read codebase files
-const studioJs = fs.readFileSync("studio.js", "utf8");
+const studioJs = require("./helpers").readStudioJs();
 const zipExporterJs = fs.readFileSync("zip_exporter.js", "utf8");
 const studioHtml = fs.readFileSync("studio.html", "utf8");
 

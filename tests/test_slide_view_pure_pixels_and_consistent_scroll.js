@@ -3,7 +3,7 @@ const assert = require('assert');
 
 console.log("TEST: Validating Pure Differing Pixels (Zero Red Boxes) & Consistent Scroll Synchronization...");
 
-const studioJs = fs.readFileSync('studio.js', 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 const syncAgentJs = fs.readFileSync('sync_agent.js', 'utf8');
 
 // 1. Verify renderSwipeDiffCanvas diff display matches 3rd column architecture

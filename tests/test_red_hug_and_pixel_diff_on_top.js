@@ -5,7 +5,7 @@ const path = require('path');
 console.log("TEST: Validating Red Hug on Differing Tags & Pixel Differences on Top of Site...");
 
 const syncAgentJs = fs.readFileSync(path.join(__dirname, '../sync_agent.js'), 'utf8');
-const studioJs = fs.readFileSync(path.join(__dirname, '../studio.js'), 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 
 // 1. Verify sync_agent.js defines clean translucent red hug with zero outlines and zero box-shadow
 assert(syncAgentJs.includes('.vc-red-diff-hug {'), "sync_agent.js must define .vc-red-diff-hug");

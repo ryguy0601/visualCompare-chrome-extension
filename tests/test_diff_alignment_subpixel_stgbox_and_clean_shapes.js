@@ -3,7 +3,7 @@ const assert = require('assert');
 
 console.log("TEST: Validating Subpixel Diff Alignment, StgBox Anchoring, and Clean Outline-Free Shapes...");
 
-const studioJs = fs.readFileSync('studio.js', 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 const syncAgentJs = fs.readFileSync('sync_agent.js', 'utf8');
 
 // 1. Verify Staging coordinates (stgBox) are preserved and anchored in VC_RED_DIFFS_APPLIED

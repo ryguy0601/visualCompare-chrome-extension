@@ -59,14 +59,15 @@
     } else if (data.type === "VC_MIRROR_ACTION") {
       handleMirroredAction(data.action);
     } else if (data.type === "VC_REQUEST_LANDMARKS") {
-      removeHazardSpacers();
       requestAnimationFrame(() => {
         sendLandmarksReport(true);
       });
     } else if (data.type === "VC_APPLY_HAZARD_SPACER") {
       applyHazardSpacer(data);
     } else if (data.type === "VC_REMOVE_HAZARD_SPACERS") {
-      removeHazardSpacers();
+      removeHazardSpacers(data.keepIds);
+    } else if (data.type === "VC_SET_MIN_DOC_HEIGHT") {
+      applyMinDocHeight(data.minDocHeight);
     } else if (data.type === "VC_APPLY_RED_DIFFS") {
       applyRedDiffs(data.diffs);
     } else if (data.type === "VC_REMOVE_RED_DIFFS") {
@@ -132,8 +133,25 @@
           width: 0px !important;
           height: 0px !important;
         }
+        .vc-hazard-stripe-spacer, #vc-ghost-cursor, #vc-scroll-end-pad {
+          display: none !important;
+        }
+        .vc-red-diff-hug {
+          outline: none !important;
+          box-shadow: none !important;
+          background-color: transparent !important;
+        }
       `;
       (document.head || document.documentElement).appendChild(captureFreezeStyle);
+    }
+
+    if (document.documentElement && document.documentElement.style.minHeight) {
+      document.documentElement.dataset.vcOrigMinH = document.documentElement.style.minHeight;
+      document.documentElement.style.minHeight = "";
+    }
+    if (document.body && document.body.style.minHeight) {
+      document.body.dataset.vcOrigMinH = document.body.style.minHeight;
+      document.body.style.minHeight = "";
     }
 
     // 2. PAUSE_CAROUSELS_JS matching Python visualCompare browser.py
@@ -190,23 +208,113 @@
     if (document.documentElement) document.documentElement.scrollTop = 0;
     if (document.body) document.body.scrollTop = 0;
 
-    // 7. Measure exact stable document height and report back
+    // 7. Measure exact stable document height and report back (including visual DOM snapshot for clean GoFullPage export)
     const docH = Math.max(
       document.body ? document.body.scrollHeight : 0,
       document.documentElement ? document.documentElement.scrollHeight : 0,
       document.body ? document.body.offsetHeight : 0,
       document.documentElement ? document.documentElement.offsetHeight : 0
     );
+    const docW = Math.max(
+      document.body ? document.body.scrollWidth : 0,
+      document.documentElement ? document.documentElement.scrollWidth : 0
+    );
+
+    let bodyBg = "#ffffff";
+    let bodyBgImage = "";
+    const visualNodes = [];
+    try {
+      const htmlStyle = document.documentElement ? window.getComputedStyle(document.documentElement) : null;
+      const bodyStyle = document.body ? window.getComputedStyle(document.body) : null;
+      const bBg = bodyStyle?.backgroundColor;
+      const hBg = htmlStyle?.backgroundColor;
+      if (bBg && bBg !== "rgba(0, 0, 0, 0)" && bBg !== "transparent") bodyBg = bBg;
+      else if (hBg && hBg !== "rgba(0, 0, 0, 0)" && hBg !== "transparent") bodyBg = hBg;
+      const bImg = bodyStyle?.backgroundImage;
+      const hImg = htmlStyle?.backgroundImage;
+      if (bImg && bImg !== "none") bodyBgImage = bImg;
+      else if (hImg && hImg !== "none") bodyBgImage = hImg;
+
+      const allEls = document.body ? document.body.querySelectorAll("*") : [];
+      for (let i = 0; i < allEls.length && visualNodes.length < 600; i++) {
+        const el = allEls[i];
+        if (!el || el.classList?.contains("vc-hazard-stripe-spacer") || el.id === "vc-ghost-cursor") continue;
+        const tag = (el.tagName || "").toLowerCase();
+        if (tag === "script" || tag === "style" || tag === "link" || tag === "meta" || tag === "noscript") continue;
+        const cs = window.getComputedStyle(el);
+        if (!cs || cs.display === "none" || cs.visibility === "hidden" || parseFloat(cs.opacity) === 0) continue;
+        const r = el.getBoundingClientRect();
+        if (!r || r.width <= 0 || r.height <= 0) continue;
+
+        let directText = "";
+        for (let c = 0; c < el.childNodes.length; c++) {
+          const cn = el.childNodes[c];
+          if (cn.nodeType === 3 && cn.nodeValue) {
+            directText += cn.nodeValue;
+          }
+        }
+        directText = directText.replace(/\s+/g, " ").trim();
+        if (!directText && (tag === "input" || tag === "textarea")) {
+          directText = (el.value || el.getAttribute("placeholder") || "").trim();
+        }
+
+        const bg = el.dataset?.vcOriginalBg || cs.backgroundColor || "";
+        const bgImage = cs.backgroundImage && cs.backgroundImage !== "none" ? cs.backgroundImage : "";
+        const hasBg = (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") || Boolean(bgImage);
+        const bTopW = parseFloat(cs.borderTopWidth) || 0;
+        const bRightW = parseFloat(cs.borderRightWidth) || 0;
+        const bBottomW = parseFloat(cs.borderBottomWidth) || 0;
+        const bLeftW = parseFloat(cs.borderLeftWidth) || 0;
+        const hasBorder = (bTopW > 0 || bRightW > 0 || bBottomW > 0 || bLeftW > 0);
+        const isImg = tag === "img";
+
+        if (!hasBg && !hasBorder && !directText && !isImg) continue;
+
+        visualNodes.push({
+          tag,
+          x: Math.round(r.left + (window.scrollX || 0)),
+          y: Math.round(r.top + (window.scrollY || 0)),
+          width: Math.round(r.width),
+          height: Math.round(r.height),
+          text: directText,
+          imgSrc: isImg ? (el.currentSrc || el.src || "") : "",
+          style: {
+            bg: hasBg ? bg : "",
+            bgImage,
+            backgroundClip: cs.webkitBackgroundClip || cs.backgroundClip || "",
+            color: cs.color || "#000000",
+            borderColor: cs.borderTopColor || cs.borderColor || "",
+            borderBottomColor: cs.borderBottomColor || "",
+            borderWidth: Math.max(bTopW, bLeftW),
+            borderBottomWidth: bBottomW,
+            radius: parseFloat(cs.borderRadius) || 0,
+            fontSize: cs.fontSize || "14px",
+            fontWeight: cs.fontWeight || "400",
+            fontFamily: cs.fontFamily || "sans-serif",
+            fontStyle: cs.fontStyle || "normal",
+            lineHeight: cs.lineHeight || "",
+            textAlign: cs.textAlign || "left",
+            justifyContent: cs.justifyContent || "",
+            alignItems: cs.alignItems || "",
+            display: cs.display || "",
+            paddingLeft: parseFloat(cs.paddingLeft) || 0,
+            paddingRight: parseFloat(cs.paddingRight) || 0,
+            paddingTop: parseFloat(cs.paddingTop) || 0,
+            paddingBottom: parseFloat(cs.paddingBottom) || 0
+          }
+        });
+      }
+    } catch (e) {}
 
     if (window.parent && isFramed) {
       window.parent.postMessage({
         type: "VC_CAPTURE_READY",
         paneId,
         docHeight: docH,
-        docWidth: Math.max(
-          document.body ? document.body.scrollWidth : 0,
-          document.documentElement ? document.documentElement.scrollWidth : 0
-        )
+        docWidth: docW,
+        bodyBg,
+        bodyBgImage,
+        visualNodes
       }, "*");
     }
   }
@@ -216,6 +324,14 @@
     if (captureFreezeStyle) {
       captureFreezeStyle.remove();
       captureFreezeStyle = null;
+    }
+    if (document.documentElement && document.documentElement.dataset.vcOrigMinH !== undefined) {
+      document.documentElement.style.minHeight = document.documentElement.dataset.vcOrigMinH;
+      delete document.documentElement.dataset.vcOrigMinH;
+    }
+    if (document.body && document.body.dataset.vcOrigMinH !== undefined) {
+      document.body.style.minHeight = document.body.dataset.vcOrigMinH;
+      delete document.body.dataset.vcOrigMinH;
     }
     // Restore hidden floating trays
     document.querySelectorAll("[data-vc-orig-disp]").forEach(el => {
@@ -766,30 +882,43 @@
       }
     }, { passive: true });
 
-    // 3b. SYNCHRONIZED WHEEL SCROLLING (Instant smooth lockstep scroll across all panes)
+    // 3b. SYNCHRONIZED WHEEL SCROLLING (Instant smooth lockstep scroll & Ctrl+Wheel column zoom)
     window.addEventListener("wheel", (e) => {
       if (window.parent) {
         window.parent.postMessage({
           type: "VC_WHEEL_SCROLL",
           paneId,
           deltaY: e.deltaY,
-          deltaX: e.deltaX
+          deltaX: e.deltaX,
+          ctrlKey: Boolean(e.ctrlKey),
+          metaKey: Boolean(e.metaKey),
+          altKey: Boolean(e.altKey),
+          shiftKey: Boolean(e.shiftKey)
         }, "*");
       }
     }, { passive: true });
 
-    // 3c. DYNAMIC SCROLL DIFF CANDIDATE REFRESH (Refreshes candidates as user scrolls into new sections)
+    // 3c. DYNAMIC SCROLL DIFF CANDIDATE REFRESH (Streams & refreshes candidates continuously as user scrolls)
     let lastCandidateScrollY = 0;
+    let lastCandidateReportTime = 0;
     let candidateScrollDebounce = null;
     window.addEventListener("scroll", () => {
+      const sy = window.scrollY || window.pageYOffset || 0;
+      const now = Date.now();
+      if (Math.abs(sy - lastCandidateScrollY) >= 60 && (now - lastCandidateReportTime) >= 110) {
+        lastCandidateScrollY = sy;
+        lastCandidateReportTime = now;
+        sendDiffCandidatesReport();
+      }
       clearTimeout(candidateScrollDebounce);
       candidateScrollDebounce = setTimeout(() => {
-        const sy = window.scrollY || window.pageYOffset || 0;
-        if (Math.abs(sy - lastCandidateScrollY) > 250) {
-          lastCandidateScrollY = sy;
+        const finalSy = window.scrollY || window.pageYOffset || 0;
+        if (Math.abs(finalSy - lastCandidateScrollY) > 10) {
+          lastCandidateScrollY = finalSy;
+          lastCandidateReportTime = Date.now();
           sendDiffCandidatesReport();
         }
-      }, 150);
+      }, 115);
     }, { passive: true });
 
     // 4. FORM INPUT TRACKING
@@ -1079,7 +1208,7 @@
         let targetY;
         if (action.scrollY === 0) {
           targetY = 0;
-        } else if (action.pctY !== undefined && action.maxScrollY !== undefined && Math.abs(maxScrollY - action.maxScrollY) > 30) {
+        } else if (action.useProportionalScroll && action.pctY !== undefined && action.maxScrollY !== undefined && Math.abs(maxScrollY - action.maxScrollY) > 30) {
           targetY = Math.min(maxScrollY, Math.max(0, Math.round(action.pctY * maxScrollY)));
         } else {
           targetY = (action.scrollY !== undefined) ? Math.min(maxScrollY, Math.max(0, action.scrollY)) : Math.round((action.pctY || 0) * maxScrollY);
@@ -1200,6 +1329,14 @@
     const docWidth = Math.max(document.documentElement.scrollWidth, document.body ? document.body.scrollWidth : 0);
     const docHeight = Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0);
 
+    // Measure any mounted hazard spacers so raw unshifted coordinates are computed without DOM teardown
+    const spacerRects = Array.from(document.querySelectorAll('.vc-hazard-stripe-spacer')).map(sp => {
+      const sr = sp.getBoundingClientRect();
+      return { el: sp, y: sr.top + scrollY, h: sr.height || sp.offsetHeight || 0 };
+    }).filter(s => s.h > 0);
+    const totalSpacerH = spacerRects.reduce((sum, s) => sum + s.h, 0);
+    const rawDocHeight = Math.max(0, docHeight - totalSpacerH);
+
     const candidates = [];
     document.querySelectorAll(LANDMARK_SELECTORS).forEach(el => {
       if (!(el instanceof HTMLElement)) return;
@@ -1287,12 +1424,23 @@
       else if (snippet && snippet.length >= 20) key = `SNIP::${tag}::${snippet.toLowerCase()}`;
       else key = `TAG::${tag}::`;
 
+      const rawTop = rect.top + scrollY;
+      let precedingSpacerH = 0;
+      let nestedSpacerH = 0;
+      for (const sp of spacerRects) {
+        if (el.contains(sp.el)) {
+          nestedSpacerH += sp.h;
+        } else if (sp.y <= rawTop + 2) {
+          precedingSpacerH += sp.h;
+        }
+      }
+
       return {
         box: {
           x: Math.round(rect.left + scrollX),
-          y: Math.round(rect.top + scrollY),
+          y: Math.max(0, Math.round(rawTop - precedingSpacerH)),
           width: Math.round(rect.width),
-          height: Math.round(rect.height)
+          height: Math.max(1, Math.round(rect.height - nestedSpacerH))
         },
         key,
         heading: i.heading,
@@ -1302,7 +1450,7 @@
       };
     });
 
-    return { landmarks, docHeight, docWidth };
+    return { landmarks, docHeight: rawDocHeight || docHeight, docWidth };
   }
 
   function sendLandmarksReport(force = false) {
@@ -1427,7 +1575,12 @@
                                  el.classList.contains('hero-section') || 
                                  el.classList.contains('cta-section');
         const isBroadWrapper = el.children.length > 0 && (rect.width > 250 && rect.height > 80);
-        if (isContainerTag || isContainerClass || isBroadWrapper) {
+        const hasDistinctFillOrBorder = (style.backgroundColor && style.backgroundColor !== 'rgba(0, 0, 0, 0)' && style.backgroundColor !== 'transparent') ||
+                                        (style.backgroundImage && style.backgroundImage !== 'none') ||
+                                        (parseFloat(style.borderTopWidth) > 0 && style.borderTopColor !== 'rgba(0, 0, 0, 0)') ||
+                                        (parseFloat(style.borderLeftWidth) > 0 && style.borderLeftColor !== 'rgba(0, 0, 0, 0)');
+        const isUnstyledBroadWrapper = isBroadWrapper && (!hasDistinctFillOrBorder || rect.width > 950 || rect.height > 600);
+        if (isContainerTag || isContainerClass || isUnstyledBroadWrapper) {
           return;
         }
 
@@ -1477,6 +1630,7 @@
           title: titleAttr,
           isFixed,
           isSticky,
+          isContainer: isBroadWrapper,
           inViewport: (isFixed || isSticky || inViewport),
           box: {
             x: Math.round(rect.left + (isSticky ? 0 : scrollX)),
@@ -1490,7 +1644,14 @@
           style: {
             bg: origBg,
             bgImage: style.backgroundImage,
+            backgroundClip: style.webkitBackgroundClip || style.backgroundClip || "",
             color: style.color,
+            textFillColor: style.webkitTextFillColor || "",
+            textDecorationColor: style.textDecorationColor || "",
+            outlineColor: style.outlineColor || "",
+            outlineWidth: style.outlineWidth || "",
+            fill: style.fill || el.getAttribute("fill") || "",
+            stroke: style.stroke || el.getAttribute("stroke") || "",
             radius: style.borderRadius,
             border: style.borderColor,
             borderColor: style.borderColor,
@@ -1572,6 +1733,12 @@
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
         white-space: nowrap !important;
         user-select: none !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        transition: opacity 0.15s ease !important;
+      }
+      .vc-hazard-stripe-spacer:hover .vc-hazard-badge {
+        opacity: 1 !important;
         pointer-events: auto !important;
       }
       .vc-hazard-icon {
@@ -1655,6 +1822,7 @@
 
     let spacer = document.querySelector(`.vc-hazard-stripe-spacer[data-spacer-id="${spacerId}"]`);
     if (spacer) {
+      spacer.title = `Layout shift: +${height}px (${counterpart || "Counterpart"} section is larger)`;
       spacer.style.setProperty("height", `${height}px`, "important");
       spacer.style.setProperty("min-height", `${height}px`, "important");
       spacer.style.setProperty("max-height", `${height}px`, "important");
@@ -1675,6 +1843,7 @@
     spacer = document.createElement("div");
     spacer.className = "vc-hazard-stripe-spacer";
     spacer.dataset.spacerId = spacerId;
+    spacer.title = `Layout shift: +${height}px (${counterpart || "Counterpart"} section is larger)`;
     spacer.style.setProperty("height", `${height}px`, "important");
     spacer.style.setProperty("min-height", `${height}px`, "important");
     spacer.style.setProperty("max-height", `${height}px`, "important");
@@ -1713,8 +1882,27 @@
     }
   }
 
-  function removeHazardSpacers() {
-    document.querySelectorAll(".vc-hazard-stripe-spacer").forEach(el => el.remove());
+  function removeHazardSpacers(keepIds = null) {
+    const keepSet = Array.isArray(keepIds) ? new Set(keepIds) : null;
+    document.querySelectorAll(".vc-hazard-stripe-spacer").forEach(el => {
+      if (keepSet && el.dataset && keepSet.has(el.dataset.spacerId)) return;
+      el.remove();
+    });
+  }
+
+  function applyMinDocHeight(minDocHeight) {
+    if (!document.body) return;
+    if (!minDocHeight || minDocHeight <= 0) {
+      document.body.style.removeProperty("min-height");
+      if (document.documentElement) document.documentElement.style.removeProperty("min-height");
+    } else {
+      const hPx = `${Math.round(minDocHeight)}px`;
+      document.body.style.minHeight = hPx;
+      if (document.documentElement) document.documentElement.style.minHeight = hPx;
+    }
+    if (lastContentDimensions) {
+      lastContentDimensions = getRawContentDimensions();
+    }
   }
 
   // ----------------------------------------------------
@@ -1732,14 +1920,14 @@
       .vc-red-diff-hug {
         outline: none !important;
         box-shadow: none !important;
-        background-color: rgba(239, 68, 68, 0.28) !important;
+        background-color: rgba(239, 68, 68, 0) !important;
         border-radius: inherit !important;
       }
       .vc-red-diff-hug::after {
         content: "" !important;
         position: absolute !important;
         inset: 0 !important;
-        background-color: rgba(239, 68, 68, 0.18) !important;
+        background-color: rgba(239, 68, 68, 0) !important;
         border-radius: inherit !important;
         pointer-events: none !important;
         z-index: 1000 !important;

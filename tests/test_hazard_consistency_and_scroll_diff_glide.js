@@ -7,7 +7,7 @@ console.log("=================================================================")
 console.log("TESTING HAZARD CONSISTENCY & DIFF SCROLL GLIDE PARITY");
 console.log("=================================================================\n");
 
-const studioJs = fs.readFileSync(path.join(__dirname, "../studio.js"), "utf8");
+const studioJs = require("./helpers").readStudioJs();
 const syncAgentJs = fs.readFileSync(path.join(__dirname, "../sync_agent.js"), "utf8");
 
 // 1. Verify Hazard Spacer Consistency

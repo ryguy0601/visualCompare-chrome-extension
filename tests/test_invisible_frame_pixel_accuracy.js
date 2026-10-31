@@ -4,7 +4,7 @@ const assert = require('assert');
 console.log("TEST: Validating Clean Production Baseline & Staging Diff Architecture...");
 
 // 1. Check studio.js for clean live Production frame rendering
-const studioJs = fs.readFileSync('studio.js', 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 
 assert(studioJs.includes('iframeSwipeProd.style.display = "block"'), "iframeSwipeProd should stay rendered as display: block");
 assert(studioJs.includes('iframeSwipeProd.style.opacity = "1"'), "iframeSwipeProd should be visible with opacity: 1 on Left of curtain");

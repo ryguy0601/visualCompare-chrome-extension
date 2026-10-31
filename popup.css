@@ -213,3 +213,10 @@ body {
   color: var(--text-main);
   border-color: #475569;
 }
+
+/* Site access card */
+.radio-row { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 4px 0; cursor: pointer; color: var(--text-main); }
+.radio-row em { color: #94a3b8; font-style: normal; }
+#site-access-excluded { width: 100%; box-sizing: border-box; resize: vertical; margin-top: 4px; }
+#site-access-excluded:disabled { opacity: 0.5; }
+.hint { font-size: 11px; color: #94a3b8; margin: 6px 0 0; }

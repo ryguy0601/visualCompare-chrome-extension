@@ -51,7 +51,7 @@ assert(html.includes('chip-label-full') && html.includes('chip-label-short'), "M
 console.log("PASS: HTML contains full and short label spans for buttons, mode tabs, and sync chips.");
 
 // 3. Verify studio.js assigns both spans on dynamic updates
-const js = fs.readFileSync('studio.js', 'utf8');
+const js = require("./helpers").readStudioJs();
 assert(js.includes('btn-label-full') && js.includes('btn-label-short'), "studio.js does not output responsive label spans");
 console.log("PASS: studio.js dynamic updates preserve responsive label spans.");
 

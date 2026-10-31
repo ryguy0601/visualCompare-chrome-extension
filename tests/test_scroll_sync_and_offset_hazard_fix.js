@@ -5,7 +5,7 @@ const path = require("path");
 
 console.log("TEST: Validating Scroll Sync & Offset Hazard Alignment Across The Board...");
 
-const studioJs = fs.readFileSync(path.join(__dirname, "../studio.js"), "utf8");
+const studioJs = require("./helpers").readStudioJs();
 const syncAgentJs = fs.readFileSync(path.join(__dirname, "../sync_agent.js"), "utf8");
 
 // 1. Verify that candidate reports NEVER wipe landmarks or document heights

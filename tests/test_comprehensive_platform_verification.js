@@ -11,7 +11,7 @@ console.log("STARTING COMPREHENSIVE PLATFORM-WIDE VERIFICATION AUDIT");
 console.log("=================================================================\n");
 
 const baseDir = path.join(__dirname, "..");
-const studioJs = fs.readFileSync(path.join(baseDir, "studio.js"), "utf8");
+const studioJs = require("./helpers").readStudioJs();
 const studioHtml = fs.readFileSync(path.join(baseDir, "studio.html"), "utf8");
 const studioCss = fs.readFileSync(path.join(baseDir, "studio.css"), "utf8");
 const syncAgentJs = fs.readFileSync(path.join(baseDir, "sync_agent.js"), "utf8");
@@ -20,7 +20,6 @@ const popupHtml = fs.readFileSync(path.join(baseDir, "popup.html"), "utf8");
 const backgroundJs = fs.readFileSync(path.join(baseDir, "background.js"), "utf8");
 const zipExporterJs = fs.readFileSync(path.join(baseDir, "zip_exporter.js"), "utf8");
 const manifestJson = JSON.parse(fs.readFileSync(path.join(baseDir, "manifest.json"), "utf8"));
-const rulesJson = JSON.parse(fs.readFileSync(path.join(baseDir, "rules.json"), "utf8"));
 
 // ----------------------------------------------------------------------------
 // SUITE 1: MANIFEST V3, EXTENSION PERMISSIONS & DECLARATIVE NET REQUEST RULES
@@ -28,20 +27,24 @@ const rulesJson = JSON.parse(fs.readFileSync(path.join(baseDir, "rules.json"), "
 console.log("SUITE 1: Validating Manifest V3, Permissions & Rules Configuration...");
 assert.strictEqual(manifestJson.manifest_version, 3, "Manifest must use V3");
 assert(manifestJson.permissions.includes("storage"), "Must request storage permission");
-assert(manifestJson.permissions.includes("tabs"), "Must request tabs permission");
+assert(manifestJson.permissions.includes("activeTab"), "Must request activeTab permission");
+assert(!manifestJson.permissions.includes("tabs"), "Must NOT request the broad tabs permission");
 assert(manifestJson.permissions.includes("scripting"), "Must request scripting permission");
 assert(manifestJson.permissions.includes("declarativeNetRequest"), "Must request declarativeNetRequest permission");
-assert(manifestJson.host_permissions.includes("<all_urls>"), "Must request <all_urls> host permission");
+assert(!manifestJson.host_permissions, "Must NOT request install-time host permissions");
+assert(!manifestJson.content_scripts, "Sync agent must be registered at runtime only on allowed sites");
+assert(!manifestJson.web_accessible_resources, "No web accessible resources (prevents extension fingerprinting)");
+assert(!manifestJson.declarative_net_request, "No always-on static header-stripping rules");
+assert(manifestJson.optional_host_permissions.includes("https://*/*"), "Site access must be an optional (runtime) permission");
 assert(manifestJson.background && manifestJson.background.service_worker === "background.js", "Must declare background service worker");
 assert(fs.existsSync(path.join(baseDir, manifestJson.action.default_popup)), "Popup HTML must exist");
-assert(rulesJson.length > 0, "rules.json must define at least one rule");
-const rule1 = rulesJson[0];
-assert.strictEqual(rule1.action.type, "modifyHeaders", "Rule must modify headers to bypass iframe blocking");
-const headersModified = rule1.action.responseHeaders.map(h => h.header.toLowerCase());
-assert(headersModified.includes("x-frame-options"), "Must strip X-Frame-Options");
-assert(headersModified.includes("content-security-policy"), "Must strip Content-Security-Policy");
+assert(backgroundJs.includes('type: "modifyHeaders"'), "Background must define the header-relaxing rule");
+assert(backgroundJs.includes("tabIds"), "Header rule must be limited to Studio tabs");
+assert(backgroundJs.includes('resourceTypes: ["sub_frame"]'), "Header rule must only apply to sub-frames");
+assert(backgroundJs.includes("x-frame-options"), "Must strip X-Frame-Options");
+assert(backgroundJs.includes("content-security-policy"), "Must strip Content-Security-Policy");
 console.log("  ✓ Manifest V3 compliant");
-console.log("  ✓ Permissions verified (storage, tabs, activeTab, declarativeNetRequest)");
+console.log("  ✓ Permissions verified (storage, scripting, activeTab, declarativeNetRequest; host access optional)");
 console.log("  ✓ Declarative Net Request rules successfully strip iframe headers\n");
 
 // ----------------------------------------------------------------------------

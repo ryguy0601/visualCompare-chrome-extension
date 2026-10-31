@@ -1,0 +1,9 @@
+{
+  "name": "visualcompare-chrome-extension",
+  "version": "1.0.0",
+  "private": true,
+  "description": "VisualCompare Live Chrome extension (no build step; tests use plain Node).",
+  "scripts": {
+    "test": "node tests/run_all.js"
+  }
+}

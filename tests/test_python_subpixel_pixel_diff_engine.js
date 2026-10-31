@@ -5,7 +5,7 @@ const path = require('path');
 
 console.log("TEST: Validating Python diff_engine.py Subpixel Pixel Diff Port & Dynamic Viewport Diffing...");
 
-const studioJs = fs.readFileSync(path.join(__dirname, '../studio.js'), 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 
 // 1. Verify computeSubpixelPixelDiff port of diff_engine.py make_diff_mask_subpixel
 assert(studioJs.includes('function computeSubpixelPixelDiff(dataP, dataS, width, height, tolerance'), 

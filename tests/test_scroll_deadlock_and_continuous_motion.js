@@ -3,7 +3,7 @@ const assert = require('assert');
 
 console.log('TEST: Validating Scroll Deadlock Prevention & Unconstrained Continuous Motion...');
 
-const studioJs = fs.readFileSync('studio.js', 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 const syncAgentJs = fs.readFileSync('sync_agent.js', 'utf8');
 
 // 1. Verify wheel event is NOT dropped by isSyncing

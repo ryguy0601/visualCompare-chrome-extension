@@ -3,7 +3,7 @@ const assert = require('assert');
 
 console.log("TEST: Validating Swipe Diff Aspect Ratio Adaptation & Zero Warping...");
 
-const studioJs = fs.readFileSync('studio.js', 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 const syncAgentJs = fs.readFileSync('sync_agent.js', 'utf8');
 
 // 1. Verify lastCapturedDiffCanvas is invalidated when switching modes

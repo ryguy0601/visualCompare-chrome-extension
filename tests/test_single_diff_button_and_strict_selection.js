@@ -5,7 +5,7 @@ const path = require('path');
 console.log("TEST: Validating Single Unified Difference Button & Strict Selection-Only Display...");
 
 const studioHtml = fs.readFileSync(path.join(__dirname, '../studio.html'), 'utf8');
-const studioJs = fs.readFileSync(path.join(__dirname, '../studio.js'), 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 
 // 1. Verify single visible difference button in toolbar and redundant buttons hidden
 assert(studioHtml.includes('id="btn-toggle-red-diffs" class="btn-diff-action btn-red-diffs inactive"'), 

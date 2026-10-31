@@ -6,7 +6,7 @@ const path = require("path");
 console.log("TEST: Validating Viewport X/Y Click Synchronization & Bug Fixes...");
 
 const syncAgentJs = fs.readFileSync(path.join(__dirname, "../sync_agent.js"), "utf8");
-const studioJs = fs.readFileSync(path.join(__dirname, "../studio.js"), "utf8");
+const studioJs = require("./helpers").readStudioJs();
 
 // 1. Verify getViewportElementAt function exists in sync_agent.js
 assert(syncAgentJs.includes("function getViewportElementAt(x, y) {"), "sync_agent.js must define getViewportElementAt(x, y)");

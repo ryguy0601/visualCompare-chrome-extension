@@ -5,7 +5,7 @@ console.log("=================================================================")
 console.log("TESTING DIFFERING PIXELS ONLY, 3RD COL BLACK CANVAS, & DESKTOP DEFAULT");
 console.log("=================================================================\n");
 
-const studioJs = fs.readFileSync('studio.js', 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 const studioHtml = fs.readFileSync('studio.html', 'utf8');
 const studioCss = fs.readFileSync('studio.css', 'utf8');
 

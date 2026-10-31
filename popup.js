@@ -17,8 +17,27 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnSwap = document.getElementById("btn-quick-swap");
   const btnDemo = document.getElementById("btn-demo-preset");
 
+  const accessRadios = document.querySelectorAll('input[name="site-access"]');
+  const excludedInput = document.getElementById("site-access-excluded");
+
+  function selectedAccessMode() {
+    const checked = document.querySelector('input[name="site-access"]:checked');
+    return checked ? checked.value : "urls";
+  }
+  function syncExcludedState() {
+    excludedInput.disabled = selectedAccessMode() !== "all_except";
+  }
+  accessRadios.forEach((r) => r.addEventListener("change", syncExcludedState));
+
   // Load saved state
-  chrome.storage.local.get(["vc_saved_urls", "vc_defaults"], (data) => {
+  chrome.storage.local.get(["vc_saved_urls", "vc_defaults", "vc_site_access_config"], (data) => {
+    if (data.vc_site_access_config) {
+      const cfg = data.vc_site_access_config;
+      const radio = document.querySelector(`input[name="site-access"][value="${cfg.mode}"]`);
+      if (radio) radio.checked = true;
+      excludedInput.value = (cfg.excluded || []).join(", ");
+      syncExcludedState();
+    }
     if (data.vc_saved_urls) {
       prodInput.value = data.vc_saved_urls.prod || "";
       stgInput.value = data.vc_saved_urls.stg || "";
@@ -59,8 +78,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Load Demo Test
   btnDemo.addEventListener("click", () => {
-    prodInput.value = chrome.runtime.getURL("demo_prod.html");
-    stgInput.value = chrome.runtime.getURL("demo_stg.html");
+    prodInput.value = chrome.runtime.getURL("demo/demo_prod.html");
+    stgInput.value = chrome.runtime.getURL("demo/demo_stg.html");
   });
 
   // Launch Studio
@@ -77,9 +96,23 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!stg) stg = prod;
     if (!prod) prod = stg;
 
+    // Work out which sites the extension needs access to
+    const mode = selectedAccessMode();
+    const parsed = VCSiteAccess.parseExcludedSites(excludedInput.value);
+    if (mode === "all_except" && parsed.invalid.length) {
+      alert("These excluded sites are not valid hostnames: " + parsed.invalid.join(", "));
+      return;
+    }
+    if (mode === "all_except" && [prod, stg].some((u) => VCSiteAccess.isExcluded(u, parsed.hosts))) {
+      alert("One of the URLs you want to compare is in your excluded list.");
+      return;
+    }
+    const accessConfig = { mode, excluded: mode === "all_except" ? parsed.hosts : [] };
+
     // Save URLs and preferences
     chrome.storage.local.set({
       vc_saved_urls: { prod, stg },
+      vc_site_access_config: accessConfig,
       vc_defaults: {
         syncClicks: syncClicks.checked,
         syncScroll: syncScroll.checked,
@@ -89,7 +122,8 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
-    // Open full studio page
+    // Open the studio. Chrome's permission prompt is shown there (not here): a popup
+    // closes as soon as the prompt takes focus, which would lose the request.
     const params = new URLSearchParams({
       prod,
       stg,
@@ -99,11 +133,7 @@ document.addEventListener("DOMContentLoaded", () => {
       syncHover: syncHover.checked,
       syncInputs: syncInputs.checked
     });
-
-    chrome.tabs.create({
-      url: chrome.runtime.getURL(`studio.html?${params.toString()}`)
-    });
-
+    chrome.tabs.create({ url: chrome.runtime.getURL(`studio.html?${params.toString()}`) });
     window.close();
   });
 });

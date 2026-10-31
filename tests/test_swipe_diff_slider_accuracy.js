@@ -11,7 +11,7 @@ assert(html.includes('id="swipe-diff-canvas"'), "swipe-diff-canvas missing from 
 console.log("PASS: studio.html contains dedicated iframe-swipe-diff frame.");
 
 // 2. Verify studio.js queries iframeSwipeDiff
-const studioJs = fs.readFileSync('studio.js', 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 assert(studioJs.includes('const iframeSwipeDiff = document.getElementById("iframe-swipe-diff");'), "iframeSwipeDiff query missing in studio.js");
 console.log("PASS: studio.js queries iframeSwipeDiff element.");
 

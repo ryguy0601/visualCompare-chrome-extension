@@ -5,7 +5,7 @@ const path = require('path');
 
 console.log("TEST: Validating 3-Column View Strictly Shows Differences ONLY on Last Column...");
 
-const studioJs = fs.readFileSync(path.join(__dirname, '../studio.js'), 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 const syncAgentJs = fs.readFileSync(path.join(__dirname, '../sync_agent.js'), 'utf8');
 
 // 1. Verify computeAndApplyRedDifferences isolates diffs strictly to the last column (Column 3)

@@ -3,7 +3,7 @@ const assert = require('assert');
 
 console.log("TEST: Validating Swipe Diff Matching Column 3 & Smooth Column View Scroll...");
 
-const studioJs = fs.readFileSync('studio.js', 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 const syncAgentJs = fs.readFileSync('sync_agent.js', 'utf8');
 
 // 1. Verify Swipe Diff View Architecture Matches Column 3 Architecture

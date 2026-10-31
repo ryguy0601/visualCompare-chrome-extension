@@ -5,7 +5,7 @@ const path = require("path");
 
 console.log("TEST: Validating Intuitive Slide/Swipe Diff Architecture...");
 
-const studioJs = fs.readFileSync(path.join(__dirname, "../studio.js"), "utf8");
+const studioJs = require("./helpers").readStudioJs();
 const studioHtml = fs.readFileSync(path.join(__dirname, "../studio.html"), "utf8");
 const studioCss = fs.readFileSync(path.join(__dirname, "../studio.css"), "utf8");
 

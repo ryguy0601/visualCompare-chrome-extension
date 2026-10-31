@@ -5,7 +5,7 @@ console.log("=================================================================")
 console.log("TESTING PYTHON VISUALCOMPARE PARITY FOR 3RD COLUMN BLACK CANVAS");
 console.log("=================================================================\n");
 
-const studioJs = fs.readFileSync('studio.js', 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 const studioHtml = fs.readFileSync('studio.html', 'utf8');
 const studioCss = fs.readFileSync('studio.css', 'utf8');
 

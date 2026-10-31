@@ -9,7 +9,7 @@ console.log("=================================================================\n
 const baseDir = path.resolve(__dirname, "..");
 const studioHtml = fs.readFileSync(path.join(baseDir, "studio.html"), "utf8");
 const studioCss = fs.readFileSync(path.join(baseDir, "studio.css"), "utf8");
-const studioJs = fs.readFileSync(path.join(baseDir, "studio.js"), "utf8");
+const studioJs = require("./helpers").readStudioJs();
 
 // 1. Verify Auto (Fit) Option in studio.html
 console.log("1. Verifying Auto (Fit) Option in studio.html...");

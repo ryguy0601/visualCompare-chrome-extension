@@ -5,7 +5,7 @@ console.log("TEST: Comprehensive Verification of Side-by-Side & Slide (Swipe) Vi
 
 const studioCss = fs.readFileSync('studio.css', 'utf8');
 const studioHtml = fs.readFileSync('studio.html', 'utf8');
-const studioJs = fs.readFileSync('studio.js', 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 const syncAgentJs = fs.readFileSync('sync_agent.js', 'utf8');
 
 // 1. Verify CSS View Isolation & Collision Prevention

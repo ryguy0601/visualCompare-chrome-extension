@@ -5,7 +5,7 @@ const path = require('path');
 
 console.log("TEST: Validating Identical Elements Have Zero Red Diff & Only Differing Pixels Highlighted in Red...");
 
-const studioJs = fs.readFileSync(path.join(__dirname, '../studio.js'), 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 const syncAgentJs = fs.readFileSync(path.join(__dirname, '../sync_agent.js'), 'utf8');
 
 // 1. Verify candidate extraction in sync_agent.js never extracts structural containers or broad wrappers

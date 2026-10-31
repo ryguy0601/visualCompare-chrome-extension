@@ -9,7 +9,7 @@ console.log("=================================================================\n
 
 const baseDir = path.join(__dirname, "..");
 const syncAgentJs = fs.readFileSync(path.join(baseDir, "sync_agent.js"), "utf8");
-const studioJs = fs.readFileSync(path.join(baseDir, "studio.js"), "utf8");
+const studioJs = require("./helpers").readStudioJs();
 const studioHtml = fs.readFileSync(path.join(baseDir, "studio.html"), "utf8");
 
 // Mock global environment for zip_exporter.js

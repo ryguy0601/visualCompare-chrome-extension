@@ -25,7 +25,7 @@ assert(studioHtml.includes('id="metric-diff-pct"'), "metric-diff-pct must exist 
 console.log("PASS 2: studio.html hides diff count badge and provides accurate diff % pills for both views.");
 
 // 3. Check studio.js
-const studioJs = fs.readFileSync(path.join(__dirname, "../studio.js"), "utf8");
+const studioJs = require("./helpers").readStudioJs();
 
 // Verify drawRedPixelDiffLabel and drawRedDiffCanvasBadge are disabled / no-op
 assert(studioJs.includes("function drawRedPixelDiffLabel(ctx, x, y, label) {\n    // Disabled per user instruction"), "drawRedPixelDiffLabel must be disabled");

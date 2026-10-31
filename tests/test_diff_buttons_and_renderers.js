@@ -4,7 +4,7 @@ const path = require('path');
 
 console.log("TEST: Validating Difference Comparison Buttons, Pixel-Level Calculation & Zero Outlines...");
 
-const studioJs = fs.readFileSync(path.join(__dirname, '../studio.js'), 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 const syncAgentJs = fs.readFileSync(path.join(__dirname, '../sync_agent.js'), 'utf8');
 
 // 1. Verify btnRunDiff click handler & execution flow without forcing unselected views

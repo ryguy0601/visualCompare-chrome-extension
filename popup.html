@@ -74,6 +74,20 @@
     </div>
   </div>
 
+  <!-- Site Access -->
+  <div class="section-card" id="site-access-card">
+    <div class="field-label-row"><label>Site access</label></div>
+    <label class="radio-row"><input type="radio" name="site-access" value="urls" checked />
+      <span>Only the two sites above <em>(recommended)</em></span></label>
+    <label class="radio-row"><input type="radio" name="site-access" value="all" />
+      <span>All sites</span></label>
+    <label class="radio-row"><input type="radio" name="site-access" value="all_except" />
+      <span>All sites except these:</span></label>
+    <textarea id="site-access-excluded" class="text-input" rows="2" disabled
+      placeholder="bank.example.com, mail.example.org"></textarea>
+    <p class="hint">Chrome will ask you to approve this when you launch. You can change it any time.</p>
+  </div>
+
   <!-- Action Buttons -->
   <div class="actions-footer">
     <button id="btn-launch-studio" class="btn-primary">
@@ -85,6 +99,7 @@
     </div>
   </div>
 
+  <script src="site_access.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

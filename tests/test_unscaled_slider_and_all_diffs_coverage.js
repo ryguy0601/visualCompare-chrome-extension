@@ -9,7 +9,7 @@ console.log("=================================================================\n
 
 const studioHtml = fs.readFileSync(path.join(__dirname, '../studio.html'), 'utf8');
 const studioCss = fs.readFileSync(path.join(__dirname, '../studio.css'), 'utf8');
-const studioJs = fs.readFileSync(path.join(__dirname, '../studio.js'), 'utf8');
+const studioJs = require("./helpers").readStudioJs();
 const syncAgentJs = fs.readFileSync(path.join(__dirname, '../sync_agent.js'), 'utf8');
 
 // ----------------------------------------------------

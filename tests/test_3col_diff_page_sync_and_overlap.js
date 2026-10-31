@@ -5,7 +5,7 @@ const path = require("path");
 
 console.log("TEST: Validating 3-Column Diff Page Navigation & Controller Overlap Fixes...");
 
-const studioJs = fs.readFileSync(path.join(__dirname, "../studio.js"), "utf8");
+const studioJs = require("./helpers").readStudioJs();
 const studioCss = fs.readFileSync(path.join(__dirname, "../studio.css"), "utf8");
 
 // 1. Verify 3rd column diff base iframe lifecycle in studio.js
